@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "OhMyLockScreen": {
+      "commandName": "MsixPackage"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+﻿<Page
+    x:Class="OhMyLockScreen.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+        <TextBlock Text="It Works!" FontSize="48" />
+        <Button x:Name="UnlockButton" Click="ButtonUnlock_Click" IsEnabled="False">Unlock</Button>
+        <Button Click="ButtonExit_Click" Margin="0,8,0,0">Exit</Button>
+        <TextBlock x:Name="StatusText" MaxWidth="400" TextWrapping="Wrap" Margin="0,12,0,0" />
+        <TextBlock x:Name="ViewStatusText" MaxWidth="400" TextWrapping="Wrap" Margin="0,12,0,0" FontSize="12" />
+    </StackPanel>
+</Page>
