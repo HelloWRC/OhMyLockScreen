@@ -1,18 +1,37 @@
-using System;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.Logging;
-using OhMyLockScreen.Models;
+using OhMyLockScreen.Shared.Helpers.Serialization;
+using OhMyLockScreen.Shared.Models;
 
-namespace OhMyLockScreen.Helpers;
+namespace OhMyLockScreen.Shared.Helpers;
 
 /// <summary>JSON 配置读写，沿用 ClassIsland 的加载备份与错误记录约定。</summary>
 public class ConfigureFileHelper
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new();
-    private static readonly JsonSerializerOptions IndentedSerializerOptions = new() { WriteIndented = true };
+    private static JsonSerializerOptions _serializerOptions = new()
+    {
+    };
+    private static JsonSerializerOptions _indentedSerializerOptions = new()
+    {
+        WriteIndented = true
+    };
+
+    internal static void InvalidatesSerializerOptions()
+    {
+        var resolver = AutoJsonPolymorphicRegistrationHelper.CreateJsonTypeInfoResolver();
+        _indentedSerializerOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            TypeInfoResolver = resolver
+        };
+        _serializerOptions = new JsonSerializerOptions()
+        {
+            TypeInfoResolver = resolver
+        };
+    }
 
     // Do not cache a logger from a host that may have been disposed.
     private static ILogger? Logger => IAppHost.TryGetService<ILogger<ConfigureFileHelper>>();
@@ -67,7 +86,7 @@ public class ConfigureFileHelper
     public static T LoadConfigUnWrapped<T>(Stream stream)
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, true, 1024, leaveOpen: true);
-        return JsonSerializer.Deserialize<T>(reader.ReadToEnd(), SerializerOptions) ?? Activator.CreateInstance<T>();
+        return JsonSerializer.Deserialize<T>(reader.ReadToEnd(), _serializerOptions) ?? Activator.CreateInstance<T>();
     }
 
     /// <summary>读取及备份恢复均失败时，记录错误并返回默认配置。</summary>
@@ -125,12 +144,12 @@ public class ConfigureFileHelper
 
     public static T CopyObject<T>(T o)
     {
-        return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(o, SerializerOptions), SerializerOptions)
+        return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(o, _serializerOptions), _serializerOptions)
                ?? Activator.CreateInstance<T>();
     }
 
     private static JsonSerializerOptions GetOptions(bool writeIndented)
-        => writeIndented ? IndentedSerializerOptions : SerializerOptions;
+        => writeIndented ? _indentedSerializerOptions : _serializerOptions;
 
     private static void RecordError(ConfigError error)
     {

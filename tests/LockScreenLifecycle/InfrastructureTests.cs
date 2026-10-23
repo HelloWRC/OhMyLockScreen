@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OhMyLockScreen;
+using OhMyLockScreen.Shared;
 using OhMyLockScreen.Helpers;
 using OhMyLockScreen.Hosting;
 using OhMyLockScreen.Models;
@@ -176,13 +177,13 @@ internal static class InfrastructureTests
 
         run("Production host registers settings at the UWP local folder", () =>
         {
-            Throws<InvalidOperationException>(() => IAppHost.GetService<SettingsService>());
+            Throws<InvalidOperationException>(() => IAppHost.GetRequiredService<SettingsService>());
             Check(IAppHost.TryGetService<SettingsService>() == null, "Optional access before startup must return null.");
             var app = new App();
             app.Launch(new LaunchActivatedEventArgs());
             Check(Window.Current.Content is Frame && File.Exists(SettingsPath), "Production startup did not load local settings.");
-            Check(IAppHost.GetService<IHostLifetime>() is UwpHostLifetime, "Host used a console lifetime.");
-            var service = IAppHost.GetService<SettingsService>();
+            Check(IAppHost.GetRequiredService<IHostLifetime>() is UwpHostLifetime, "Host used a console lifetime.");
+            var service = IAppHost.GetRequiredService<SettingsService>();
             service.Settings.TestValue = 21;
             Check(ReadTestValue() == 21, "Registered settings were not persisted.");
             app.ExitAsync().GetAwaiter().GetResult();

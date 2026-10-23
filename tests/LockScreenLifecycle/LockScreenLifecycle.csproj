@@ -9,7 +9,7 @@
     <Compile Include="../../OhMyLockScreen/App.xaml.cs" Link="App.xaml.cs" />
     <Compile Include="../../OhMyLockScreen/App.Hosting.cs" Link="App.Hosting.cs" />
     <Compile Include="../../OhMyLockScreen/App.Services.cs" Link="App.Services.cs" />
-    <Compile Include="../../OhMyLockScreen/IAppHost.cs" Link="IAppHost.cs" />
+    <Compile Include="../../OhMyLockScreen.Shared/IAppHost.cs" Link="IAppHost.cs" />
     <Compile Include="../../OhMyLockScreen/Hosting/*.cs" Link="Hosting/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Helpers/*.cs" Link="Helpers/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Models/*.cs" Link="Models/%(Filename)%(Extension)" />

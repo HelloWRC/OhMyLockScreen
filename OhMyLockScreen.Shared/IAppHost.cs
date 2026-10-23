@@ -1,14 +1,13 @@
-using System;
 using Microsoft.Extensions.Hosting;
 
-namespace OhMyLockScreen;
+namespace OhMyLockScreen.Shared;
 
 /// <summary>应用主机和服务访问入口。</summary>
 public interface IAppHost
 {
     public static IHost? Host;
 
-    public static T GetService<T>() where T : class
+    public static T GetRequiredService<T>() where T : class
     {
         return TryGetService<T>()
                ?? throw new InvalidOperationException($"应用主机尚未初始化或未注册服务 {typeof(T).FullName}。");

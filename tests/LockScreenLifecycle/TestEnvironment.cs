@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using OhMyLockScreen;
+using OhMyLockScreen.Shared;
 using OhMyLockScreen.Helpers;
 using Windows.ApplicationModel.Core;
 using Windows.Storage;

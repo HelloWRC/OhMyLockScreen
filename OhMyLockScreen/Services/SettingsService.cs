@@ -3,8 +3,9 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Logging;
-using OhMyLockScreen.Helpers;
 using OhMyLockScreen.Models;
+using OhMyLockScreen.Shared.Helpers;
+using OhMyLockScreen.Shared.Models;
 
 namespace OhMyLockScreen.Services;
 

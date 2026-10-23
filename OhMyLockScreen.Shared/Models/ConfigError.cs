@@ -1,6 +1,4 @@
-using System;
-
-namespace OhMyLockScreen.Models;
+namespace OhMyLockScreen.Shared.Models;
 
 /// <summary>配置加载错误；Level 为 0 表示已从备份恢复，1 表示返回默认值。</summary>
 public sealed class ConfigError
