@@ -1,0 +1,418 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using OhMyLockScreen;
+using OhMyLockScreen.Helpers;
+using OhMyLockScreen.Hosting;
+using OhMyLockScreen.Models;
+using OhMyLockScreen.Services;
+using Windows.ApplicationModel.Activation;
+using Windows.ApplicationModel.Core;
+using Windows.Storage;
+using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Media.Animation;
+using Windows.Devices.Input;
+
+internal static class InfrastructureTests
+{
+    private static string SettingsPath => Path.Combine(ApplicationData.Current.LocalFolder.Path, "Settings.json");
+
+    private static void Check(bool condition, string message)
+    {
+        if (!condition) throw new Exception(message);
+    }
+
+    private static void Throws<T>(Action action) where T : Exception
+    {
+        try { action(); }
+        catch (T) { return; }
+        throw new Exception($"Expected {typeof(T).Name}.");
+    }
+
+    internal static async Task RunAsync(Action<string, Action> run, Func<string, Func<Task>, Task> runAsync)
+    {
+        run("Missing configuration creates defaults and supports JSON round trips", () =>
+        {
+            var config = ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(SettingsPath);
+            Check(config.Value == 7 && File.Exists(SettingsPath), "Default config was not created.");
+            Check(!File.Exists(SettingsPath + ".bak"), "Saving unexpectedly created a backup.");
+            config.Value = 42;
+            config.Items.Add("one");
+            ConfigureFileHelper.SaveConfig(SettingsPath, config, true);
+            Check(File.ReadAllText(SettingsPath).Contains('\n'), "Indented output was not formatted.");
+            var loaded = ConfigureFileHelper.LoadConfig<SampleConfig>(SettingsPath);
+            Check(loaded.Value == 42 && loaded.Items.SequenceEqual(["one"]), "Config did not round trip.");
+            var backup = File.ReadAllText(SettingsPath + ".bak");
+            ConfigureFileHelper.SaveConfig(SettingsPath, new SampleConfig { Value = 99 });
+            Check(File.ReadAllText(SettingsPath + ".bak") == backup, "Saving changed the last loaded backup.");
+        });
+
+        run("Valid backup is checked and restored before reporting recovery", () =>
+        {
+            ConfigureFileHelper.SaveConfig(SettingsPath, new SampleConfig { Value = 31 });
+            ConfigureFileHelper.LoadConfig<SampleConfig>(SettingsPath);
+            var backup = File.ReadAllText(SettingsPath + ".bak");
+            File.WriteAllText(SettingsPath, "invalid main");
+            var loaded = ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(SettingsPath);
+            Check(loaded.Value == 31 && File.ReadAllText(SettingsPath) == backup, "Backup was not restored.");
+            Check(ConfigureFileHelper.Errors is [{ Level: 0, Critical: false }], "Recovery error was not recorded.");
+        });
+
+        run("Two corrupt configs return defaults without restoring corrupt backup bytes", () =>
+        {
+            File.WriteAllText(SettingsPath, "invalid main");
+            File.WriteAllText(SettingsPath + ".bak", "invalid backup");
+            var loaded = ConfigureFileHelper.LoadConfig<SampleConfig>(SettingsPath);
+            Check(loaded.Value == 7, "Wrapped load did not return defaults.");
+            Check(File.ReadAllText(SettingsPath) == "invalid main" && File.ReadAllText(SettingsPath + ".bak") == "invalid backup",
+                "Failed recovery overwrote evidence.");
+            Check(ConfigureFileHelper.Errors is [{ Level: 1, Critical: true }], "Fatal error was not recorded.");
+            Throws<JsonException>(() => ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(SettingsPath));
+        });
+
+        run("Backup policy supports global defaults and per-call overrides", () =>
+        {
+            ConfigureFileHelper.SaveConfig(SettingsPath, new SampleConfig());
+            ConfigureFileHelper.IsBackupEnabled = false;
+            ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(SettingsPath);
+            Check(!File.Exists(SettingsPath + ".bak"), "Global backup disable was ignored.");
+            ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(SettingsPath, true);
+            Check(File.Exists(SettingsPath + ".bak"), "Per-call backup enable was ignored.");
+            File.WriteAllText(SettingsPath, "invalid");
+            Throws<JsonException>(() => ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(SettingsPath, false));
+            Check(ConfigureFileHelper.LoadConfig<SampleConfig>(SettingsPath, true).Value == 7, "Per-call recovery failed.");
+            Throws<FileNotFoundException>(() => ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(SettingsPath + ".missing", false, true));
+        });
+
+        run("A failed backup write never restores stale data over a valid main file", () =>
+        {
+            ConfigureFileHelper.SaveConfig(SettingsPath, new SampleConfig { Value = 51 });
+            Directory.CreateDirectory(SettingsPath + ".bak");
+            Throws<IOException>(() => ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(SettingsPath));
+            Check(ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(SettingsPath, false).Value == 51,
+                "Backup write failure replaced the valid main config.");
+        });
+
+        run("Stream overloads preserve caller ownership on success and failure", () =>
+        {
+            using var stream = new MemoryStream();
+            ConfigureFileHelper.SaveConfig(stream, new SampleConfig { Value = 81 }, true);
+            Check(stream.CanWrite && Encoding.UTF8.GetString(stream.ToArray()).Contains('\n'), "Stream save closed or ignored formatting.");
+            stream.Position = 0;
+            Check(ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(stream).Value == 81 && stream.CanRead, "Stream load closed the stream.");
+            using var invalid = new MemoryStream(Encoding.UTF8.GetBytes("invalid"));
+            Throws<JsonException>(() => ConfigureFileHelper.LoadConfigUnWrapped<SampleConfig>(invalid));
+            Check(invalid.CanRead, "Failed unwrapped load closed the stream.");
+            invalid.Position = 0;
+            Check(ConfigureFileHelper.LoadConfig<SampleConfig>(invalid).Value == 7 && invalid.CanRead, "Wrapped stream fallback failed.");
+            Check(ConfigureFileHelper.Errors is [{ Path: "<stream>", Level: 1 }], "Stream error was not recorded.");
+            using var readOnly = new MemoryStream([], writable: false);
+            Throws<ArgumentException>(() => ConfigureFileHelper.SaveConfig(readOnly, new SampleConfig()));
+            Check(readOnly.CanRead, "Failed stream save closed the caller's stream.");
+        });
+
+        run("JSON deep copy isolates nested collections and leaves global defaults alone", () =>
+        {
+            var defaults = JsonSerializerOptions.Default;
+            var config = new SampleConfig { Items = ["original"] };
+            var copy = ConfigureFileHelper.CopyObject(config);
+            copy.Items.Add("copy");
+            Check(!ReferenceEquals(config, copy) && config.Items.Count == 1, "Copy shares nested state.");
+            Check(ReferenceEquals(defaults, JsonSerializerOptions.Default), "Configuration API replaced global JSON defaults.");
+        });
+
+        run("File write failures are observable to callers", () =>
+        {
+            var blockedPath = Path.Combine(ApplicationData.Current.LocalFolder.Path, "directory");
+            Directory.CreateDirectory(blockedPath);
+            Throws<UnauthorizedAccessException>(() => ConfigureFileHelper.SaveConfig(blockedPath, new SampleConfig()));
+            Check(ConfigureFileHelper.LoadConfig<SampleConfig>(blockedPath).Value == 7 && ConfigureFileHelper.Errors.Count == 1,
+                "Wrapped file creation failure did not record its fallback.");
+        });
+
+        run("Settings auto-save once after load and detach replaced or reloaded models", () =>
+        {
+            ConfigureFileHelper.SaveConfig(SettingsPath, new Settings { TestValue = 11 });
+            var logger = new RecordingLogger<SettingsService>();
+            using var service = new SettingsService(logger, SettingsPath);
+            service.LoadSettingsAsync().GetAwaiter().GetResult();
+            Check(service.Settings.TestValue == 11 && logger.Saves == 0, "Loading triggered an auto-save.");
+            service.Settings.TestValue = 12;
+            Check(logger.Saves == 1 && ReadTestValue() == 12, "Property change was not saved exactly once.");
+            var old = service.Settings;
+            service.LoadSettingsAsync().GetAwaiter().GetResult();
+            service.LoadSettingsAsync().GetAwaiter().GetResult();
+            old.TestValue = 99;
+            Check(logger.Saves == 1, "Reload left the old model subscribed.");
+            service.Settings.TestValue = 13;
+            Check(logger.Saves == 2, "Repeated loading duplicated subscriptions.");
+            old = service.Settings;
+            service.Settings = new Settings();
+            old.TestValue = 100;
+            service.Settings.TestValue = 14;
+            Check(logger.Saves == 3 && ReadTestValue() == 14, "Replacement did not transfer the subscription.");
+            service.SaveSettings("explicit");
+            Check(logger.Saves == 4, "Explicit save did not write settings.");
+            service.Dispose();
+            service.Settings.TestValue = 15;
+            Check(logger.Saves == 4 && ReadTestValue() == 14, "Disposal left auto-save active.");
+            Throws<ObjectDisposedException>(() => service.SaveSettings());
+        });
+
+        run("Settings auto-save logs failures while explicit save throws", () =>
+        {
+            var logger = new RecordingLogger<SettingsService>();
+            using var service = new SettingsService(logger, ApplicationData.Current.LocalFolder.Path);
+            service.LoadSettingsAsync().GetAwaiter().GetResult();
+            service.Settings.TestValue = 2;
+            Check(logger.Errors == 1 && service.Settings.TestValue == 2, "Auto-save failure escaped or discarded memory state.");
+            Throws<UnauthorizedAccessException>(() => service.SaveSettings());
+        });
+
+        run("Production host registers settings at the UWP local folder", () =>
+        {
+            Throws<InvalidOperationException>(() => IAppHost.GetService<SettingsService>());
+            Check(IAppHost.TryGetService<SettingsService>() == null, "Optional access before startup must return null.");
+            var app = new App();
+            app.Launch(new LaunchActivatedEventArgs());
+            Check(Window.Current.Content is Frame && File.Exists(SettingsPath), "Production startup did not load local settings.");
+            Check(IAppHost.GetService<IHostLifetime>() is UwpHostLifetime, "Host used a console lifetime.");
+            var service = IAppHost.GetService<SettingsService>();
+            service.Settings.TestValue = 21;
+            Check(ReadTestValue() == 21, "Registered settings were not persisted.");
+            app.ExitAsync().GetAwaiter().GetResult();
+            Check(IAppHost.Host == null && CoreApplication.ExitCalls == 1, "Exit did not clear the host.");
+        });
+
+        await runAsync("Repeated activation and suspension reuse one started host", async () =>
+        {
+            var probe = new HostedProbe();
+            int builds = 0;
+            var app = new App(() => { builds++; return BuildHost(probe); });
+            app.Launch(new LaunchActivatedEventArgs());
+            var firstHost = IAppHost.Host;
+            var firstWindow = Window.Current;
+            Window.Current = new Window();
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
+            Check(Window.Current.Content is Frame && firstWindow.Content is Frame, "Activation lost one of the views.");
+            File.Delete(SettingsPath);
+            var suspend = app.Suspend();
+            Check(suspend.SuspendingOperation.Deferral.IsComplete && File.Exists(SettingsPath), "Suspend did not save and complete its deferral.");
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreenComponent));
+            Check(builds == 1 && probe.Starts == 1 && probe.Stops == 0 && ReferenceEquals(firstHost, IAppHost.Host),
+                "Suspend or reactivation restarted the host.");
+            await app.ExitAsync();
+            Check(probe.Stops == 1 && probe.Disposed && IAppHost.Host == null, "Exit did not stop and dispose the host.");
+        });
+
+        await runAsync("Delayed startup shares one task and returns to each owning view", async () =>
+        {
+            var probe = new HostedProbe { StartGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            var app = new App(() => BuildHost(probe));
+            var firstView = new ViewContext();
+            var secondView = new ViewContext();
+            firstView.Invoke(() => app.Launch(new LaunchActivatedEventArgs()));
+            firstView.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen)));
+            secondView.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.LockScreenComponent)));
+            firstView.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.Other)));
+            Check(firstView.Window.Content == null && secondView.Window.Content == null && probe.Starts == 1,
+                "Views appeared before shared startup completed.");
+            Check(app.Suspend().SuspendingOperation.Deferral.IsComplete, "Suspension waited for hosted startup.");
+            probe.StartGate.SetResult();
+            // Each completed stage of Host.StartAsync may post another UI continuation.
+            // Pump both views as real UI event loops do, until activation is complete.
+            var stopwatch = Stopwatch.StartNew();
+            while (firstView.Window.Content == null || secondView.Window.Content == null)
+            {
+                Check(stopwatch.Elapsed < TimeSpan.FromSeconds(5), "Activation did not return to its UI context.");
+                firstView.Drain();
+                secondView.Drain();
+                await Task.Delay(10);
+            }
+            Check(firstView.Window.Content is Frame && secondView.Window.Content is Frame, "An asynchronous activation lost its view.");
+            var firstPage = (MainPage)((Frame)firstView.Window.Content!).Content!;
+            var secondPage = (MainPage)((Frame)secondView.Window.Content!).Content!;
+            Check(!ReferenceEquals(firstPage, secondPage), "Pages were shared across views.");
+            Check(firstPage.ActivationKindText.Text == $"App.OnActivated args.Kind：{ActivationKind.Other}（{(int)ActivationKind.Other}）" &&
+                secondPage.ActivationKindText.Text.Contains("LockScreenComponent"),
+                "Delayed startup lost the latest activation kind or shared it across views.");
+            await app.ExitAsync();
+        });
+
+        await runAsync("Exit during startup waits for cleanup without showing a page", async () =>
+        {
+            var probe = new HostedProbe { StartGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            var app = new App(() => BuildHost(probe));
+            var window = Window.Current;
+            app.Launch(new LaunchActivatedEventArgs());
+            var exit = app.ExitAsync();
+            Check(!exit.IsCompleted && window.Content == null, "Exit ignored pending startup.");
+            probe.StartGate.SetResult();
+            await exit;
+            Check(window.Content == null && probe.Stops == 1 && probe.Disposed && CoreApplication.ExitCalls == 1,
+                "Startup displayed a page or leaked the host after exit began.");
+        });
+
+        await runAsync("Animated exit cleans the page and merges overlapping shutdown requests", async () =>
+        {
+            var probe = new HostedProbe { StopGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            var app = new App(() => BuildHost(probe));
+            app.Launch(new LaunchActivatedEventArgs());
+            var page = (MainPage)((Frame)Window.Current.Content!).Content!;
+            page.Load();
+            var timer = DispatcherTimer.LastCreated!;
+            Window.Current.CoreWindow.PressPointer(PointerDeviceType.Mouse);
+            Check(probe.Stops == 0 && CoreApplication.ExitCalls == 0, "Shutdown started before the animation finished.");
+            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(333));
+            var firstExit = app.ExitAsync();
+            var secondExit = app.ExitAsync();
+            Check(ReferenceEquals(firstExit, secondExit) && probe.Stops == 1 && !firstExit.IsCompleted, "Shutdown was not coalesced.");
+            Check(!timer.IsEnabled && Window.Current.ActivationSubscribers == 0 && Window.Current.VisibilitySubscribers == 0,
+                "Page tracking continued while shutdown was pending.");
+            Check(page.BackgroundPlaceholder.Opacity == 0 && page.ForegroundTranslation.Y == -page.ActualHeight,
+                "Shutdown restored the opaque background or foreground.");
+            probe.StopGate.SetResult();
+            await firstExit;
+            Check(CoreApplication.ExitCalls == 1 && probe.Disposed, "Overlapping exit requests exited more than once.");
+        });
+
+        await runAsync("Suspend and exit tolerate settings write failures", async () =>
+        {
+            var probe = new HostedProbe();
+            var logger = new RecordingLogger<SettingsService>();
+            var app = new App(() => BuildHost(probe, ApplicationData.Current.LocalFolder.Path, logger));
+            app.Launch(new LaunchActivatedEventArgs());
+            Check(app.Suspend().SuspendingOperation.Deferral.IsComplete, "Save failure leaked the suspension deferral.");
+            await app.ExitAsync();
+            Check(probe.Stops == 1 && probe.Disposed && CoreApplication.ExitCalls == 1, "Save failure prevented orderly exit.");
+        });
+
+        await runAsync("Hosted stop failure still disposes and exits", async () =>
+        {
+            var probe = new HostedProbe { ThrowOnStop = true };
+            var app = new App(() => BuildHost(probe));
+            app.Launch(new LaunchActivatedEventArgs());
+            await app.ExitAsync();
+            Check(probe.Stops == 1 && probe.Disposed && CoreApplication.ExitCalls == 1 && IAppHost.Host == null,
+                "Stop failure prevented disposal or exit.");
+        });
+
+        await runAsync("Uncooperative hosted shutdown is bounded to five seconds", async () =>
+        {
+            var probe = new HostedProbe { StopGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            var app = new App(() => BuildHost(probe));
+            app.Launch(new LaunchActivatedEventArgs());
+            var stopwatch = Stopwatch.StartNew();
+            await app.ExitAsync().WaitAsync(TimeSpan.FromSeconds(8));
+            Check(stopwatch.Elapsed >= TimeSpan.FromSeconds(4.5) && probe.Disposed && CoreApplication.ExitCalls == 1,
+                "Stop timeout failed to release the host and exit.");
+            probe.StopGate.SetResult();
+        });
+
+        await runAsync("Failed startup releases the host and completes suspension deferrals", async () =>
+        {
+            var probe = new HostedProbe { ThrowOnStart = true };
+            var app = new App(() => BuildHost(probe));
+            app.Launch(new LaunchActivatedEventArgs());
+            Check(Window.Current.Content == null && probe.Disposed && IAppHost.Host == null, "Startup failure leaked a host or showed an uninitialized page.");
+            Check(app.Suspend().SuspendingOperation.Deferral.IsComplete, "Failed startup leaked a deferral.");
+            await app.ExitAsync();
+            Check(CoreApplication.ExitCalls == 1, "Failed startup blocked Exit.");
+        });
+    }
+
+    private static int ReadTestValue() => ConfigureFileHelper.LoadConfigUnWrapped<Settings>(SettingsPath, false).TestValue;
+
+    private static IHost BuildHost(HostedProbe probe, string? path = null, ILogger<SettingsService>? logger = null)
+    {
+        return new HostBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton<IHostLifetime, UwpHostLifetime>();
+                services.AddSingleton(provider => new SettingsService(logger ?? provider.GetRequiredService<ILogger<SettingsService>>(), path ?? SettingsPath));
+                services.AddSingleton<IHostedService>(_ => probe);
+            })
+            .Build();
+    }
+
+    public sealed class SampleConfig
+    {
+        public int Value { get; set; } = 7;
+        public List<string> Items { get; set; } = [];
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public int Saves { get; private set; }
+        public int Errors { get; private set; }
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Information && formatter(state, exception).StartsWith("写入应用设置：")) Saves++;
+            if (logLevel == LogLevel.Error) Errors++;
+        }
+    }
+
+    private sealed class HostedProbe : IHostedService, IDisposable
+    {
+        public TaskCompletionSource? StartGate { get; init; }
+        public TaskCompletionSource? StopGate { get; init; }
+        public bool ThrowOnStart { get; init; }
+        public bool ThrowOnStop { get; init; }
+        public int Starts { get; private set; }
+        public int Stops { get; private set; }
+        public bool Disposed { get; private set; }
+        public async Task StartAsync(CancellationToken cancellationToken)
+        {
+            Starts++;
+            if (ThrowOnStart) throw new InvalidOperationException("Simulated startup failure.");
+            if (StartGate != null) await StartGate.Task.WaitAsync(cancellationToken);
+        }
+        public async Task StopAsync(CancellationToken cancellationToken)
+        {
+            Stops++;
+            if (ThrowOnStop) throw new InvalidOperationException("Simulated shutdown failure.");
+            if (StopGate != null) await StopGate.Task;
+        }
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class ViewContext : SynchronizationContext
+    {
+        private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> callbacks = new();
+        internal Window Window { get; } = new();
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            callbacks.Enqueue((d, state));
+        }
+
+        internal void Invoke(Action action)
+        {
+            var previous = Current;
+            var previousWindow = Window.Current;
+            SetSynchronizationContext(this);
+            Window.Current = Window;
+            try { action(); }
+            finally
+            {
+                SetSynchronizationContext(previous);
+                Window.Current = previousWindow;
+            }
+        }
+
+        internal void Drain()
+        {
+            Invoke(() =>
+            {
+                while (callbacks.TryDequeue(out var work)) work.Callback(work.State);
+            });
+        }
+    }
+}

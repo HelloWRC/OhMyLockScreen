@@ -2,6 +2,12 @@
 namespace Windows
 {
     public delegate void UwpEventHandler<TArgs>(object sender, TArgs args);
+    public delegate void UwpTypedEventHandler<TSender, TArgs>(TSender sender, TArgs args);
+}
+
+namespace Windows.Foundation
+{
+    public readonly record struct Point(double X, double Y);
 }
 
 namespace Windows.ApplicationModel.Activation
@@ -26,45 +32,93 @@ namespace Windows.ApplicationModel
     }
     public sealed class SuspendingOperation
     {
-        public SuspendingDeferral GetDeferral() => new();
+        public SuspendingDeferral Deferral { get; } = new();
+        public SuspendingDeferral GetDeferral() => Deferral;
     }
-    public sealed class SuspendingDeferral { public void Complete() { } }
+    public sealed class SuspendingDeferral
+    {
+        public bool IsComplete { get; private set; }
+        public void Complete() => IsComplete = true;
+    }
+}
+
+namespace Windows.Storage
+{
+    public sealed class StorageFolder { public string Path { get; set; } = ""; }
+    public sealed class ApplicationData
+    {
+        public static ApplicationData Current { get; } = new();
+        public StorageFolder LocalFolder { get; } = new();
+    }
 }
 
 namespace Windows.ApplicationModel.Core
 {
-    public sealed class CoreApplicationView
-    {
-        public bool IsHosted { get; init; }
-        public bool IsMain { get; init; } = true;
-    }
     public static class CoreApplication
     {
-        public static Func<CoreApplicationView> CurrentViewFactory { get; set; } = () => new();
-        public static CoreApplicationView GetCurrentView() => CurrentViewFactory();
         public static int ExitCalls { get; set; }
         public static void Exit() => ExitCalls++;
-    }
-}
-
-namespace Windows.UI.ViewManagement
-{
-    public sealed class ApplicationView
-    {
-        public int Id { get; init; } = 1;
-        public bool IsOnLockScreen { get; init; }
-        public static Func<ApplicationView> CurrentViewFactory { get; set; } = () => new();
-        public static ApplicationView GetForCurrentView() => CurrentViewFactory();
     }
 }
 
 namespace Windows.UI.Core
 {
     public enum CoreWindowActivationState { Deactivated, CodeActivated, PointerActivated }
+    public enum CoreAcceleratorKeyEventType { KeyDown, KeyUp, SystemKeyDown, SystemKeyUp }
+    public sealed class KeyEventArgs(Windows.System.VirtualKey key) : EventArgs
+    {
+        public Windows.System.VirtualKey VirtualKey => key;
+        public bool Handled { get; set; }
+    }
+    public sealed class PointerEventArgs(Windows.Devices.Input.PointerDeviceType deviceType) : EventArgs
+    {
+        public Windows.Devices.Input.PointerDeviceType DeviceType => deviceType;
+        public bool Handled { get; set; }
+    }
+    public sealed class AcceleratorKeyEventArgs(CoreAcceleratorKeyEventType eventType, Windows.System.VirtualKey key) : EventArgs
+    {
+        public CoreAcceleratorKeyEventType EventType => eventType;
+        public Windows.System.VirtualKey VirtualKey => key;
+        public bool Handled { get; set; }
+    }
+    public sealed class CoreDispatcher
+    {
+        public event UwpTypedEventHandler<CoreDispatcher, AcceleratorKeyEventArgs>? AcceleratorKeyActivated;
+        public int AcceleratorSubscribers => AcceleratorKeyActivated?.GetInvocationList().Length ?? 0;
+        public void PressAccelerator(CoreAcceleratorKeyEventType eventType, Windows.System.VirtualKey key)
+            => AcceleratorKeyActivated?.Invoke(this, new(eventType, key));
+    }
+    public sealed class CoreWindow
+    {
+        public CoreDispatcher Dispatcher { get; } = new();
+        public event UwpTypedEventHandler<CoreWindow, KeyEventArgs>? KeyDown;
+        public event UwpTypedEventHandler<CoreWindow, PointerEventArgs>? PointerPressed;
+        public event UwpTypedEventHandler<CoreWindow, PointerEventArgs>? PointerMoved;
+        public int KeySubscribers => KeyDown?.GetInvocationList().Length ?? 0;
+        public int PointerSubscribers => PointerPressed?.GetInvocationList().Length ?? 0;
+        public void PressKey(Windows.System.VirtualKey key) => KeyDown?.Invoke(this, new(key));
+        public Action CaptureKeyDown(Windows.System.VirtualKey key)
+        {
+            var handler = KeyDown;
+            return () => handler?.Invoke(this, new(key));
+        }
+        public void PressPointer(Windows.Devices.Input.PointerDeviceType deviceType) => PointerPressed?.Invoke(this, new(deviceType));
+        public void MovePointer() => PointerMoved?.Invoke(this, new(Windows.Devices.Input.PointerDeviceType.Mouse));
+    }
     public sealed class VisibilityChangedEventArgs(bool visible) : EventArgs
     {
         public bool Visible => visible;
     }
+}
+
+namespace Windows.System
+{
+    public enum VirtualKey { A, Space, Enter, Escape, Shift, Control, Menu }
+}
+
+namespace Windows.Devices.Input
+{
+    public enum PointerDeviceType { Mouse, Touch, Pen }
 }
 
 namespace Windows.UI
@@ -75,6 +129,120 @@ namespace Windows.UI
 namespace Windows.UI.Xaml.Media
 {
     public sealed class SolidColorBrush(object color) { public object Color => color; }
+    public sealed class TranslateTransform { public double Y { get; set; } }
+}
+
+namespace Windows.UI.Xaml.Media.Animation
+{
+    public abstract class Timeline
+    {
+        public Duration Duration { get; set; }
+        internal object? Target { get; set; }
+        internal string? TargetProperty { get; set; }
+        internal abstract double GetValue(TimeSpan elapsed);
+    }
+    public sealed class DoubleAnimation : Timeline
+    {
+        public double? From { get; set; }
+        public double? To { get; set; }
+        internal override double GetValue(TimeSpan elapsed)
+        {
+            double progress = Math.Clamp(elapsed.TotalMilliseconds / Duration.TimeSpan.TotalMilliseconds, 0, 1);
+            return From!.Value + (To!.Value - From.Value) * progress;
+        }
+    }
+    public readonly record struct KeyTime(TimeSpan TimeSpan)
+    {
+        public static KeyTime FromTimeSpan(TimeSpan value) => new(value);
+    }
+    public sealed class KeySpline
+    {
+        public Windows.Foundation.Point ControlPoint1 { get; set; }
+        public Windows.Foundation.Point ControlPoint2 { get; set; }
+        internal double GetProgress(double progress)
+        {
+            static double Bezier(double t, double first, double second)
+                => 3 * (1 - t) * (1 - t) * t * first + 3 * (1 - t) * t * t * second + t * t * t;
+
+            double low = 0;
+            double high = 1;
+            for (int i = 0; i < 48; i++)
+            {
+                double middle = (low + high) / 2;
+                if (Bezier(middle, ControlPoint1.X, ControlPoint2.X) < progress) low = middle;
+                else high = middle;
+            }
+            return Bezier((low + high) / 2, ControlPoint1.Y, ControlPoint2.Y);
+        }
+    }
+    public abstract class DoubleKeyFrame
+    {
+        public KeyTime KeyTime { get; set; }
+        public double Value { get; set; }
+    }
+    public sealed class DiscreteDoubleKeyFrame : DoubleKeyFrame;
+    public sealed class SplineDoubleKeyFrame : DoubleKeyFrame
+    {
+        public KeySpline KeySpline { get; set; } = new();
+    }
+    public sealed class DoubleAnimationUsingKeyFrames : Timeline
+    {
+        public List<DoubleKeyFrame> KeyFrames { get; } = [];
+        internal override double GetValue(TimeSpan elapsed)
+        {
+            double previousValue = 0;
+            var previousTime = TimeSpan.Zero;
+            foreach (var frame in KeyFrames)
+            {
+                if (elapsed < frame.KeyTime.TimeSpan)
+                {
+                    if (frame is not SplineDoubleKeyFrame spline) return previousValue;
+                    double progress = (elapsed - previousTime).TotalMilliseconds / (frame.KeyTime.TimeSpan - previousTime).TotalMilliseconds;
+                    return previousValue + (frame.Value - previousValue) * spline.KeySpline.GetProgress(progress);
+                }
+                previousValue = frame.Value;
+                previousTime = frame.KeyTime.TimeSpan;
+            }
+            return previousValue;
+        }
+    }
+    public sealed class Storyboard
+    {
+        public static Storyboard? LastCreated { get; set; }
+        public static bool FailOnBegin { get; set; }
+        public Storyboard() => LastCreated = this;
+        public List<Timeline> Children { get; } = [];
+        public event UwpEventHandler<object>? Completed;
+        public int CompletedSubscribers => Completed?.GetInvocationList().Length ?? 0;
+        public bool IsRunning { get; private set; }
+        public int BeginCalls { get; private set; }
+        private TimeSpan elapsed;
+        public static void SetTarget(Timeline animation, object target) => animation.Target = target;
+        public static void SetTargetProperty(Timeline animation, string property) => animation.TargetProperty = property;
+        public void Begin()
+        {
+            BeginCalls++;
+            if (FailOnBegin) throw new InvalidOperationException("Simulated animation startup failure.");
+            IsRunning = true;
+            Advance(TimeSpan.Zero);
+        }
+        public void Stop() => IsRunning = false;
+        public void Advance(TimeSpan amount)
+        {
+            if (!IsRunning) return;
+            elapsed += amount;
+            foreach (var animation in Children)
+            {
+                double value = animation.GetValue(elapsed);
+                animation.Target!.GetType().GetProperty(animation.TargetProperty!)!.SetValue(animation.Target, value);
+            }
+            if (Children.All(animation => elapsed >= animation.Duration.TimeSpan))
+            {
+                IsRunning = false;
+                Completed?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
 }
 
 namespace Windows.UI.Xaml.Navigation
@@ -91,16 +259,26 @@ namespace Windows.UI.Xaml
     using Windows.ApplicationModel.Activation;
     using Windows.UI.Core;
 
+    public enum Visibility { Visible, Collapsed }
     public class Application
     {
+        public static Application? Current { get; set; }
+        public Application() => Current = this;
         public event UwpEventHandler<SuspendingEventArgs>? Suspending;
         protected virtual void OnLaunched(LaunchActivatedEventArgs args) { }
         protected virtual void OnActivated(IActivatedEventArgs args) { }
         public void Launch(LaunchActivatedEventArgs args) => OnLaunched(args);
         public void Activate(IActivatedEventArgs args) => OnActivated(args);
-        public void Suspend() => Suspending?.Invoke(this, new());
+        public SuspendingEventArgs Suspend()
+        {
+            var args = new SuspendingEventArgs();
+            Suspending?.Invoke(this, args);
+            return args;
+        }
     }
     public sealed class RoutedEventArgs : EventArgs;
+    public sealed class SizeChangedEventArgs : EventArgs;
+    public readonly record struct Duration(TimeSpan TimeSpan);
     public sealed class WindowActivatedEventArgs(CoreWindowActivationState state) : EventArgs
     {
         public CoreWindowActivationState WindowActivationState => state;
@@ -110,6 +288,7 @@ namespace Windows.UI.Xaml
         [ThreadStatic] private static Window? current;
         public static Window Current { get => current ??= new(); set => current = value; }
         public object? Content { get; set; }
+        public CoreWindow CoreWindow { get; } = new();
         public event UwpEventHandler<WindowActivatedEventArgs>? Activated;
         public event UwpEventHandler<VisibilityChangedEventArgs>? VisibilityChanged;
         public int ActivationSubscribers => Activated?.GetInvocationList().Length ?? 0;
@@ -120,18 +299,20 @@ namespace Windows.UI.Xaml
     }
     public sealed class DispatcherTimer
     {
+        public static List<DispatcherTimer> Created { get; } = [];
         public static DispatcherTimer? LastCreated { get; private set; }
-        public DispatcherTimer() { Owner = Window.Current; LastCreated = this; }
+        public DispatcherTimer() { Owner = Window.Current; LastCreated = this; Created.Add(this); }
         public Window Owner { get; }
         public TimeSpan Interval { get; set; }
         public bool IsEnabled { get; private set; }
         public event UwpEventHandler<object>? Tick;
+        public int TickSubscribers => Tick?.GetInvocationList().Length ?? 0;
         public void Start() => IsEnabled = true;
         public void Stop() => IsEnabled = false;
         public void Advance()
         {
             if (!IsEnabled) return;
-            if (Window.Current != Owner) throw new Exception("Retry left its owning view.");
+            if (Window.Current != Owner) throw new Exception("Clock left its owning view.");
             Tick?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -143,6 +324,8 @@ namespace Windows.UI.Xaml.Controls
     using Windows.UI.Xaml.Navigation;
     public class Page
     {
+        public double ActualWidth { get; set; } = 1920;
+        public double ActualHeight { get; set; } = 1080;
         public event UwpEventHandler<RoutedEventArgs>? Loaded;
         public event UwpEventHandler<RoutedEventArgs>? Unloaded;
         public void Load() => Loaded?.Invoke(this, new());
@@ -159,20 +342,17 @@ namespace Windows.UI.Xaml.Controls
             catch { NavigationFailed?.Invoke(this, new(pageType)); return false; }
         }
     }
-    public sealed class Button { public bool IsEnabled { get; set; } }
-    public sealed class TextBlock { public string Text { get; set; } = string.Empty; }
-}
-
-namespace Windows.ApplicationModel.LockScreen
-{
-    public sealed class LockApplicationHost
+    public sealed class Border
     {
-        public static Func<LockApplicationHost?> Acquire { get; set; } = () => null;
-        public Action? Unlock { get; init; }
-        public int UnlockRequests { get; private set; }
-        public static LockApplicationHost? GetForCurrentView() => Acquire();
-        public void RequestUnlock() { UnlockRequests++; Unlock?.Invoke(); }
+        public double Opacity { get; set; } = 1;
+        public Visibility Visibility { get; set; } = Visibility.Visible;
     }
+    public sealed class Viewbox
+    {
+        public double MaxWidth { get; set; }
+        public double MaxHeight { get; set; }
+    }
+    public sealed class TextBlock { public string Text { get; set; } = string.Empty; }
 }
 
 namespace OhMyLockScreen
@@ -183,20 +363,28 @@ namespace OhMyLockScreen
     {
         internal static void Enable(Window window) { }
     }
-    internal static partial class LockScreenHostAccess
+    internal static class LockScreenHosting
     {
-        internal static Func<Windows.ApplicationModel.LockScreen.LockApplicationHost?> BrokerAcquire { get; set; } = () => null;
-        private static partial Windows.ApplicationModel.LockScreen.LockApplicationHost? CreateThroughBroker()
-            => BrokerAcquire();
+        internal static Func<bool> IsHosted { get; set; } = () => true;
+        internal static bool IsWindowHostedByLockScreen() => IsHosted();
     }
     public partial class App { public void InitializeComponent() { } }
     public partial class MainPage
     {
-        internal Button UnlockButton { get; } = new();
-        internal TextBlock StatusText { get; } = new();
-        internal TextBlock ViewStatusText { get; } = new();
+        internal TextBlock TimeText { get; } = new();
+        internal TextBlock DateText { get; } = new();
+        internal TextBlock ActivationKindText { get; } = new() { Text = "App.OnActivated args.Kind：尚未触发" };
+        internal TextBlock DismissStatusText { get; } = new();
+        internal Border DismissStatusPanel { get; } = new() { Visibility = Visibility.Collapsed };
+        internal Border BackgroundPlaceholder { get; } = new();
+        internal Viewbox ClockViewbox { get; } = new();
+        internal Windows.UI.Xaml.Media.TranslateTransform ForegroundTranslation { get; } = new();
         public void InitializeComponent() { }
-        internal void ClickUnlock() => ButtonUnlock_Click(this, new RoutedEventArgs());
-        internal void ClickExit() => ButtonExit_Click(this, new RoutedEventArgs());
+        internal void Resize(double width, double height)
+        {
+            ActualWidth = width;
+            ActualHeight = height;
+            OnSizeChanged(this, new SizeChangedEventArgs());
+        }
     }
 }

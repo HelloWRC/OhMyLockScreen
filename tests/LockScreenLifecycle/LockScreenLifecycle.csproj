@@ -7,7 +7,17 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../OhMyLockScreen/App.xaml.cs" Link="App.xaml.cs" />
+    <Compile Include="../../OhMyLockScreen/App.Hosting.cs" Link="App.Hosting.cs" />
+    <Compile Include="../../OhMyLockScreen/App.Services.cs" Link="App.Services.cs" />
+    <Compile Include="../../OhMyLockScreen/IAppHost.cs" Link="IAppHost.cs" />
+    <Compile Include="../../OhMyLockScreen/Hosting/*.cs" Link="Hosting/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Helpers/*.cs" Link="Helpers/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Models/*.cs" Link="Models/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Services/*.cs" Link="Services/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/MainPage.xaml.cs" Link="MainPage.xaml.cs" />
-    <Compile Include="../../OhMyLockScreen/LockScreenHostAccess.cs" Link="LockScreenHostAccess.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
   </ItemGroup>
 </Project>
