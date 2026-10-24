@@ -7,7 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OhMyLockScreen;
 using OhMyLockScreen.Shared;
-using OhMyLockScreen.Helpers;
+using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Hosting;
 using OhMyLockScreen.Models;
 using OhMyLockScreen.Services;

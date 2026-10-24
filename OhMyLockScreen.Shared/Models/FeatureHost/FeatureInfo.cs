@@ -1,6 +1,10 @@
-﻿namespace OhMyLockScreen.Shared.Models.FeatureHost;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using OhMyLockScreen.Shared.Abstractions.Models;
+using OhMyLockScreen.Shared.Abstractions.Models.FeatureHost;
 
-public partial class FeatureInfo
+namespace OhMyLockScreen.Shared.Models.FeatureHost;
+
+public partial class FeatureInfo : SettingsWithClientSettingsBase<IFeatureSettings>
 {
-    
+    [ObservableProperty] private string _id = "";
 }

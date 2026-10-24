@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization.Metadata;
 using OhMyLockScreen.Shared.Attributes.Serialization;
 
@@ -7,13 +8,15 @@ namespace OhMyLockScreen.Shared.Helpers.Serialization;
 
 public static class AutoJsonPolymorphicRegistrationHelper
 {
+    private static readonly object Sync = new();
+
     private static HashSet<Type> DiscoveredBaseTypes { get; } = [];
 
     private static ConcurrentDictionary<Type, ConcurrentDictionary<string, Type>> TypeAlias { get; } = [];
 
     private static HashSet<Type> GetAllBaseTypes(Type type)
     {
-        var result = new HashSet<Type>();
+        var result = new HashSet<Type>(type.GetInterfaces());
         var baseType = type.BaseType;
         while (baseType != null)
         {
@@ -52,28 +55,39 @@ public static class AutoJsonPolymorphicRegistrationHelper
 
     public static void DiscoverAndRegisterForAssembly(Assembly assembly)
     {
-        foreach (var type in assembly.DefinedTypes.Where(x => x.GetCustomAttribute<AutoJsonPolymorphicAttribute>() != null))
+        ArgumentNullException.ThrowIfNull(assembly);
+        lock (Sync)
         {
-            DiscoveredBaseTypes.Add(type);
-        }
-
-        var targetTypes = assembly.DefinedTypes
-            .Where(x => GetAllBaseTypes(x).Any(DiscoveredBaseTypes.Contains))
-            .ToDictionary(x => x.GetCustomAttribute<AutoJsonTypeNameAttribute>()?.Name ?? $"{x.FullName};assembly={x.Assembly.GetName().Name}");
-
-        foreach (var (name, type) in targetTypes)
-        {
-            var baseType = GetAllBaseTypes(type).FirstOrDefault(DiscoveredBaseTypes.Contains);
-            if (baseType == null)
+            foreach (var type in assembly.DefinedTypes.Where(x => x.GetCustomAttribute<AutoJsonPolymorphicAttribute>() != null))
             {
-                continue;
+                DiscoveredBaseTypes.Add(type);
             }
 
-            var alias = TypeAlias.TryGetValue(baseType, out var a) ? a : [];
-            alias.TryAdd(name, type);
-            TypeAlias.TryAdd(baseType, alias);
-        }
+            var targetTypes = assembly.DefinedTypes
+                .Where(type => type.IsClass && !type.IsAbstract && !type.ContainsGenericParameters);
 
-        ConfigureFileHelper.InvalidatesSerializerOptions();
+            foreach (var type in targetTypes)
+            {
+                var name = type.GetCustomAttribute<AutoJsonTypeNameAttribute>()?.Name
+                    ?? $"{type.FullName};assembly={type.Assembly.GetName().Name}";
+                foreach (var baseType in GetAllBaseTypes(type).Where(DiscoveredBaseTypes.Contains))
+                {
+                    var aliases = TypeAlias.GetOrAdd(baseType, _ => new ConcurrentDictionary<string, Type>());
+                    var registeredType = aliases.GetOrAdd(name, type);
+                    if (registeredType != type)
+                    {
+                        throw new InvalidOperationException($"类型别名 {name} 已用于 {registeredType.FullName}。");
+                    }
+                }
+            }
+
+            ConfigureFileHelper.InvalidatesSerializerOptions();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void DiscoverAndRegisterForCurrentAssembly()
+    {
+        DiscoverAndRegisterForAssembly(Assembly.GetCallingAssembly());
     }
 }

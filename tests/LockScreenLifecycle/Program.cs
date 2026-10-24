@@ -38,6 +38,27 @@ async Task RunAsync(string name, Func<Task> test)
     Console.WriteLine($"PASS: {name}");
 }
 
+if (args.Contains("--presenter-feature-only"))
+{
+    PresenterFeatureTests.Run(Run);
+    Console.WriteLine($"All {passed} presenter feature checks passed using simulated UWP controls.");
+    return;
+}
+
+if (args.Contains("--feature-only"))
+{
+    FeatureTests.Run(Run);
+    Console.WriteLine($"All {passed} feature checks passed using temporary settings and simulated UWP controls.");
+    return;
+}
+
+if (args.Contains("--layout-only"))
+{
+    LayoutTests.Run(Run);
+    Console.WriteLine($"All {passed} layout checks passed using temporary settings and simulated UWP panels.");
+    return;
+}
+
 Run("Hosted launch displays a transparent frame", () =>
 {
     new App().Launch(new LaunchActivatedEventArgs());
@@ -316,6 +337,9 @@ Run("Preview input keeps the page visible until the window is hosted", () =>
 });
 
 await InfrastructureTests.RunAsync(Run, RunAsync);
+ComponentTests.Run(Run);
+FeatureTests.Run(Run);
+LayoutTests.Run(Run);
 
 Console.WriteLine($"All {passed} checks passed using temporary settings and simulated UWP views and animations.");
 

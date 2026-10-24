@@ -1,0 +1,16 @@
+﻿<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene">
+    <Style TargetType="scene:LayerPresenter">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="scene:LayerPresenter">
+                    <scene:LayoutControl
+                        Settings="{TemplateBinding Layer}"
+                        ItemsSource="{Binding Layer.Children, RelativeSource={RelativeSource Mode=TemplatedParent}}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

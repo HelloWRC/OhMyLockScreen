@@ -64,6 +64,7 @@ namespace Windows.ApplicationModel.Core
 namespace Windows.UI.Core
 {
     public enum CoreWindowActivationState { Deactivated, CodeActivated, PointerActivated }
+    public enum CoreDispatcherPriority { Normal }
     public enum CoreAcceleratorKeyEventType { KeyDown, KeyUp, SystemKeyDown, SystemKeyUp }
     public sealed class KeyEventArgs(Windows.System.VirtualKey key) : EventArgs
     {
@@ -81,8 +82,32 @@ namespace Windows.UI.Core
         public Windows.System.VirtualKey VirtualKey => key;
         public bool Handled { get; set; }
     }
-    public sealed class CoreDispatcher
+    public sealed class CoreDispatcher(Windows.UI.Xaml.Window? owner = null)
     {
+        private readonly Queue<(Action Callback, TaskCompletionSource Completion)> _callbacks = [];
+        public bool HasThreadAccess => owner == null || ReferenceEquals(owner, Windows.UI.Xaml.Window.Current);
+
+        public Task RunAsync(CoreDispatcherPriority priority, Action callback)
+        {
+            var completion = new TaskCompletionSource();
+            _callbacks.Enqueue((callback, completion));
+            return completion.Task;
+        }
+
+        public void Drain()
+        {
+            if (!HasThreadAccess)
+            {
+                throw new InvalidOperationException("Dispatcher left its owning view.");
+            }
+
+            while (_callbacks.TryDequeue(out var work))
+            {
+                work.Callback();
+                work.Completion.SetResult();
+            }
+        }
+
         public event UwpTypedEventHandler<CoreDispatcher, AcceleratorKeyEventArgs>? AcceleratorKeyActivated;
         public int AcceleratorSubscribers => AcceleratorKeyActivated?.GetInvocationList().Length ?? 0;
         public void PressAccelerator(CoreAcceleratorKeyEventType eventType, Windows.System.VirtualKey key)
@@ -352,7 +377,16 @@ namespace Windows.UI.Xaml.Controls
         public double MaxWidth { get; set; }
         public double MaxHeight { get; set; }
     }
-    public sealed class TextBlock { public string Text { get; set; } = string.Empty; }
+    public sealed class TextBlock : FrameworkElement
+    {
+        public static readonly DependencyProperty TextProperty = DependencyProperty.Register(
+            nameof(Text), typeof(string), typeof(TextBlock), new PropertyMetadata(string.Empty));
+        public static readonly DependencyProperty FontSizeProperty = DependencyProperty.Register(
+            nameof(FontSize), typeof(double), typeof(TextBlock), new PropertyMetadata(14.0));
+
+        public string Text { get => (string)GetValue(TextProperty)!; set => SetValue(TextProperty, value); }
+        public double FontSize { get => (double)GetValue(FontSizeProperty)!; set => SetValue(FontSizeProperty, value); }
+    }
 }
 
 namespace OhMyLockScreen
