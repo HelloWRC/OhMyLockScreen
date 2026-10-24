@@ -14,7 +14,9 @@ using OhMyLockScreen.Shared.Helpers.Serialization;
 using OhMyLockScreen.Shared.Services.FeatureHost;
 using OhMyLockScreen.Shared.Services.Scene;
 using Windows.Storage;
+using OhMyLockScreen.Services.Features.Layout;
 using OhMyLockScreen.Services.Scene;
+using OhMyLockScreen.Shared.Extensions.FeatureHost;
 
 namespace OhMyLockScreen;
 
@@ -41,6 +43,10 @@ public sealed partial class App
         services.AddSingleton<FeatureRegistryService>();
         services.AddSingleton<IFeatureService, FeatureService>();
         services.AddSingleton<IComponentsService, ComponentsService>();
+        // Components
         services.AddComponent<TextComponent>();
+        // Features
+        services.AddFeature<LayoutFeature>();
+        services.AddFeature<GridLayoutFeature>();
     }
 }

@@ -100,6 +100,34 @@ internal static class FeatureAttacherTests
                 "Unload order did not reverse actual attachment order.");
         });
 
+        run("Feature attachers accept descendants without accepting incompatible ancestors", () =>
+        {
+            (object Host, string[] Expected)[] cases =
+            [
+                (new BaseHost(), ["base"]),
+                (new DerivedHost(), ["base", "derived", "interface"]),
+                (new IndirectHost(), ["base", "derived", "indirect", "interface"])
+            ];
+
+            foreach (var (host, expected) in cases)
+            {
+                var fixture = new Fixture();
+                fixture.Register<BaseHost>("base");
+                fixture.Register<DerivedHost>("derived");
+                fixture.Register<IndirectHost>("indirect");
+                fixture.Register<IProbeHost>("interface");
+                fixture.Register<string>("unrelated");
+                using var attacher = fixture.Attacher(
+                    Container("base", "derived", "indirect", "interface", "unrelated"), host);
+                attacher.Attach();
+                Check(fixture.Created.Select(probe => probe.Id).SequenceEqual(expected)
+                    && fixture.Attempts.SequenceEqual(expected)
+                    && fixture.Created.All(probe => ReferenceEquals(probe.Target, host))
+                    && fixture.Logger.Errors.Count == 0,
+                    "Target compatibility rejected a descendant or accepted an incompatible ancestor.");
+            }
+        });
+
         run("Feature attachers reload exactly once for each collection operation", () =>
         {
             var fixture = new Fixture();
@@ -566,7 +594,9 @@ internal static class FeatureAttacherTests
 
     private class BaseHost;
 
-    private sealed class DerivedHost : BaseHost, IProbeHost;
+    private class DerivedHost : BaseHost, IProbeHost;
+
+    private sealed class IndirectHost : DerivedHost;
 
     [FeatureInfo("attacher.injected", "Injected")]
     private sealed class InjectedFeature : FeatureBase<object, ProbeSettings>

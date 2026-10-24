@@ -38,6 +38,14 @@ async Task RunAsync(string name, Func<Task> test)
     Console.WriteLine($"PASS: {name}");
 }
 
+if (args.Contains("--binding-only"))
+{
+    DependencyPropertyBindingTests.Run(Run);
+    LayoutFeatureTests.Run(Run);
+    Console.WriteLine($"All {passed} property binding checks passed using simulated UWP controls.");
+    return;
+}
+
 if (args.Contains("--presenter-feature-only"))
 {
     PresenterFeatureTests.Run(Run);
@@ -338,6 +346,8 @@ Run("Preview input keeps the page visible until the window is hosted", () =>
 
 await InfrastructureTests.RunAsync(Run, RunAsync);
 ComponentTests.Run(Run);
+DependencyPropertyBindingTests.Run(Run);
+LayoutFeatureTests.Run(Run);
 FeatureTests.Run(Run);
 LayoutTests.Run(Run);
 

@@ -7,7 +7,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="scene:LayerPresenter">
                     <scene:LayoutControl
-                        Settings="{TemplateBinding Layer}"
+                        Settings="{Binding Layer, Mode=OneWay, RelativeSource={RelativeSource Mode=TemplatedParent}}"
                         ItemsSource="{Binding Layer.Children, RelativeSource={RelativeSource Mode=TemplatedParent}}" />
                 </ControlTemplate>
             </Setter.Value>

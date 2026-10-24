@@ -405,6 +405,7 @@ namespace OhMyLockScreen
     public partial class App { public void InitializeComponent() { } }
     public partial class MainPage
     {
+        internal OhMyLockScreen.Shared.Controls.Scene.ScenePresenter RootScenePresenter { get; } = new();
         internal TextBlock TimeText { get; } = new();
         internal TextBlock DateText { get; } = new();
         internal TextBlock ActivationKindText { get; } = new() { Text = "App.OnActivated args.Kind：尚未触发" };
@@ -418,7 +419,6 @@ namespace OhMyLockScreen
         {
             ActualWidth = width;
             ActualHeight = height;
-            OnSizeChanged(this, new SizeChangedEventArgs());
         }
     }
 }

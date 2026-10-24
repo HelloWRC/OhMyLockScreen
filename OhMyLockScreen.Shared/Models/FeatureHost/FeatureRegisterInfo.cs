@@ -28,7 +28,7 @@ public sealed class FeatureRegisterInfo(
 
     public Type FeatureType { get; } = featureType;
 
-    /// <summary>特性可应用的目标类型，由 FeatureBase 的泛型参数推断。</summary>
+    /// <summary>特性可应用的目标类型，由 FeatureBase 的泛型参数推断，也接受该类型的派生类或接口实现。</summary>
     public Type TargetType { get; } = targetType;
 
     /// <summary>特性自定义设置的数据模型类型，由 FeatureBase 的泛型参数推断。</summary>

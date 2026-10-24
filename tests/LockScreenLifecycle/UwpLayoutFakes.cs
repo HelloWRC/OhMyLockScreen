@@ -98,6 +98,23 @@ namespace Windows.UI.Xaml.Controls
 
     public sealed class Grid : Panel
     {
+        public static readonly DependencyProperty RowProperty = RegisterPosition("Row", 0);
+        public static readonly DependencyProperty ColumnProperty = RegisterPosition("Column", 0);
+        public static readonly DependencyProperty RowSpanProperty = RegisterPosition("RowSpan", 1);
+        public static readonly DependencyProperty ColumnSpanProperty = RegisterPosition("ColumnSpan", 1);
+
+        private static DependencyProperty RegisterPosition(string name, int minimum)
+        {
+            return DependencyProperty.Register(name, typeof(int), typeof(Grid),
+                new PropertyMetadata(minimum, (_, args) =>
+                {
+                    if ((int)args.NewValue! < minimum)
+                    {
+                        throw new ArgumentException($"{name} must be at least {minimum}.");
+                    }
+                }));
+        }
+
         public List<RowDefinition> RowDefinitions { get; } = [];
         public List<ColumnDefinition> ColumnDefinitions { get; } = [];
         public double RowSpacing { get; set; }

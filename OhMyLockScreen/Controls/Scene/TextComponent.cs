@@ -11,7 +11,7 @@ namespace OhMyLockScreen.Controls.Scene;
 [ComponentInfo(Id, "文本", "\U000F07F0", "显示自定义文本。")]
 public sealed class TextComponent : ComponentBase<TextComponentSettings>
 {
-    public const string Id = "OhMyLockScreen.Text";
+    public const string Id = "omls.components.text";
 
     private readonly TextBlock _text = new();
 

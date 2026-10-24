@@ -237,6 +237,7 @@ public sealed class FeatureAttacher : ObservableObject, IDisposable
             return;
         }
 
+        // 声明的目标类型可以是宿主运行时类型的基类或其实现的接口。
         if (!registration.TargetType.IsInstanceOfType(_host))
         {
             return;

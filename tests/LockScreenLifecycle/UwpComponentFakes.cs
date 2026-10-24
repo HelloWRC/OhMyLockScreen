@@ -53,8 +53,57 @@ namespace Windows.UI.Xaml
 
     public class UIElement : DependencyObject;
 
+    public enum HorizontalAlignment { Left, Center, Right, Stretch }
+
+    public enum VerticalAlignment { Top, Center, Bottom, Stretch }
+
+    public readonly record struct Thickness(double Left, double Top, double Right, double Bottom);
+
     public class FrameworkElement : UIElement
     {
+        public static readonly DependencyProperty WidthProperty = DependencyProperty.Register(
+            nameof(Width), typeof(double), typeof(FrameworkElement), new PropertyMetadata(double.NaN));
+        public static readonly DependencyProperty HeightProperty = DependencyProperty.Register(
+            nameof(Height), typeof(double), typeof(FrameworkElement), new PropertyMetadata(double.NaN));
+        public static readonly DependencyProperty HorizontalAlignmentProperty = DependencyProperty.Register(
+            nameof(HorizontalAlignment), typeof(HorizontalAlignment), typeof(FrameworkElement),
+            new PropertyMetadata(HorizontalAlignment.Stretch));
+        public static readonly DependencyProperty VerticalAlignmentProperty = DependencyProperty.Register(
+            nameof(VerticalAlignment), typeof(VerticalAlignment), typeof(FrameworkElement),
+            new PropertyMetadata(VerticalAlignment.Stretch));
+        public static readonly DependencyProperty MarginProperty = DependencyProperty.Register(
+            nameof(Margin), typeof(Thickness), typeof(FrameworkElement), new PropertyMetadata(default(Thickness)));
+
+        public double Width
+        {
+            get => (double)GetValue(WidthProperty)!;
+            set => SetValue(WidthProperty, value);
+        }
+
+        public double Height
+        {
+            get => (double)GetValue(HeightProperty)!;
+            set => SetValue(HeightProperty, value);
+        }
+
+        public HorizontalAlignment HorizontalAlignment
+        {
+            get => (HorizontalAlignment)GetValue(HorizontalAlignmentProperty)!;
+            set => SetValue(HorizontalAlignmentProperty, value);
+        }
+
+        public VerticalAlignment VerticalAlignment
+        {
+            get => (VerticalAlignment)GetValue(VerticalAlignmentProperty)!;
+            set => SetValue(VerticalAlignmentProperty, value);
+        }
+
+        public Thickness Margin
+        {
+            get => (Thickness)GetValue(MarginProperty)!;
+            set => SetValue(MarginProperty, value);
+        }
+
         public object? DataContext { get; set; }
         public Dictionary<object, object> Resources { get; } = [];
         public Core.CoreDispatcher Dispatcher { get; } = new(Window.Current);
