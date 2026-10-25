@@ -2,7 +2,9 @@ using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using OhMyLockScreen.Controls.Scene;
+using OhMyLockScreen.Controls.Components;
+using OhMyLockScreen.Controls.Editor;
+using OhMyLockScreen.ViewModels;
 using OhMyLockScreen.Hosting;
 using OhMyLockScreen.Services.FeatureHost;
 using OhMyLockScreen.Services;
@@ -26,27 +28,27 @@ public sealed partial class App
     {
         AutoJsonPolymorphicRegistrationHelper.DiscoverAndRegisterForAssembly(typeof(IAppHost).Assembly);
         AutoJsonPolymorphicRegistrationHelper.DiscoverAndRegisterForAssembly(typeof(App).Assembly);
-
-        return new HostBuilder()
-            .ConfigureLogging(logging => logging.AddDebug())
-            .ConfigureServices(ConfigureServices)
-            .Build();
+        return new HostBuilder().ConfigureLogging(logging => logging.AddDebug()).ConfigureServices(ConfigureServices).Build();
     }
 
     private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
     {
         services.AddSingleton<IHostLifetime, UwpHostLifetime>();
-        services.AddSingleton(provider => new SettingsService(
-            provider.GetRequiredService<ILogger<SettingsService>>(),
-            Path.Combine(ApplicationData.Current.LocalFolder.Path, "Settings.json")));
+        services.AddSingleton(provider => new SettingsService(provider.GetRequiredService<ILogger<SettingsService>>(), Path.Combine(ApplicationData.Current.LocalFolder.Path, "Settings.json")));
+        services.AddSingleton<ISceneService>(provider => new SceneService(provider.GetRequiredService<SettingsService>(), provider.GetRequiredService<ILogger<SceneService>>(), ApplicationData.Current.LocalFolder.Path));
+        services.AddSingleton(TimeProvider.System);
+        services.AddTransient<SceneEditorViewModel>();
         services.AddSingleton<ComponentRegistryService>();
         services.AddSingleton<FeatureRegistryService>();
         services.AddSingleton<IFeatureService, FeatureService>();
         services.AddSingleton<IComponentsService, ComponentsService>();
         // Components
-        services.AddComponent<TextComponent>();
+        services.AddComponent<TextComponent, TextSettingsControl>();
+        services.AddComponent<ClockComponent, ClockSettingsControl>();
+        services.AddComponent<DateComponent>();
+        services.AddComponent<ContainerComponent, ContainerSettingsControl>();
         // Features
-        services.AddFeature<LayoutFeature>();
-        services.AddFeature<GridLayoutFeature>();
+        services.AddFeature<LayoutFeature, LayoutSettingsControl>();
+        services.AddFeature<GridLayoutFeature, GridLayoutSettingsControl>();
     }
 }

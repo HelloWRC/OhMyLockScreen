@@ -1,0 +1,239 @@
+<local:LayoutSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Editor.LayoutSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+    xmlns:icons="using:FluentIcons.Uwp"
+    Loaded="OnLoaded"
+    Unloaded="OnUnloaded">
+    <StackPanel
+        Style="{StaticResource EditorFormStyle}">
+        <Grid
+            ColumnSpacing="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition
+                    Width="32" />
+                <ColumnDefinition
+                    Width="*" />
+                <ColumnDefinition
+                    Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock
+                Text="宽度"
+                VerticalAlignment="Center" />
+            <muxc:NumberBox
+                Grid.Column="1"
+                Style="{StaticResource EditorNumberStyle}"
+                IsEnabled="{x:Bind Settings.IsAutoWidth, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
+                Value="{Binding Width, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            <CheckBox
+                Grid.Column="2"
+                Content="自动"
+                MinWidth="0"
+                IsChecked="{x:Bind Settings.IsAutoWidth, Mode=TwoWay}" />
+        </Grid>
+        <Grid
+            ColumnSpacing="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition
+                    Width="32" />
+                <ColumnDefinition
+                    Width="*" />
+                <ColumnDefinition
+                    Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock
+                Text="高度"
+                VerticalAlignment="Center" />
+            <muxc:NumberBox
+                Grid.Column="1"
+                Style="{StaticResource EditorNumberStyle}"
+                IsEnabled="{x:Bind Settings.IsAutoHeight, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
+                Value="{Binding Height, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            <CheckBox
+                Grid.Column="2"
+                Content="自动"
+                MinWidth="0"
+                IsChecked="{x:Bind Settings.IsAutoHeight, Mode=TwoWay}" />
+        </Grid>
+        <CheckBox
+            Content="自动调整对齐"
+            IsChecked="{x:Bind Settings.IsAutoAlignment, Mode=TwoWay}"
+            ToolTipService.ToolTip="拖动时根据组件位置自动切换两端和居中对齐" />
+        <Grid
+            ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition
+                    Width="56" />
+                <ColumnDefinition
+                    Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock
+                Text="水平对齐"
+                VerticalAlignment="Center" />
+            <toolkit:Segmented
+                Grid.Column="1"
+                HorizontalAlignment="Stretch"
+                SelectionMode="Single"
+                SelectionChanged="OnHorizontalAlignmentSelectionChanged"
+                SelectedIndex="{x:Bind HorizontalAlignmentIndex, Mode=OneWay}">
+                <toolkit:SegmentedItem
+                    ToolTipService.ToolTip="左对齐"
+                    AutomationProperties.Name="左对齐"
+                    MinWidth="0"
+                    Padding="8,4">
+                    <toolkit:SegmentedItem.Icon>
+                        <icons:FluentIcon
+                            Icon="AlignLeft"
+                            FontSize="20" />
+                    </toolkit:SegmentedItem.Icon>
+                </toolkit:SegmentedItem>
+                <toolkit:SegmentedItem
+                    ToolTipService.ToolTip="水平居中"
+                    AutomationProperties.Name="水平居中"
+                    MinWidth="0"
+                    Padding="8,4">
+                    <toolkit:SegmentedItem.Icon>
+                        <icons:FluentIcon
+                            Icon="AlignCenterVertical"
+                            FontSize="20" />
+                    </toolkit:SegmentedItem.Icon>
+                </toolkit:SegmentedItem>
+                <toolkit:SegmentedItem
+                    ToolTipService.ToolTip="右对齐"
+                    AutomationProperties.Name="右对齐"
+                    MinWidth="0"
+                    Padding="8,4">
+                    <toolkit:SegmentedItem.Icon>
+                        <icons:FluentIcon
+                            Icon="AlignRight"
+                            FontSize="20" />
+                    </toolkit:SegmentedItem.Icon>
+                </toolkit:SegmentedItem>
+                <toolkit:SegmentedItem
+                    ToolTipService.ToolTip="水平拉伸"
+                    AutomationProperties.Name="水平拉伸"
+                    MinWidth="0"
+                    Padding="8,4">
+                    <toolkit:SegmentedItem.Icon>
+                        <icons:FluentIcon
+                            Icon="AlignStretchHorizontal"
+                            FontSize="20" />
+                    </toolkit:SegmentedItem.Icon>
+                </toolkit:SegmentedItem>
+            </toolkit:Segmented>
+        </Grid>
+        <Grid
+            ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition
+                    Width="56" />
+                <ColumnDefinition
+                    Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock
+                Text="竖直对齐"
+                VerticalAlignment="Center" />
+            <toolkit:Segmented
+                Grid.Column="1"
+                HorizontalAlignment="Stretch"
+                SelectionMode="Single"
+                SelectionChanged="OnVerticalAlignmentSelectionChanged"
+                SelectedIndex="{x:Bind VerticalAlignmentIndex, Mode=OneWay}">
+                <toolkit:SegmentedItem
+                    ToolTipService.ToolTip="顶部对齐"
+                    AutomationProperties.Name="顶部对齐"
+                    MinWidth="0"
+                    Padding="8,4">
+                    <toolkit:SegmentedItem.Icon>
+                        <icons:FluentIcon
+                            Icon="AlignTop"
+                            FontSize="20" />
+                    </toolkit:SegmentedItem.Icon>
+                </toolkit:SegmentedItem>
+                <toolkit:SegmentedItem
+                    ToolTipService.ToolTip="垂直居中"
+                    AutomationProperties.Name="垂直居中"
+                    MinWidth="0"
+                    Padding="8,4">
+                    <toolkit:SegmentedItem.Icon>
+                        <icons:FluentIcon
+                            Icon="AlignCenterHorizontal"
+                            FontSize="20" />
+                    </toolkit:SegmentedItem.Icon>
+                </toolkit:SegmentedItem>
+                <toolkit:SegmentedItem
+                    ToolTipService.ToolTip="底部对齐"
+                    AutomationProperties.Name="底部对齐"
+                    MinWidth="0"
+                    Padding="8,4">
+                    <toolkit:SegmentedItem.Icon>
+                        <icons:FluentIcon
+                            Icon="AlignBottom"
+                            FontSize="20" />
+                    </toolkit:SegmentedItem.Icon>
+                </toolkit:SegmentedItem>
+                <toolkit:SegmentedItem
+                    ToolTipService.ToolTip="垂直拉伸"
+                    AutomationProperties.Name="垂直拉伸"
+                    MinWidth="0"
+                    Padding="8,4">
+                    <toolkit:SegmentedItem.Icon>
+                        <icons:FluentIcon
+                            Icon="AlignStretchVertical"
+                            FontSize="20" />
+                    </toolkit:SegmentedItem.Icon>
+                </toolkit:SegmentedItem>
+            </toolkit:Segmented>
+        </Grid>
+        <Grid
+            ColumnSpacing="4"
+            DataContext="{x:Bind Margins, Mode=OneWay}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition
+                    Width="32" />
+                <ColumnDefinition
+                    Width="*" />
+                <ColumnDefinition
+                    Width="*" />
+                <ColumnDefinition
+                    Width="*" />
+                <ColumnDefinition
+                    Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock
+                Text="间距"
+                VerticalAlignment="Center" />
+            <muxc:NumberBox
+                Grid.Column="1"
+                Minimum="-100000"
+                Style="{StaticResource EditorNumberStyle}"
+                ToolTipService.ToolTip="左间距"
+                AutomationProperties.Name="左间距"
+                Value="{Binding Left, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            <muxc:NumberBox
+                Grid.Column="2"
+                Minimum="-100000"
+                Style="{StaticResource EditorNumberStyle}"
+                ToolTipService.ToolTip="上间距"
+                AutomationProperties.Name="上间距"
+                Value="{Binding Top, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            <muxc:NumberBox
+                Grid.Column="3"
+                Minimum="-100000"
+                Style="{StaticResource EditorNumberStyle}"
+                ToolTipService.ToolTip="右间距"
+                AutomationProperties.Name="右间距"
+                Value="{Binding Right, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            <muxc:NumberBox
+                Grid.Column="4"
+                Minimum="-100000"
+                Style="{StaticResource EditorNumberStyle}"
+                ToolTipService.ToolTip="下间距"
+                AutomationProperties.Name="下间距"
+                Value="{Binding Bottom, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+        </Grid>
+    </StackPanel>
+</local:LayoutSettingsControlBase>

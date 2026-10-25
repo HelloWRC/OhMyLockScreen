@@ -9,7 +9,7 @@
             <scene:ComponentPresenter />
         </DataTemplate>
         <ItemsPanelTemplate x:Key="CanvasItemsPanel">
-            <Canvas />
+            <scene:AutoSizedCanvas />
         </ItemsPanelTemplate>
         <ItemsPanelTemplate x:Key="StackPanelItemsPanel">
             <StackPanel />
@@ -18,7 +18,7 @@
             <toolkit:WrapPanel />
         </ItemsPanelTemplate>
         <ItemsPanelTemplate x:Key="GridItemsPanel">
-            <Grid />
+            <scene:AutoSizedGrid />
         </ItemsPanelTemplate>
     </ItemsControl.Resources>
 </ItemsControl>

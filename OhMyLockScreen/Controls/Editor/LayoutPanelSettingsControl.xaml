@@ -1,0 +1,49 @@
+<UserControl
+    x:Class="OhMyLockScreen.Controls.Editor.LayoutPanelSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor"
+    Loaded="OnLoaded"
+    Unloaded="OnUnloaded">
+    <StackPanel
+        Style="{StaticResource EditorFormStyle}">
+        <ComboBox
+            Header="布局方式"
+            HorizontalAlignment="Stretch"
+            SelectedIndex="{x:Bind ViewModel.KindIndex, Mode=TwoWay}">
+            <ComboBoxItem
+                Content="画布" />
+            <ComboBoxItem
+                Content="堆叠" />
+            <ComboBoxItem
+                Content="环绕" />
+            <ComboBoxItem
+                Content="网格" />
+        </ComboBox>
+        <ComboBox
+            Header="方向"
+            HorizontalAlignment="Stretch"
+            Visibility="{x:Bind ViewModel.ShowOrientation, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+            SelectedIndex="{x:Bind ViewModel.OrientationIndex, Mode=TwoWay}">
+            <ComboBoxItem
+                Content="纵向" />
+            <ComboBoxItem
+                Content="横向" />
+        </ComboBox>
+        <muxc:NumberBox
+            Header="间距"
+            Maximum="10000"
+            Style="{StaticResource EditorNumberStyle}"
+            Visibility="{x:Bind ViewModel.ShowSpacing, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+            Value="{x:Bind ViewModel.Spacing, Mode=TwoWay}" />
+        <local:GridDefinitionsControl
+            Header="网格行"
+            Visibility="{x:Bind ViewModel.ShowGridDefinitions, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+            Definitions="{x:Bind Model.Rows, Mode=OneWay}" />
+        <local:GridDefinitionsControl
+            Header="网格列"
+            Visibility="{x:Bind ViewModel.ShowGridDefinitions, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+            Definitions="{x:Bind Model.Columns, Mode=OneWay}" />
+    </StackPanel>
+</UserControl>

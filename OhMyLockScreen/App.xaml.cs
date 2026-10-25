@@ -10,24 +10,25 @@ using Windows.UI.Xaml.Navigation;
 using Windows.UI.Xaml.Media;
 
 namespace OhMyLockScreen;
-
 /// <summary>
-/// Provides application-specific behavior to supplement the default <see cref="Application"/> class.
+/// Provides application-specific behavior to supplement the default <see cref = "Application"/> class.
 /// </summary>
 public sealed partial class App : Application
 {
     private readonly ConditionalWeakTable<Window, ViewActivation> _viewActivations = new();
-
     private sealed class ViewActivation
     {
-        internal ActivationKind? Kind { get; set; }
+        internal ActivationKind? Kind
+        {
+            get; set;
+        }
     }
 
     /// <summary>
-    /// Initializes the singleton application object. This is the first line of authored code
-    /// executed, and as such is the logical equivalent of main() or WinMain().
-    /// </summary>
-    public App() : this(CreateHost)
+        /// Initializes the singleton application object. This is the first line of authored code
+        /// executed, and as such is the logical equivalent of main() or WinMain().
+        /// </summary>
+        public App() : this(CreateHost)
     {
     }
 
@@ -35,7 +36,6 @@ public sealed partial class App : Application
     {
         _initializeHost = new Lazy<Task>(() => StartHostAsync(hostFactory));
         InitializeComponent();
-
         Suspending += OnSuspending;
     }
 
@@ -63,11 +63,7 @@ public sealed partial class App : Application
         var window = Window.Current;
         // Keep the latest OnActivated value per view, including during host startup.
         var activation = _viewActivations.GetValue(window, _ => new ViewActivation());
-        if (activationKind.HasValue)
-        {
-            activation.Kind = activationKind;
-        }
-
+        activation.Kind = activationKind;
         try
         {
             await _initializeHost.Value;
@@ -77,6 +73,7 @@ public sealed partial class App : Application
             LogLifecycleError(exception, "应用主机启动失败");
             return;
         }
+
         if (!_isExiting)
         {
             ShowMainPage(window, activation.Kind);
@@ -85,7 +82,12 @@ public sealed partial class App : Application
 
     private void ShowMainPage(Window window, ActivationKind? activationKind)
     {
-        WindowTransparency.Enable(window);
+        var isLockScreen = activationKind is ActivationKind.LockScreen or ActivationKind.LockScreenComponent || LockScreenHosting.IsWindowHostedByLockScreen();
+        if (isLockScreen)
+        {
+            WindowTransparency.Enable(window);
+        }
+
         // Window.Current belongs to the view activated by the system host.
         if (window.Content is not Frame rootFrame)
         {
@@ -95,41 +97,47 @@ public sealed partial class App : Application
         }
 
         rootFrame.Background = new SolidColorBrush(Windows.UI.Colors.Transparent);
-
-        if (rootFrame.Content == null)
+        var pageType = isLockScreen ? typeof(MainPage) : typeof(SceneEditorPage);
+        var pageChanged = rootFrame.Content?.GetType() != pageType;
+        if (pageChanged)
         {
-            rootFrame.Navigate(typeof(MainPage));
+            rootFrame.Navigate(pageType);
+            rootFrame.BackStack.Clear();
         }
 
-        if (rootFrame.Content is MainPage mainPage && activationKind.HasValue)
+        if (rootFrame.Content is MainPage mainPage)
         {
-            mainPage.ShowActivationKind(activationKind.Value);
+            // A retained lock-screen view does not run Loaded again. Refresh it
+            // on each activation so edits from another app process are visible.
+            if (!pageChanged)
+            {
+                mainPage.RefreshActiveScene();
+            }
         }
 
         window.Activate();
     }
 
     /// <summary>
-    /// Invoked when Navigation to a certain page fails.
-    /// </summary>
-    /// <param name="sender">The Frame which failed navigation.</param>
-    /// <param name="e">Details about the navigation failure.</param>
-    private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
+        /// Invoked when Navigation to a certain page fails.
+        /// </summary>
+        /// <param name = "sender">The Frame which failed navigation.</param>
+        /// <param name = "e">Details about the navigation failure.</param>
+        private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
     {
         throw new Exception($"Failed to load page '{e.SourcePageType.FullName}'.");
     }
 
     /// <summary>
-    /// Invoked when application execution is being suspended. Application state is saved
-    /// without knowing whether the application will be terminated or resumed with the contents
-    /// of memory still intact.
-    /// </summary>
-    /// <param name="sender">The source of the suspend request.</param>
-    /// <param name="e">Details about the suspend request.</param>
-    private void OnSuspending(object sender, SuspendingEventArgs e)
+        /// Invoked when application execution is being suspended. Application state is saved
+        /// without knowing whether the application will be terminated or resumed with the contents
+        /// of memory still intact.
+        /// </summary>
+        /// <param name = "sender">The source of the suspend request.</param>
+        /// <param name = "e">Details about the suspend request.</param>
+        private void OnSuspending(object sender, SuspendingEventArgs e)
     {
         SuspendingDeferral deferral = e.SuspendingOperation.GetDeferral();
-
         try
         {
             // Suspending has a short system deadline; do not wait for hosted

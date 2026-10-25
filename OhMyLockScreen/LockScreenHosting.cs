@@ -1,15 +1,55 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Windows.ApplicationModel;
+using Windows.ApplicationModel.Core;
 
 namespace OhMyLockScreen;
 
 internal static unsafe class LockScreenHosting
 {
+    private const string LockScreenApplicationId = "App";
+    private const string LockScreenAumIdSuffix = "!App";
+
     /// <summary>
-    /// True when the current CoreWindow has been reparented into the lock host's
-    /// ApplicationHostBridgeWindow, i.e. this process really is the displayed lock app.
+    /// True when the current process is running as the lock-screen application or
+    /// its view has been hosted by Windows.
     /// </summary>
     internal static bool IsWindowHostedByLockScreen()
+    {
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
+        {
+            try
+            {
+                var appInfo = AppInfo.Current;
+                if (string.Equals(appInfo.Id, LockScreenApplicationId, StringComparison.OrdinalIgnoreCase)
+                    || appInfo.AppUserModelId.EndsWith(LockScreenAumIdSuffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.WriteLine($"Could not query the current application identity: {exception}");
+            }
+        }
+
+        try
+        {
+            if (CoreApplication.GetCurrentView().IsHosted)
+            {
+                return true;
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Could not query the current application view host: {exception}");
+        }
+
+        return IsParentedByLockScreenHost();
+    }
+
+    private static bool IsParentedByLockScreenHost()
     {
         var coreWindow = Windows.UI.Xaml.Window.Current?.CoreWindow;
         if (coreWindow is null)

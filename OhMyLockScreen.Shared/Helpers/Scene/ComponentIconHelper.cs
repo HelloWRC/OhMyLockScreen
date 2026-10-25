@@ -1,9 +1,16 @@
 using Windows.UI.Xaml.Controls;
+using FluentIcons.Common;
 
 namespace OhMyLockScreen.Shared.Helpers.Scene;
 
 internal static class ComponentIconHelper
 {
+    internal static FontIconSource CreateIconSource(Icon icon) => new FluentIcons.Uwp.FluentIconSource
+    {
+        Icon = icon,
+        IconSize = IconSize.Resizable,
+        FontSize = 20
+    };
     internal static FontIconSource? CreateIconSource(string? glyph)
     {
         if (string.IsNullOrEmpty(glyph))

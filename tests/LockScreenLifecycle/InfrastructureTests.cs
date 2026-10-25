@@ -215,6 +215,7 @@ internal static class InfrastructureTests
         {
             var probe = new HostedProbe { StartGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
             var app = new App(() => BuildHost(probe));
+            LockScreenHosting.IsHosted = () => false;
             var firstView = new ViewContext();
             var secondView = new ViewContext();
             firstView.Invoke(() => app.Launch(new LaunchActivatedEventArgs()));
@@ -236,11 +237,8 @@ internal static class InfrastructureTests
                 await Task.Delay(10);
             }
             Check(firstView.Window.Content is Frame && secondView.Window.Content is Frame, "An asynchronous activation lost its view.");
-            var firstPage = (MainPage)((Frame)firstView.Window.Content!).Content!;
-            var secondPage = (MainPage)((Frame)secondView.Window.Content!).Content!;
-            Check(!ReferenceEquals(firstPage, secondPage), "Pages were shared across views.");
-            Check(firstPage.ActivationKindText.Text == $"App.OnActivated args.Kind：{ActivationKind.Other}（{(int)ActivationKind.Other}）" &&
-                secondPage.ActivationKindText.Text.Contains("LockScreenComponent"),
+            Check(firstView.Window.Content is Frame { Content: SceneEditorPage } &&
+                secondView.Window.Content is Frame { Content: MainPage },
                 "Delayed startup lost the latest activation kind or shared it across views.");
             await app.ExitAsync();
         });
@@ -265,18 +263,21 @@ internal static class InfrastructureTests
             var app = new App(() => BuildHost(probe));
             app.Launch(new LaunchActivatedEventArgs());
             var page = (MainPage)((Frame)Window.Current.Content!).Content!;
+            page.RootScenePresenter.ActualHeight = 720;
             page.Load();
-            var timer = DispatcherTimer.LastCreated!;
             Window.Current.CoreWindow.PressPointer(PointerDeviceType.Mouse);
             Check(probe.Stops == 0 && CoreApplication.ExitCalls == 0, "Shutdown started before the animation finished.");
             Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(333));
             var firstExit = app.ExitAsync();
             var secondExit = app.ExitAsync();
             Check(ReferenceEquals(firstExit, secondExit) && probe.Stops == 1 && !firstExit.IsCompleted, "Shutdown was not coalesced.");
-            Check(!timer.IsEnabled && Window.Current.ActivationSubscribers == 0 && Window.Current.VisibilitySubscribers == 0,
+            Check(Window.Current.CoreWindow.KeySubscribers == 0 &&
+                Window.Current.CoreWindow.PointerSubscribers == 0 &&
+                Window.Current.CoreWindow.Dispatcher.AcceleratorSubscribers == 0,
                 "Page tracking continued while shutdown was pending.");
-            Check(page.BackgroundPlaceholder.Opacity == 0 && page.ForegroundTranslation.Y == -page.ActualHeight,
-                "Shutdown restored the opaque background or foreground.");
+            Check(page.RootScenePresenter.LayersLayerElement.Opacity == 0 &&
+                page.RootScenePresenter.LayersTranslation.Y == -720,
+                "Shutdown restored the scene layers after the unlock animation.");
             probe.StopGate.SetResult();
             await firstExit;
             Check(CoreApplication.ExitCalls == 1 && probe.Disposed, "Overlapping exit requests exited more than once.");

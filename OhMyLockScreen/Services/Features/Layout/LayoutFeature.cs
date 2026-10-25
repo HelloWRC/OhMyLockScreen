@@ -6,7 +6,6 @@ using OhMyLockScreen.Shared.Abstractions.FeatureHost;
 using OhMyLockScreen.Shared.Attributes.FeatureHost;
 using OhMyLockScreen.Shared.Helpers;
 using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
 
 namespace OhMyLockScreen.Services.Features.Layout;
 
@@ -30,14 +29,14 @@ public class LayoutFeature : FeatureBase<FrameworkElement, LayoutFeatureSettings
 
         try
         {
-            _bindings.Add(settings.WhenValueChanged(source => source.Width)
+            _bindings.Add(DependencyPropertyBindingHelper.Bind(settings.WhenValueChanged(source => source.Width)
                 .CombineLatest(settings.WhenValueChanged(source => source.IsAutoWidth),
-                    (width, isAuto) => isAuto ? double.NaN : width)
-                .Subscribe(width => target.Width = width));
-            _bindings.Add(settings.WhenValueChanged(source => source.Height)
+                    (width, isAuto) => isAuto ? double.NaN : width),
+                target, FrameworkElement.WidthProperty));
+            _bindings.Add(DependencyPropertyBindingHelper.Bind(settings.WhenValueChanged(source => source.Height)
                 .CombineLatest(settings.WhenValueChanged(source => source.IsAutoHeight),
-                    (height, isAuto) => isAuto ? double.NaN : height)
-                .Subscribe(height => target.Height = height));
+                    (height, isAuto) => isAuto ? double.NaN : height),
+                target, FrameworkElement.HeightProperty));
             _bindings.Add(DependencyPropertyBindingHelper.Bind(
                 settings, source => source.VerticalAlignment, target, FrameworkElement.VerticalAlignmentProperty));
             _bindings.Add(DependencyPropertyBindingHelper.Bind(

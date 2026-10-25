@@ -6,15 +6,15 @@ namespace OhMyLockScreen.Shared.Abstractions.Models.Scene;
 
 public interface ILayoutSettings
 {
-    public LayoutKind Kind { get; }
+    public LayoutKind Kind { get; set; }
 
-    public double Spacing { get; }
+    public double Spacing { get; set; }
 
     public ObservableCollection<GridElement> Rows { get; }
 
     public ObservableCollection<GridElement> Columns { get; }
 
-    public Orientation Orientation { get; }
+    public Orientation Orientation { get; set; }
 }
 
 public enum LayoutKind

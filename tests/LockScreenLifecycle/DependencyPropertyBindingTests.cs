@@ -72,22 +72,41 @@ internal static class DependencyPropertyBindingTests
                 "A subsequent null value was dropped or was not passed to the converter.");
         });
 
-        run("Disposing property bindings releases listeners and preserves the last value", () =>
+        run("Disposing property bindings releases listeners and restores the original value once", () =>
         {
             var source = new Source { Value = 24 };
-            var target = new TextBlock();
+            var target = new TextBlock { FontSize = 18 };
             using var bindings = new CompositeDisposable();
-            bindings.Add(DependencyPropertyBindingHelper.Bind(
-                source, settings => settings.Value, target, TextBlock.FontSizeProperty));
+            var binding = DependencyPropertyBindingHelper.Bind(
+                source, settings => settings.Value, target, TextBlock.FontSizeProperty);
+            bindings.Add(binding);
             Check(source.Subscribers > 0, "The source was not observed.");
             source.Value = 32;
 
             bindings.Dispose();
-            bindings.Dispose();
             Check(source.Subscribers == 0, "Disposal left source listeners attached.");
             source.Value = 48;
-            Check((double)target.GetValue(TextBlock.FontSizeProperty)! == 32,
-                "Disposal cleared the last value or allowed later synchronization.");
+            Check(target.FontSize == 18,
+                "Disposal did not restore the original value or allowed later synchronization.");
+            target.FontSize = 20;
+            binding.Dispose();
+            bindings.Dispose();
+            Check(target.FontSize == 20, "Repeated disposal restored the original value again.");
+        });
+
+        run("Converted property bindings restore original null values", () =>
+        {
+            var source = new Source { Value = 24 };
+            var target = new TextBlock();
+            target.SetValue(TextBlock.TextProperty, null);
+            using var binding = DependencyPropertyBindingHelper.Bind(
+                source, settings => settings.Value, target, TextBlock.TextProperty,
+                value => value.ToString());
+            source.Value = 32;
+            binding.Dispose();
+            source.Value = 48;
+            Check(target.GetValue(TextBlock.TextProperty) == null && source.Subscribers == 0,
+                "A converted binding did not restore the original null value or retained its listener.");
         });
 
         run("Property bindings on the same source can be disposed independently", () =>
@@ -103,7 +122,7 @@ internal static class DependencyPropertyBindingTests
             firstBinding.Dispose();
             firstBinding.Dispose();
             source.Value = 32;
-            Check((double)first.GetValue(TextBlock.FontSizeProperty)! == 24 &&
+            Check((double)first.GetValue(TextBlock.FontSizeProperty)! == 14 &&
                 (double)second.GetValue(TextBlock.FontSizeProperty)! == 32,
                 "Disposing one binding affected another binding on the same source.");
             secondBinding.Dispose();

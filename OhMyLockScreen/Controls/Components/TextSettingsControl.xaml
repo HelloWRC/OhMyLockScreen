@@ -1,0 +1,21 @@
+<local:TextSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Components.TextSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:local="using:OhMyLockScreen.Controls.Components">
+    <StackPanel
+        Style="{StaticResource EditorFormStyle}">
+        <TextBox
+            Header="文本"
+            AcceptsReturn="True"
+            TextWrapping="Wrap"
+            Text="{x:Bind Settings.Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+        <muxc:NumberBox
+            Header="字号"
+            Minimum="1"
+            Maximum="512"
+            Style="{StaticResource EditorNumberStyle}"
+            Value="{Binding FontSize, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+    </StackPanel>
+</local:TextSettingsControlBase>

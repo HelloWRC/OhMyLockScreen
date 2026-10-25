@@ -9,7 +9,6 @@ using OhMyLockScreen.Shared.Services.Scene;
 using Windows.UI.Xaml.Controls;
 
 namespace OhMyLockScreen.Shared.Extensions.Scene;
-
 /// <summary>组件注册扩展。</summary>
 public static class ComponentRegistryExtensions
 {
@@ -21,8 +20,7 @@ public static class ComponentRegistryExtensions
 
     /// <summary>注册组件及其设置控件，设置数据模型仍由组件基类推断。</summary>
     public static IServiceCollection AddComponent<TComponent, TSettings>(this IServiceCollection services)
-        where TComponent : ComponentBase
-        where TSettings : UserControl
+        where TComponent : ComponentBase where TSettings : UserControl
     {
         return Register(services, typeof(TComponent), typeof(TSettings));
     }
@@ -40,13 +38,10 @@ public static class ComponentRegistryExtensions
             throw new ArgumentException($"设置控件 {settingsType.FullName} 必须是可实例化的具体类型。");
         }
 
-        var info = componentType.GetCustomAttribute<ComponentInfoAttribute>()
-            ?? throw new ArgumentException($"组件 {componentType.FullName} 缺少注册信息。");
+        var info = componentType.GetCustomAttribute<ComponentInfoAttribute>() ?? throw new ArgumentException($"组件 {componentType.FullName} 缺少注册信息。");
         ArgumentException.ThrowIfNullOrWhiteSpace(info.Id);
         ArgumentException.ThrowIfNullOrWhiteSpace(info.Name);
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(ComponentRegisterInfo)
-            && descriptor.ImplementationInstance is ComponentRegisterInfo registered
-            && registered.Id == info.Id))
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(ComponentRegisterInfo) && descriptor.ImplementationInstance is ComponentRegisterInfo registered && registered.Id == info.Id))
         {
             throw new ArgumentException($"组件 Id {info.Id} 已被占用。");
         }
@@ -69,9 +64,7 @@ public static class ComponentRegistryExtensions
         }
 
         services.TryAddSingleton<ComponentRegistryService>();
-        services.AddSingleton(new ComponentRegisterInfo(
-            info.Id, info.Name, info.Description, componentType, clientSettingsType, settingsType, isContainer,
-            info.IconGlyph));
+        services.AddSingleton(new ComponentRegisterInfo(info.Id, info.Name, info.Description, componentType, clientSettingsType, settingsType, isContainer, info.IconGlyph, info.Icon));
         services.AddTransient(componentType);
         if (settingsType != null)
         {

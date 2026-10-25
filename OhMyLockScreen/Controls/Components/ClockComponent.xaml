@@ -1,0 +1,12 @@
+<local:ClockComponentBase
+    x:Class="OhMyLockScreen.Controls.Components.ClockComponent"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Components"
+    Loaded="OnLoaded"
+    Unloaded="OnUnloaded">
+    <TextBlock
+        Text="{x:Bind DisplayText, Mode=OneWay}"
+        FontWeight="Bold"
+        FontSize="{x:Bind Settings.FontSize, Mode=OneWay}" />
+</local:ClockComponentBase>

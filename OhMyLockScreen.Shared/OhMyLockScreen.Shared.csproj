@@ -17,6 +17,7 @@
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
         <PackageReference Include="CommunityToolkit.Uwp.Controls.Primitives" Version="8.2.251219" />
+        <PackageReference Include="CommunityToolkit.Uwp.Controls.Segmented" Version="8.2.251219" />
         <PackageReference Include="CommunityToolkit.Uwp.Extensions" Version="8.2.251219" />
         <PackageReference Include="Microsoft.UI.Xaml" Version="2.8.7" />
         <PackageReference Include="ReactiveUI" Version="26.0.1" />

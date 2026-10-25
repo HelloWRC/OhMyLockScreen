@@ -1,0 +1,11 @@
+<local:DateComponentBase
+    x:Class="OhMyLockScreen.Controls.Components.DateComponent"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Components"
+    Loaded="OnLoaded"
+    Unloaded="OnUnloaded">
+    <TextBlock
+        Text="{x:Bind DisplayText, Mode=OneWay}"
+        FontSize="24" />
+</local:DateComponentBase>

@@ -3,7 +3,6 @@
 namespace Windows.UI.Xaml
 {
     public delegate void PropertyChangedCallback(DependencyObject sender, DependencyPropertyChangedEventArgs args);
-
     public sealed class DependencyPropertyChangedEventArgs(object? oldValue, object? newValue)
     {
         public object? OldValue { get; } = oldValue;
@@ -18,21 +17,20 @@ namespace Windows.UI.Xaml
 
     public sealed class DependencyProperty
     {
-        internal PropertyMetadata Metadata { get; }
+        public static object UnsetValue { get; } = new();
+        internal PropertyMetadata Metadata
+        {
+            get;
+        }
 
         private DependencyProperty(PropertyMetadata metadata) => Metadata = metadata;
-
-        public static DependencyProperty Register(string name, Type type, Type owner, PropertyMetadata metadata)
-            => new(metadata);
+        public static DependencyProperty Register(string name, Type type, Type owner, PropertyMetadata metadata) => new(metadata);
     }
 
     public class DependencyObject
     {
         private readonly Dictionary<DependencyProperty, object?> _values = [];
-
-        public object? GetValue(DependencyProperty property)
-            => _values.TryGetValue(property, out var value) ? value : property.Metadata.DefaultValue;
-
+        public object? GetValue(DependencyProperty property) => _values.TryGetValue(property, out var value) ? value : property.Metadata.DefaultValue;
         public void SetValue(DependencyProperty property, object? value)
         {
             var previous = GetValue(property);
@@ -51,88 +49,140 @@ namespace Windows.UI.Xaml
         public string Path { get; } = path;
     }
 
-    public class UIElement : DependencyObject;
+    public class UIElement : DependencyObject
+    {
+        public static readonly DependencyProperty OpacityProperty = DependencyProperty.Register(
+            nameof(Opacity),
+            typeof(double),
+            typeof(UIElement),
+            new PropertyMetadata(1.0));
+        public static readonly DependencyProperty VisibilityProperty = DependencyProperty.Register(
+            nameof(Visibility),
+            typeof(Visibility),
+            typeof(UIElement),
+            new PropertyMetadata(Visibility.Visible));
 
-    public enum HorizontalAlignment { Left, Center, Right, Stretch }
+        public double Opacity
+        {
+            get => (double)GetValue(OpacityProperty)!;
+            set => SetValue(OpacityProperty, value);
+        }
 
-    public enum VerticalAlignment { Top, Center, Bottom, Stretch }
+        public Visibility Visibility
+        {
+            get => (Visibility)GetValue(VisibilityProperty)!;
+            set => SetValue(VisibilityProperty, value);
+        }
+    }
+    public enum HorizontalAlignment
+    {
+        Left,
+        Center,
+        Right,
+        Stretch
+    }
+
+    public enum VerticalAlignment
+    {
+        Top,
+        Center,
+        Bottom,
+        Stretch
+    }
 
     public readonly record struct Thickness(double Left, double Top, double Right, double Bottom);
-
     public class FrameworkElement : UIElement
     {
-        public static readonly DependencyProperty WidthProperty = DependencyProperty.Register(
-            nameof(Width), typeof(double), typeof(FrameworkElement), new PropertyMetadata(double.NaN));
-        public static readonly DependencyProperty HeightProperty = DependencyProperty.Register(
-            nameof(Height), typeof(double), typeof(FrameworkElement), new PropertyMetadata(double.NaN));
-        public static readonly DependencyProperty HorizontalAlignmentProperty = DependencyProperty.Register(
-            nameof(HorizontalAlignment), typeof(HorizontalAlignment), typeof(FrameworkElement),
-            new PropertyMetadata(HorizontalAlignment.Stretch));
-        public static readonly DependencyProperty VerticalAlignmentProperty = DependencyProperty.Register(
-            nameof(VerticalAlignment), typeof(VerticalAlignment), typeof(FrameworkElement),
-            new PropertyMetadata(VerticalAlignment.Stretch));
-        public static readonly DependencyProperty MarginProperty = DependencyProperty.Register(
-            nameof(Margin), typeof(Thickness), typeof(FrameworkElement), new PropertyMetadata(default(Thickness)));
+        public double ActualWidth
+        {
+            get;
+            set;
+        }
 
+        public double ActualHeight
+        {
+            get;
+            set;
+        }
+
+        public Media.Transform? RenderTransform
+        {
+            get; set;
+        }
+
+        public static readonly DependencyProperty WidthProperty = DependencyProperty.Register(nameof(Width), typeof(double), typeof(FrameworkElement), new PropertyMetadata(double.NaN));
+        public static readonly DependencyProperty HeightProperty = DependencyProperty.Register(nameof(Height), typeof(double), typeof(FrameworkElement), new PropertyMetadata(double.NaN));
+        public static readonly DependencyProperty HorizontalAlignmentProperty = DependencyProperty.Register(nameof(HorizontalAlignment), typeof(HorizontalAlignment), typeof(FrameworkElement), new PropertyMetadata(HorizontalAlignment.Stretch));
+        public static readonly DependencyProperty VerticalAlignmentProperty = DependencyProperty.Register(nameof(VerticalAlignment), typeof(VerticalAlignment), typeof(FrameworkElement), new PropertyMetadata(VerticalAlignment.Stretch));
+        public static readonly DependencyProperty MarginProperty = DependencyProperty.Register(nameof(Margin), typeof(Thickness), typeof(FrameworkElement), new PropertyMetadata(default(Thickness)));
         public double Width
         {
-            get => (double)GetValue(WidthProperty)!;
-            set => SetValue(WidthProperty, value);
+            get => (double)GetValue(WidthProperty)!; set => SetValue(WidthProperty, value);
         }
-
         public double Height
         {
-            get => (double)GetValue(HeightProperty)!;
-            set => SetValue(HeightProperty, value);
+            get => (double)GetValue(HeightProperty)!; set => SetValue(HeightProperty, value);
         }
-
         public HorizontalAlignment HorizontalAlignment
         {
-            get => (HorizontalAlignment)GetValue(HorizontalAlignmentProperty)!;
-            set => SetValue(HorizontalAlignmentProperty, value);
+            get => (HorizontalAlignment)GetValue(HorizontalAlignmentProperty)!; set => SetValue(HorizontalAlignmentProperty, value);
         }
-
         public VerticalAlignment VerticalAlignment
         {
-            get => (VerticalAlignment)GetValue(VerticalAlignmentProperty)!;
-            set => SetValue(VerticalAlignmentProperty, value);
+            get => (VerticalAlignment)GetValue(VerticalAlignmentProperty)!; set => SetValue(VerticalAlignmentProperty, value);
         }
-
         public Thickness Margin
         {
-            get => (Thickness)GetValue(MarginProperty)!;
-            set => SetValue(MarginProperty, value);
+            get => (Thickness)GetValue(MarginProperty)!; set => SetValue(MarginProperty, value);
         }
-
-        public object? DataContext { get; set; }
+        public object? DataContext
+        {
+            get; set;
+        }
         public Dictionary<object, object> Resources { get; } = [];
         public Core.CoreDispatcher Dispatcher { get; } = new(Window.Current);
 
         public event UwpEventHandler<RoutedEventArgs>? Loaded;
         public event UwpEventHandler<RoutedEventArgs>? Unloaded;
         public event UwpEventHandler<object>? LayoutUpdated;
-
         public Dictionary<DependencyProperty, Data.Binding> Bindings { get; } = [];
 
         public void SetBinding(DependencyProperty property, Data.Binding binding) => Bindings[property] = binding;
-
         public void Load() => Loaded?.Invoke(this, new RoutedEventArgs());
-
         public void Unload() => Unloaded?.Invoke(this, new RoutedEventArgs());
-
         public void RaiseLayoutUpdated() => LayoutUpdated?.Invoke(this, EventArgs.Empty);
     }
 }
 
 namespace Windows.UI.Xaml.Data
 {
-    public enum BindingMode { OneWay, TwoWay, OneTime }
+    public interface IValueConverter
+    {
+        object Convert(object value, Type targetType, object parameter, string language);
+        object ConvertBack(object value, Type targetType, object parameter, string language);
+    }
+
+    public enum BindingMode
+    {
+        OneWay,
+        TwoWay,
+        OneTime
+    }
 
     public sealed class Binding
     {
-        public object? Source { get; set; }
-        public PropertyPath? Path { get; set; }
-        public BindingMode Mode { get; set; }
+        public object? Source
+        {
+            get; set;
+        }
+        public PropertyPath? Path
+        {
+            get; set;
+        }
+        public BindingMode Mode
+        {
+            get; set;
+        }
     }
 }
 
@@ -140,25 +190,50 @@ namespace Windows.UI.Xaml.Controls
 {
     public class FontIconSource : DependencyObject
     {
+        public double FontSize
+        {
+            get; set;
+        }
         public string Glyph { get; set; } = string.Empty;
-        public Media.FontFamily? FontFamily { get; set; }
+        public Media.FontFamily? FontFamily
+        {
+            get; set;
+        }
     }
 
     public class Control : FrameworkElement
     {
-        public object? DefaultStyleKey { get; set; }
-        protected virtual void OnApplyTemplate() { }
+        public object? DefaultStyleKey
+        {
+            get; set;
+        }
 
+        protected virtual void OnApplyTemplate()
+        {
+        }
     }
 
     public class UserControl : Control
     {
-        public object? Content { get; set; }
+        public object? Content
+        {
+            get; set;
+        }
     }
 
     public class ContentPresenter : FrameworkElement
     {
-        public object? Content { get; set; }
+        public object? Content
+        {
+            get; set;
+        }
+    }
+
+    public enum Stretch
+    {
+        Fill,
+        Uniform,
+        UniformToFill
     }
 }
 
@@ -175,10 +250,18 @@ namespace FluentIcons.Uwp
 {
     public sealed class FluentIconSource : Windows.UI.Xaml.Controls.FontIconSource
     {
+        public FluentIcons.Common.Icon Icon
+        {
+            get; set;
+        }
+        public FluentIcons.Common.IconSize IconSize
+        {
+            get; set;
+        }
+
         public FluentIconSource()
         {
-            FontFamily = new Windows.UI.Xaml.Media.FontFamily(
-                "ms-appx:///FluentIcons.Uwp/Assets/FluentSystemIcons-Size20.otf#Fluent System Icons Size20");
+            FontFamily = new Windows.UI.Xaml.Media.FontFamily("ms-appx:///FluentIcons.Uwp/Assets/FluentSystemIcons-Size20.otf#Fluent System Icons Size20");
         }
     }
 }

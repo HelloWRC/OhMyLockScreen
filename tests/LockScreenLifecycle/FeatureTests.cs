@@ -36,7 +36,6 @@ internal static class FeatureTests
             Throws<ArgumentNullException>(() => FeatureRegistryExtensions.AddFeature<PlainFeature>(null!));
             Check(services.Count == count, "Failed registration modified the service collection.");
         });
-
         run("Controls with settings support arbitrary models and notify only when the model changes", () =>
         {
             var control = new GeneralSettingsControl();
@@ -49,19 +48,16 @@ internal static class FeatureTests
             Throws<InvalidOperationException>(() => _ = control.Settings);
             var first = new GeneralSettings();
             control.SetSettings(first);
-            Check(ReferenceEquals(control.Settings, first) && notifications == 1 && control.SettingsCallbacks == 1,
-                "The control did not expose or notify its injected settings.");
+            Check(ReferenceEquals(control.Settings, first) && notifications == 1 && control.SettingsCallbacks == 1, "The control did not expose or notify its injected settings.");
             control.SetSettings(first);
             Check(notifications == 1 && control.SettingsCallbacks == 1, "Repeated injection duplicated notifications.");
             var second = new GeneralSettings();
             control.SetSettings(second);
-            Check(ReferenceEquals(control.Settings, second) && notifications == 2 && control.SettingsCallbacks == 2,
-                "Settings replacement did not update the control.");
+            Check(ReferenceEquals(control.Settings, second) && notifications == 2 && control.SettingsCallbacks == 2, "Settings replacement did not update the control.");
             control.SetSettings(null);
             Throws<InvalidOperationException>(() => _ = control.Settings);
             Check(notifications == 3 && control.SettingsCallbacks == 3, "Clearing settings did not notify the control.");
         });
-
         run("Feature registration infers targets and settings across intermediate generic bases", () =>
         {
             var services = new ServiceCollection();
@@ -70,24 +66,16 @@ internal static class FeatureTests
             using var provider = services.BuildServiceProvider();
             var registry = provider.GetRequiredService<FeatureRegistryService>();
             var probe = registry.Find("test.probe")!;
-            Check(registry.Registered.Count == 2 && probe.FeatureType == typeof(ProbeFeature)
-                && probe.TargetType == typeof(UserControl) && probe.ClientSettingsType == typeof(ProbeSettings)
-                && probe.SettingsType == null && probe.Name == "Probe" && probe.Description == "Probe description",
-                "Feature registration lost metadata or inferred incorrect generic arguments.");
+            Check(registry.Registered.Count == 2 && probe.FeatureType == typeof(ProbeFeature) && probe.TargetType == typeof(UserControl) && probe.ClientSettingsType == typeof(ProbeSettings) && probe.SettingsType == null && probe.Name == "Probe" && probe.Description == "Probe description", "Feature registration lost metadata or inferred incorrect generic arguments.");
             var plain = registry.Find("test.plain")!;
-            Check(plain.TargetType == typeof(object) && plain.ClientSettingsType == null && plain.SettingsType == null
-                && plain.Description == "Plain description" && plain.IconSource == null,
-                "A feature without custom settings or an icon was registered incorrectly.");
-            Check(registry.Find("unknown") == null && registry.Find("TEST.PROBE") == null,
-                "Feature lookup did not use exact IDs.");
+            Check(plain.TargetType == typeof(object) && plain.ClientSettingsType == null && plain.SettingsType == null && plain.Description == "Plain description" && plain.IconSource == null, "A feature without custom settings or an icon was registered incorrectly.");
+            Check(registry.Find("unknown") == null && registry.Find("TEST.PROBE") == null, "Feature lookup did not use exact IDs.");
             var firstIcon = probe.IconSource!;
             var secondIcon = probe.IconSource!;
-            Check(firstIcon.Glyph == "\U000F07F0" && secondIcon.Glyph == firstIcon.Glyph
-                && !ReferenceEquals(firstIcon, secondIcon), "Feature icon sources were lost or shared.");
+            Check(firstIcon.Glyph == "\U000F07F0" && secondIcon.Glyph == firstIcon.Glyph && !ReferenceEquals(firstIcon, secondIcon), "Feature icon sources were lost or shared.");
             firstIcon.Glyph = "changed";
             Check(probe.IconSource!.Glyph == "\U000F07F0", "An icon source changed stored feature metadata.");
         });
-
         run("Feature and settings controls use transient constructor injection without eager creation", () =>
         {
             var services = new ServiceCollection();
@@ -96,23 +84,16 @@ internal static class FeatureTests
             services.AddFeature<ProbeFeature, ProbeSettingsControl>();
             using var provider = services.BuildServiceProvider();
             var info = provider.GetRequiredService<FeatureRegistryService>().Find("test.probe")!;
-            Check(info.SettingsType == typeof(ProbeSettingsControl) && info.ClientSettingsType == typeof(ProbeSettings)
-                && dependency.FeaturesCreated == 0 && dependency.ControlsCreated == 0,
-                "Registration instantiated a feature or confused the settings control and model.");
+            Check(info.SettingsType == typeof(ProbeSettingsControl) && info.ClientSettingsType == typeof(ProbeSettings) && dependency.FeaturesCreated == 0 && dependency.ControlsCreated == 0, "Registration instantiated a feature or confused the settings control and model.");
             var first = provider.GetRequiredService<ProbeFeature>();
             var second = provider.GetRequiredService<ProbeFeature>();
             var firstControl = provider.GetRequiredService<ProbeSettingsControl>();
             var secondControl = provider.GetRequiredService<ProbeSettingsControl>();
             Throws<InvalidOperationException>(() => _ = firstControl.Settings);
             Throws<InvalidOperationException>(() => _ = secondControl.Settings);
-            Check(!ReferenceEquals(first, second) && ReferenceEquals(first.Dependency, dependency)
-                && ReferenceEquals(second.Dependency, dependency) && dependency.FeaturesCreated == 2,
-                "Features did not use transient constructor injection.");
-            Check(!ReferenceEquals(firstControl, secondControl) && ReferenceEquals(firstControl.Dependency, dependency)
-                && ReferenceEquals(secondControl.Dependency, dependency) && dependency.ControlsCreated == 2,
-                "Settings controls did not use transient constructor injection.");
+            Check(!ReferenceEquals(first, second) && ReferenceEquals(first.Dependency, dependency) && ReferenceEquals(second.Dependency, dependency) && dependency.FeaturesCreated == 2, "Features did not use transient constructor injection.");
+            Check(!ReferenceEquals(firstControl, secondControl) && ReferenceEquals(firstControl.Dependency, dependency) && ReferenceEquals(secondControl.Dependency, dependency) && dependency.ControlsCreated == 2, "Settings controls did not use transient constructor injection.");
         });
-
         run("Feature registries are singletons scoped to their hosts", () =>
         {
             var first = new ServiceCollection();
@@ -123,97 +104,97 @@ internal static class FeatureTests
             using var secondProvider = second.BuildServiceProvider();
             var firstRegistry = firstProvider.GetRequiredService<FeatureRegistryService>();
             var secondRegistry = secondProvider.GetRequiredService<FeatureRegistryService>();
-            Check(ReferenceEquals(firstRegistry, firstProvider.GetRequiredService<FeatureRegistryService>())
-                && firstRegistry.Find("test.plain") == null && secondRegistry.Find("test.probe") == null,
-                "Feature registry lifetime or host isolation was incorrect.");
+            Check(ReferenceEquals(firstRegistry, firstProvider.GetRequiredService<FeatureRegistryService>()) && firstRegistry.Find("test.plain") == null && secondRegistry.Find("test.probe") == null, "Feature registry lifetime or host isolation was incorrect.");
         });
-
         run("Feature service creates independent features with shared settings and injected dependencies", () =>
         {
             using var provider = CreateProvider();
             var service = provider.GetRequiredService<IFeatureService>();
-            var settings = new FeatureInfo { Id = "test.probe" };
+            var settings = new FeatureInfo
+            {
+                Id = "test.probe"
+            };
             var first = (ProbeFeature)service.CreateFeature(settings)!;
             var second = (ProbeFeature)service.CreateFeature(settings)!;
             var dependency = provider.GetRequiredService<ProbeDependency>();
-            Check(!ReferenceEquals(first, second) && ReferenceEquals(first.Dependency, dependency)
-                && dependency.FeaturesCreated == 2 && dependency.ControlsCreated == 0,
-                "Feature creation shared instances or created settings controls eagerly.");
-            Check(settings.Settings is ProbeSettings && ReferenceEquals(first.Settings, settings.Settings)
-                && ReferenceEquals(second.Settings, settings.Settings)
-                && first.SettingsNotifications == 1 && second.SettingsNotifications == 1
-                && first.SettingsCallbacks == 1 && second.SettingsCallbacks == 1,
-                "Typed settings were not shared or initialization did not notify exactly once.");
+            Check(!ReferenceEquals(first, second) && ReferenceEquals(first.Dependency, dependency) && dependency.FeaturesCreated == 2 && dependency.ControlsCreated == 0, "Feature creation shared instances or created settings controls eagerly.");
+            Check(settings.Settings is ProbeSettings && ReferenceEquals(first.Settings, settings.Settings) && ReferenceEquals(second.Settings, settings.Settings) && first.SettingsNotifications == 1 && second.SettingsNotifications == 1 && first.SettingsCallbacks == 1 && second.SettingsCallbacks == 1, "Typed settings were not shared or initialization did not notify exactly once.");
             Check(first.Target == null && second.Target == null, "Creation attached a target.");
             var target = new UserControl();
             first.Attach(target);
             Check(ReferenceEquals(first.Target, target), "The created feature could not attach to its typed target.");
             first.Dispose();
             Check(first.Target == null, "Feature disposal did not detach its target.");
-            Check(service.CreateFeature(new FeatureInfo { Id = "test.plain" }) is PlainFeature,
-                "A feature without custom settings could not be created.");
+            Check(service.CreateFeature(new FeatureInfo { Id = "test.plain" }) is PlainFeature, "A feature without custom settings could not be created.");
         });
-
         run("Feature settings controls initialize and reuse the model without creating features", () =>
         {
             using var provider = CreateProvider();
             var service = provider.GetRequiredService<IFeatureService>();
-            var settings = new FeatureInfo { Id = "test.probe" };
+            var settings = new FeatureInfo
+            {
+                Id = "test.probe"
+            };
             var first = (ProbeSettingsControl)service.CreateSettingsControl(settings)!;
             var second = (ProbeSettingsControl)service.CreateSettingsControl(settings)!;
             var dependency = provider.GetRequiredService<ProbeDependency>();
-            Check(settings.Settings is ProbeSettings && ReferenceEquals(first.DataContext, settings.Settings)
-                && ReferenceEquals(second.DataContext, settings.Settings)
-                && ReferenceEquals(first.Settings, settings.Settings) && ReferenceEquals(second.Settings, settings.Settings)
-                && first.SettingsCallbacks == 1 && first.SettingsNotifications == 1
-                && second.SettingsCallbacks == 1 && second.SettingsNotifications == 1
-                && !ReferenceEquals(first, second) && ReferenceEquals(first.Dependency, dependency)
-                && dependency.ControlsCreated == 2 && dependency.FeaturesCreated == 0,
-                "Settings controls did not use independent instances and the shared model.");
+            Check(settings.Settings is ProbeSettings && ReferenceEquals(first.DataContext, settings.Settings) && ReferenceEquals(second.DataContext, settings.Settings) && ReferenceEquals(first.Settings, settings.Settings) && ReferenceEquals(second.Settings, settings.Settings) && first.SettingsCallbacks == 1 && first.SettingsNotifications == 1 && second.SettingsCallbacks == 1 && second.SettingsNotifications == 1 && !ReferenceEquals(first, second) && ReferenceEquals(first.Dependency, dependency) && dependency.ControlsCreated == 2 && dependency.FeaturesCreated == 0, "Settings controls did not use independent instances and the shared model.");
             var feature = (ProbeFeature)service.CreateFeature(settings)!;
             Check(ReferenceEquals(feature.Settings, first.DataContext), "The feature replaced the settings control's model.");
         });
-
         run("Unknown features and absent settings controls preserve configuration", () =>
         {
             using var provider = CreateProvider();
             var service = provider.GetRequiredService<IFeatureService>();
             var original = new OtherSettings();
-            var unknown = new FeatureInfo { Id = "unknown", Settings = original };
-            Check(service.CreateFeature(unknown) == null && service.CreateSettingsControl(unknown) == null
-                && ReferenceEquals(unknown.Settings, original), "Unknown IDs changed the configuration.");
-            var withoutControl = new FeatureInfo { Id = "test.without-control" };
-            Check(service.CreateSettingsControl(withoutControl) == null && withoutControl.Settings == null,
-                "An absent settings control created a model.");
-            var plain = new FeatureInfo { Id = "test.plain" };
-            Check(service.CreateSettingsControl(plain) is PlainSettingsControl { DataContext: null, SettingsInternal: null }
-                && plain.Settings == null, "A settings control without a model could not be created.");
+            var unknown = new FeatureInfo
+            {
+                Id = "unknown",
+                Settings = original
+            };
+            Check(service.CreateFeature(unknown) == null && service.CreateSettingsControl(unknown) == null && ReferenceEquals(unknown.Settings, original), "Unknown IDs changed the configuration.");
+            var withoutControl = new FeatureInfo
+            {
+                Id = "test.without-control"
+            };
+            Check(service.CreateSettingsControl(withoutControl) == null && withoutControl.Settings == null, "An absent settings control created a model.");
+            var plain = new FeatureInfo
+            {
+                Id = "test.plain"
+            };
+            Check(service.CreateSettingsControl(plain) is PlainSettingsControl { DataContext: null, SettingsInternal: null } && plain.Settings == null, "A settings control without a model could not be created.");
             Throws<ArgumentNullException>(() => service.CreateFeature(null!));
             Throws<ArgumentNullException>(() => service.CreateSettingsControl(null!));
         });
-
         run("Feature service replaces mismatched settings using the shared settings helper", () =>
         {
             using var provider = CreateProvider();
             var service = provider.GetRequiredService<IFeatureService>();
             var original = new OtherSettings();
-            var featureSettings = new FeatureInfo { Id = "test.probe", Settings = original };
+            var featureSettings = new FeatureInfo
+            {
+                Id = "test.probe",
+                Settings = original
+            };
             var feature = (ProbeFeature)service.CreateFeature(featureSettings)!;
-            Check(featureSettings.Settings is ProbeSettings && ReferenceEquals(feature.Settings, featureSettings.Settings),
-                "Feature creation did not replace mismatched settings with its registered model.");
-            var controlSettings = new FeatureInfo { Id = "test.probe", Settings = original };
+            Check(featureSettings.Settings is ProbeSettings && ReferenceEquals(feature.Settings, featureSettings.Settings), "Feature creation did not replace mismatched settings with its registered model.");
+            var controlSettings = new FeatureInfo
+            {
+                Id = "test.probe",
+                Settings = original
+            };
             var control = (ProbeSettingsControl)service.CreateSettingsControl(controlSettings)!;
-            Check(controlSettings.Settings is ProbeSettings && ReferenceEquals(control.DataContext, controlSettings.Settings)
-                && ReferenceEquals(control.Settings, controlSettings.Settings),
-                "Settings control creation did not replace mismatched settings with its registered model.");
+            Check(controlSettings.Settings is ProbeSettings && ReferenceEquals(control.DataContext, controlSettings.Settings) && ReferenceEquals(control.Settings, controlSettings.Settings), "Settings control creation did not replace mismatched settings with its registered model.");
         });
-
         run("Feature and settings control failures retain the model created by the shared settings helper", () =>
         {
             using var provider = CreateProvider();
             var service = provider.GetRequiredService<IFeatureService>();
             var dependency = provider.GetRequiredService<ProbeDependency>();
-            var settings = new FeatureInfo { Id = "test.probe" };
+            var settings = new FeatureInfo
+            {
+                Id = "test.probe"
+            };
             dependency.FailFeatureConstruction = true;
             Throws<InvalidOperationException>(() => service.CreateFeature(settings));
             var createdSettings = settings.Settings;
@@ -231,16 +212,13 @@ internal static class FeatureTests
             Throws<InvalidOperationException>(() => service.CreateSettingsControl(settings));
             Check(ReferenceEquals(settings.Settings, createdSettings), "Settings injection failure replaced the existing model.");
         });
-
-        run("The app host provides an empty feature registry before any features are registered", () =>
+        run("The app host provides the built-in layout features and feature service", () =>
         {
             new App().Launch(new LaunchActivatedEventArgs());
-            Check(IAppHost.Host!.Services.GetRequiredService<FeatureRegistryService>().Registered.Count == 0,
-                "The app host did not register the feature registry.");
-            Check(IAppHost.Host.Services.GetRequiredService<IFeatureService>() is FeatureService,
-                "The app host did not register the feature service.");
+            var registered = IAppHost.Host!.Services.GetRequiredService<FeatureRegistryService>().Registered;
+            Check(registered.Select(feature => feature.Id).ToHashSet().SetEquals(["omls.features.layout.layout", "omls.features.layout.grid"]), "The app host did not register the built-in layout features.");
+            Check(IAppHost.Host.Services.GetRequiredService<IFeatureService>() is FeatureService, "The app host did not register the feature service.");
         });
-
         FeatureAttacherTests.Run(run);
         PresenterFeatureTests.Run(run);
     }
@@ -265,7 +243,8 @@ internal static class FeatureTests
         }
     }
 
-    private static void Throws<TException>(Action action) where TException : Exception
+    private static void Throws<TException>(Action action)
+        where TException : Exception
     {
         try
         {
@@ -281,50 +260,59 @@ internal static class FeatureTests
 
     private sealed class ProbeDependency
     {
-        public int FeaturesCreated { get; set; }
-
-        public int ControlsCreated { get; set; }
-
-        public bool FailFeatureConstruction { get; set; }
-
-        public bool FailSettingsInitialization { get; set; }
-
-        public bool FailControlConstruction { get; set; }
-
-        public bool FailControlInitialization { get; set; }
+        public int FeaturesCreated
+        {
+            get; set;
+        }
+        public int ControlsCreated
+        {
+            get; set;
+        }
+        public bool FailFeatureConstruction
+        {
+            get; set;
+        }
+        public bool FailSettingsInitialization
+        {
+            get; set;
+        }
+        public bool FailControlConstruction
+        {
+            get; set;
+        }
+        public bool FailControlInitialization
+        {
+            get; set;
+        }
     }
 
     private sealed class GeneralSettings;
-
     private sealed class GeneralSettingsControl : ControlWithSettingsBase<GeneralSettings>
     {
-        public int SettingsCallbacks { get; private set; }
+        public int SettingsCallbacks
+        {
+            get; private set;
+        }
 
         protected override void OnSettingsChanged() => SettingsCallbacks++;
     }
 
     private sealed class ProbeSettings : IFeatureSettings;
-
     private sealed class OtherSettings : IFeatureSettings;
-
     private abstract class TestFeature<TTarget> : FeatureBase<TTarget> where TTarget : class
     {
         public override void Attach(TTarget target) => Target = target;
-
         public override void Detach() => Target = null;
     }
 
-    private abstract class IntermediateFeature<TTarget> : FeatureBase<TTarget, ProbeSettings>
-        where TTarget : class
+    private abstract class IntermediateFeature<TTarget> : FeatureBase<TTarget, ProbeSettings> where TTarget : class
     {
         public override void Attach(TTarget target) => Target = target;
-
         public override void Detach() => Target = null;
     }
 
     [FeatureInfo("test.without-control", "Without control")]
     private sealed class WithoutControlFeature : IntermediateFeature<object>;
-
     [FeatureInfo("test.probe", "Probe", "\U000F07F0", "Probe description")]
     private sealed class ProbeFeature : IntermediateFeature<UserControl>
     {
@@ -346,11 +334,18 @@ internal static class FeatureTests
             };
         }
 
-        public ProbeDependency Dependency { get; }
-
-        public int SettingsNotifications { get; private set; }
-
-        public int SettingsCallbacks { get; private set; }
+        public ProbeDependency Dependency
+        {
+            get;
+        }
+        public int SettingsNotifications
+        {
+            get; private set;
+        }
+        public int SettingsCallbacks
+        {
+            get; private set;
+        }
 
         protected override void OnSettingsChanged()
         {
@@ -363,9 +358,7 @@ internal static class FeatureTests
         }
     }
 
-    private abstract class IntermediateSettingsControl<TSettings> : ControlWithSettingsBase<TSettings>
-        where TSettings : class;
-
+    private abstract class IntermediateSettingsControl<TSettings> : ControlWithSettingsBase<TSettings> where TSettings : class;
     private sealed class ProbeSettingsControl : IntermediateSettingsControl<ProbeSettings>
     {
         public ProbeSettingsControl(ProbeDependency dependency)
@@ -386,11 +379,18 @@ internal static class FeatureTests
             };
         }
 
-        public ProbeDependency Dependency { get; }
-
-        public int SettingsNotifications { get; private set; }
-
-        public int SettingsCallbacks { get; private set; }
+        public ProbeDependency Dependency
+        {
+            get;
+        }
+        public int SettingsNotifications
+        {
+            get; private set;
+        }
+        public int SettingsCallbacks
+        {
+            get; private set;
+        }
 
         protected override void OnSettingsChanged()
         {
@@ -405,30 +405,20 @@ internal static class FeatureTests
     }
 
     private sealed class PlainSettingsControl : ControlWithSettingsBase;
-
     private sealed class WrongSettingsControl : ControlWithSettingsBase<OtherSettings>;
-
     [FeatureInfo("test.plain", "Plain", "Plain description")]
     private class PlainFeature : TestFeature<object>;
-
     [FeatureInfo("test.probe", "Duplicate")]
     private sealed class DuplicateFeature : TestFeature<object>;
-
     private sealed class MissingInfoFeature : TestFeature<object>;
-
     [FeatureInfo("test.abstract", "Abstract")]
     private abstract class AbstractFeature : TestFeature<object>;
-
     [FeatureInfo(" ", "Empty ID")]
     private sealed class EmptyIdFeature : TestFeature<object>;
-
     [FeatureInfo("test.empty-name", " ")]
     private sealed class EmptyNameFeature : TestFeature<object>;
-
     private sealed class InheritedInfoFeature : PlainFeature;
-
     [FeatureInfo("test.invalid", "Invalid")]
     private sealed class NotAFeature;
-
     private abstract class AbstractSettingsControl : ControlWithSettingsBase;
 }

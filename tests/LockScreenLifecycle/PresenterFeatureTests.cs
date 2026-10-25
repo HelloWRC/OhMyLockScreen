@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using OhMyLockScreen.Controls.Scene;
+using OhMyLockScreen.Controls.Components;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Services.FeatureHost;
 using OhMyLockScreen.Services.Scene;
@@ -40,17 +40,13 @@ internal static class PresenterFeatureTests
                 item.Presenter.Load();
                 item.Presenter.Load();
                 var entries = log.Entries.Skip(count).ToArray();
-                Check(entries.Select(entry => entry.Id).SequenceEqual(["first", item.FeatureId, "second"])
-                    && entries.All(entry => ReferenceEquals(entry.Target, item.Presenter)),
-                    "A presenter did not attach its own features in order or repeated Loaded duplicated them.");
+                Check(entries.Select(entry => entry.Id).SequenceEqual(["first", item.FeatureId, "second"]) && entries.All(entry => ReferenceEquals(entry.Target, item.Presenter)), "A presenter did not attach its own features in order or repeated Loaded duplicated them.");
                 log.Detached.Clear();
                 item.Presenter.Unload();
                 item.Presenter.Unload();
-                Check(log.Detached.SequenceEqual(entries.Reverse()) && entries.All(entry => entry.DetachCalls == 1),
-                    "Presenter unload did not clean up once in reverse order.");
+                Check(log.Detached.SequenceEqual(entries.Reverse()) && entries.All(entry => entry.DetachCalls == 1), "Presenter unload did not clean up once in reverse order.");
             }
         });
-
         run("Presenter feature sources follow configuration replacements and collection changes", () =>
         {
             var log = CreateHost();
@@ -78,7 +74,6 @@ internal static class PresenterFeatureTests
                 item.Presenter.Unload();
             }
         });
-
         run("Unloaded presenters ignore feature edits and reload their latest configuration", () =>
         {
             var log = CreateHost();
@@ -100,7 +95,6 @@ internal static class PresenterFeatureTests
                 item.Presenter.Unload();
             }
         });
-
         run("Presenters sharing settings keep independent feature instances and lifetimes", () =>
         {
             var log = CreateHost();
@@ -118,79 +112,66 @@ internal static class PresenterFeatureTests
                 var firstEntry = log.Entries[^1];
                 second.Presenter.Load();
                 var secondEntry = log.Entries[^1];
-                Check(!ReferenceEquals(firstEntry, secondEntry)
-                    && ReferenceEquals(firstEntry.Target, first.Presenter)
-                    && ReferenceEquals(secondEntry.Target, second.Presenter),
-                    "Shared settings shared a feature instance across presenters.");
+                Check(!ReferenceEquals(firstEntry, secondEntry) && ReferenceEquals(firstEntry.Target, first.Presenter) && ReferenceEquals(secondEntry.Target, second.Presenter), "Shared settings shared a feature instance across presenters.");
                 first.Presenter.Unload();
-                Check(firstEntry.DetachCalls == 1 && secondEntry.DetachCalls == 0,
-                    "Unloading one presenter detached another presenter's feature.");
+                Check(firstEntry.DetachCalls == 1 && secondEntry.DetachCalls == 0, "Unloading one presenter detached another presenter's feature.");
                 ExpectCreated(log, () => container.Features.Add(Info("second")), first.FeatureId, "second");
                 second.Presenter.Unload();
             }
         });
-
         run("Component presenter detaches features before replacing or clearing content", () =>
         {
             var log = CreateHost();
             var presenter = new ComponentPresenter
             {
-                Settings = new ComponentSettings { Id = TextComponent.Id, Features = [Info("first")] }
+                Settings = new ComponentSettings
+                {
+                    Id = TextComponent.Id,
+                    Features = [Info("first")]
+                }
             };
             presenter.Load();
             var first = log.Entries[^1];
-            Check(first.AttachedContent is TextComponent && ReferenceEquals(first.AttachedContent, presenter.Content),
-                "Component features attached before component content was available.");
-            presenter.Settings = new ComponentSettings { Id = TextComponent.Id, Features = [Info("second")] };
+            Check(first.AttachedContent is TextComponent && ReferenceEquals(first.AttachedContent, presenter.Content), "Component features attached before component content was available.");
+            presenter.Settings = new ComponentSettings
+            {
+                Id = TextComponent.Id,
+                Features = [Info("second")]
+            };
             var second = log.Entries[^1];
-            Check(first.DetachCalls == 1 && ReferenceEquals(first.DetachedContent, first.AttachedContent)
-                && second.AttachedContent is TextComponent && !ReferenceEquals(first.AttachedContent, second.AttachedContent),
-                "Component replacement detached old features after replacing content or attached new features too early.");
+            Check(first.DetachCalls == 1 && ReferenceEquals(first.DetachedContent, first.AttachedContent) && second.AttachedContent is TextComponent && !ReferenceEquals(first.AttachedContent, second.AttachedContent), "Component replacement detached old features after replacing content or attached new features too early.");
             presenter.Settings.Settings = new TextComponentSettings();
             var third = log.Entries[^1];
-            Check(second.DetachCalls == 1 && ReferenceEquals(second.DetachedContent, second.AttachedContent)
-                && third.AttachedContent is TextComponent && !ReferenceEquals(second.AttachedContent, third.AttachedContent),
-                "Custom settings replacement did not reattach features around the new component content.");
+            Check(second.DetachCalls == 1 && ReferenceEquals(second.DetachedContent, second.AttachedContent) && third.AttachedContent is TextComponent && !ReferenceEquals(second.AttachedContent, third.AttachedContent), "Custom settings replacement did not reattach features around the new component content.");
             presenter.Settings.Id = "unknown";
-            Check(third.DetachCalls == 1 && log.Entries[^1].AttachedContent == null && presenter.Content == null,
-                "Component ID replacement did not detach features before clearing obsolete content.");
+            Check(third.DetachCalls == 1 && log.Entries[^1].AttachedContent == null && presenter.Content == null, "Component ID replacement did not detach features before clearing obsolete content.");
             presenter.Settings.Id = TextComponent.Id;
             var last = log.Entries[^1];
             presenter.Unload();
-            Check(last.DetachCalls == 1 && last.AttachedContent is TextComponent
-                && ReferenceEquals(last.DetachedContent, last.AttachedContent)
-                && presenter.Content == null, "Component unload cleared content before cleaning up features.");
+            Check(last.DetachCalls == 1 && last.AttachedContent is TextComponent && ReferenceEquals(last.DetachedContent, last.AttachedContent) && presenter.Content == null, "Component unload cleared content before cleaning up features.");
         });
     }
 
-    private static FeatureInfo Info(string id) => new() { Id = "presenter." + id };
-
-    private static PresenterCase[] Cases() =>
-    [
-        new(new ScenePresenter(), () => new SceneSettings(),
-            (presenter, container) => ((ScenePresenter)presenter).Scene = (SceneSettings?)container, "scene"),
-        new(new LayerPresenter(), () => new LayerSettings(),
-            (presenter, container) => ((LayerPresenter)presenter).Layer = (LayerSettings?)container, "layer"),
-        new(new ComponentPresenter(), () => new ComponentSettings { Id = TextComponent.Id },
-            (presenter, container) => ((ComponentPresenter)presenter).Settings = (ComponentSettings?)container, "component")
-    ];
-
+    private static FeatureInfo Info(string id) => new()
+    {
+        Id = "presenter." + id
+    };
+    private static PresenterCase[] Cases() => [new(new ScenePresenter(), () => new SceneSettings(), (presenter, container) => ((ScenePresenter)presenter).Scene = (SceneSettings?)container, "scene"), new(new LayerPresenter(), () => new LayerSettings(), (presenter, container) => ((LayerPresenter)presenter).Layer = (LayerSettings?)container, "layer"), new(new ComponentPresenter(), () => new ComponentSettings { Id = TextComponent.Id }, (presenter, container) => ((ComponentPresenter)presenter).Settings = (ComponentSettings?)container, "component")];
     private static ProbeLog CreateHost()
     {
         var log = new ProbeLog();
-        IAppHost.Host = new HostBuilder().ConfigureLogging(logging => logging.AddDebug())
-            .ConfigureServices(services =>
-            {
-                services.AddSingleton(log);
-                services.AddSingleton<IFeatureService, FeatureService>();
-                services.AddSingleton<IComponentsService, ComponentsService>();
-                services.AddComponent<TextComponent>();
-                services.AddFeature<FirstFeature>();
-                services.AddFeature<SecondFeature>();
-                services.AddFeature<SceneFeature>();
-                services.AddFeature<LayerFeature>();
-                services.AddFeature<ComponentFeature>();
-            }).Build();
+        IAppHost.Host = new HostBuilder().ConfigureLogging(logging => logging.AddDebug()).ConfigureServices(services =>
+        {
+            services.AddSingleton(log);
+            services.AddSingleton<IFeatureService, FeatureService>();
+            services.AddSingleton<IComponentsService, ComponentsService>();
+            services.AddComponent<TextComponent>();
+            services.AddFeature<FirstFeature>();
+            services.AddFeature<SecondFeature>();
+            services.AddFeature<SceneFeature>();
+            services.AddFeature<LayerFeature>();
+            services.AddFeature<ComponentFeature>();
+        }).Build();
         return log;
     }
 
@@ -198,8 +179,7 @@ internal static class PresenterFeatureTests
     {
         var count = log.Entries.Count;
         action();
-        Check(log.Entries.Skip(count).Select(entry => entry.Id).SequenceEqual(ids),
-            "A presenter change did not attach exactly the expected fresh feature instances.");
+        Check(log.Entries.Skip(count).Select(entry => entry.Id).SequenceEqual(ids), "A presenter change did not attach exactly the expected fresh feature instances.");
     }
 
     private static void Check(bool condition, string message)
@@ -210,35 +190,31 @@ internal static class PresenterFeatureTests
         }
     }
 
-    private sealed record PresenterCase(
-        FrameworkElement Presenter, Func<IFeatureContainer> CreateContainer,
-        Action<FrameworkElement, IFeatureContainer?> SetContainer, string FeatureId);
-
+    private sealed record PresenterCase(FrameworkElement Presenter, Func<IFeatureContainer> CreateContainer, Action<FrameworkElement, IFeatureContainer?> SetContainer, string FeatureId);
     private sealed class ProbeLog
     {
         public List<Entry> Entries { get; } = [];
-
         public List<Entry> Detached { get; } = [];
     }
 
     private sealed class Entry(string id, FrameworkElement target)
     {
         public string Id { get; } = id;
-
         public FrameworkElement Target { get; } = target;
-
         public object? AttachedContent { get; } = (target as ComponentPresenter)?.Content;
-
-        public object? DetachedContent { get; set; }
-
-        public int DetachCalls { get; set; }
+        public object? DetachedContent
+        {
+            get; set;
+        }
+        public int DetachCalls
+        {
+            get; set;
+        }
     }
 
-    private abstract class TrackingFeature<TTarget>(ProbeLog log, string id) : FeatureBase<TTarget>
-        where TTarget : FrameworkElement
+    private abstract class TrackingFeature<TTarget>(ProbeLog log, string id) : FeatureBase<TTarget> where TTarget : FrameworkElement
     {
         private Entry? _entry;
-
         public override void Attach(TTarget target)
         {
             Target = target;
@@ -261,16 +237,12 @@ internal static class PresenterFeatureTests
 
     [FeatureInfo("presenter.first", "First")]
     private sealed class FirstFeature(ProbeLog log) : TrackingFeature<FrameworkElement>(log, "first");
-
     [FeatureInfo("presenter.second", "Second")]
     private sealed class SecondFeature(ProbeLog log) : TrackingFeature<FrameworkElement>(log, "second");
-
     [FeatureInfo("presenter.scene", "Scene")]
     private sealed class SceneFeature(ProbeLog log) : TrackingFeature<ScenePresenter>(log, "scene");
-
     [FeatureInfo("presenter.layer", "Layer")]
     private sealed class LayerFeature(ProbeLog log) : TrackingFeature<LayerPresenter>(log, "layer");
-
     [FeatureInfo("presenter.component", "Component")]
     private sealed class ComponentFeature(ProbeLog log) : TrackingFeature<ComponentPresenter>(log, "component");
 }

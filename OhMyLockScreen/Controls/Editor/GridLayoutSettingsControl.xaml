@@ -1,0 +1,32 @@
+<local:GridLayoutSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Editor.GridLayoutSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor">
+    <StackPanel
+        Style="{StaticResource EditorFormStyle}">
+        <muxc:NumberBox
+            Header="行"
+            Maximum="10000"
+            Style="{StaticResource EditorNumberStyle}"
+            Value="{Binding Row, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+        <muxc:NumberBox
+            Header="列"
+            Maximum="10000"
+            Style="{StaticResource EditorNumberStyle}"
+            Value="{Binding Column, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+        <muxc:NumberBox
+            Header="跨行"
+            Minimum="1"
+            Maximum="10000"
+            Style="{StaticResource EditorNumberStyle}"
+            Value="{Binding RowSpan, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+        <muxc:NumberBox
+            Header="跨列"
+            Minimum="1"
+            Maximum="10000"
+            Style="{StaticResource EditorNumberStyle}"
+            Value="{Binding ColumnSpan, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+    </StackPanel>
+</local:GridLayoutSettingsControlBase>

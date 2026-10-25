@@ -9,15 +9,18 @@
     <Compile Include="../../OhMyLockScreen/App.xaml.cs" Link="App.xaml.cs" />
     <Compile Include="../../OhMyLockScreen/App.Hosting.cs" Link="App.Hosting.cs" />
     <Compile Include="../../OhMyLockScreen/App.Services.cs" Link="App.Services.cs" />
-    <Compile Include="../../OhMyLockScreen.Shared/**/*.cs" Exclude="../../OhMyLockScreen.Shared/obj/**/*.cs;../../OhMyLockScreen.Shared/bin/**/*.cs" Link="Shared/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen.Shared/**/*.cs" Exclude="../../OhMyLockScreen.Shared/obj/**/*.cs;../../OhMyLockScreen.Shared/bin/**/*.cs;../../OhMyLockScreen.Shared/Controls/Scene/AutoSizedCanvas.cs;../../OhMyLockScreen.Shared/Controls/Scene/AutoSizedGrid.cs" Link="Shared/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Hosting/*.cs" Link="Hosting/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Models/**/*.cs" Link="Models/%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="../../OhMyLockScreen/Controls/**/*.cs" Link="Controls/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Controls/**/*.cs" Exclude="../../OhMyLockScreen/Controls/Editor/**/*.cs;../../OhMyLockScreen/Controls/Components/*SettingsControl.xaml.cs;../../OhMyLockScreen/Controls/Scene/SceneSurface.xaml.cs" Link="Controls/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorConverters.cs" Link="Controls/Editor/EditorConverters.cs" />
+    <Compile Include="../../OhMyLockScreen/ViewModels/**/*.cs" Link="ViewModels/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/**/*.cs" Link="Services/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/MainPage.xaml.cs" Link="MainPage.xaml.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <PackageReference Include="FluentIcons.Common" Version="2.1.339.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
     <PackageReference Include="ReactiveUI" Version="26.0.1" />
     <PackageReference Include="DynamicData" Version="9.4.31" />

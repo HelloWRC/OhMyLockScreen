@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using OhMyLockScreen.Services;
 using Windows.ApplicationModel.Core;
 using OhMyLockScreen.Shared;
+using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 
 namespace OhMyLockScreen;
 
@@ -18,7 +19,6 @@ public sealed partial class App
     private IHost? _host;
     private Task? _exitTask;
     private volatile bool _isExiting;
-
     private async Task StartHostAsync(Func<IHost> hostFactory)
     {
         _host = hostFactory();
@@ -26,6 +26,7 @@ public sealed partial class App
         try
         {
             await _host.Services.GetRequiredService<SettingsService>().LoadSettingsAsync();
+            _host.Services.GetService<ISceneService>()?.Initialize();
             await _host.StartAsync();
         }
         catch
@@ -76,6 +77,15 @@ public sealed partial class App
     {
         try
         {
+            _host?.Services.GetService<ISceneService>()?.FlushPending();
+        }
+        catch (Exception exception)
+        {
+            LogLifecycleError(exception, "保存场景失败");
+        }
+
+        try
+        {
             _host?.Services.GetService<SettingsService>()?.SaveSettings(note);
         }
         catch (Exception exception)
@@ -88,7 +98,11 @@ public sealed partial class App
     {
         var currentHost = _host;
         _host = null;
-        if (ReferenceEquals(IAppHost.Host, currentHost)) IAppHost.Host = null;
+        if (ReferenceEquals(IAppHost.Host, currentHost))
+        {
+            IAppHost.Host = null;
+        }
+
         try
         {
             currentHost?.Dispose();

@@ -3,23 +3,11 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene"
     mc:Ignorable="d"
     Background="Transparent"
     Foreground="White">
-
-    <Grid Background="Transparent">
-        <Border x:Name="BackgroundPlaceholder" Background="#17324D">
-            <MediaElement
-                Source="ms-appx:///Assets/Videos/testbg.mp4"
-                AutoPlay="True"
-                IsLooping="True"
-                IsMuted="True"
-                AreTransportControlsEnabled="False"
-                IsHitTestVisible="False"
-                Stretch="UniformToFill" />
-        </Border>
-
-        <scene:ScenePresenter x:Name="RootScenePresenter"/>
-    </Grid>
+    <scene:ScenePresenter
+        x:Name="RootScenePresenter" />
 </Page>

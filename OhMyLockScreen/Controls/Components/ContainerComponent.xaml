@@ -1,0 +1,10 @@
+<local:ContainerComponentBase
+    x:Class="OhMyLockScreen.Controls.Components.ContainerComponent"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Components"
+    xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene">
+    <scene:LayoutControl
+        Settings="{x:Bind Settings, Mode=OneWay}"
+        ItemsSource="{x:Bind Settings.Children, Mode=OneWay}" />
+</local:ContainerComponentBase>

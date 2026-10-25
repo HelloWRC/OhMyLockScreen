@@ -37,6 +37,12 @@ public sealed class SettingsService(ILogger<SettingsService> logger, string sett
 
     public Task LoadSettingsAsync()
     {
+        ReloadSettings();
+        return Task.CompletedTask;
+    }
+
+    public void ReloadSettings()
+    {
         lock (_sync)
         {
             ObjectDisposedException.ThrowIf(_isDisposed, this);
@@ -52,7 +58,6 @@ public sealed class SettingsService(ILogger<SettingsService> logger, string sett
                 _settings.PropertyChanged += OnSettingsChanged;
             }
         }
-        return Task.CompletedTask;
     }
 
     public void SaveSettings(string note = "")

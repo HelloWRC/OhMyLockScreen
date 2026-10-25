@@ -66,9 +66,8 @@ public sealed partial class LayoutControl : ItemsControl
             return;
         }
 
-        var presenter = (ComponentPresenter)element;
-        presenter.Settings = null;
-        presenter.DataContext = null;
+        // ItemsControl may clear a container while reusing it for the replacement ItemsPanel.
+        // ComponentPresenter detaches its model and content when it actually leaves the visual tree.
     }
 
     protected override void OnApplyTemplate()
@@ -109,6 +108,21 @@ public sealed partial class LayoutControl : ItemsControl
         {
             UpdatePanelSettings();
         }
+
+        EnsureCurrentPresentersLoaded();
+    }
+
+    private void EnsureCurrentPresentersLoaded()
+    {
+        if (ItemsPanelRoot is not { } panel)
+        {
+            return;
+        }
+
+        foreach (var presenter in panel.Children.OfType<ComponentPresenter>())
+        {
+            presenter.ActivateFromLayout();
+        }
     }
 
     private void RefreshLayout()
@@ -137,6 +151,7 @@ public sealed partial class LayoutControl : ItemsControl
         {
             _panelKind = kind;
             _configuredPanel = null;
+            PreserveCurrentPresenterContent();
             ItemsPanel = (ItemsPanelTemplate)Resources[$"{kind}ItemsPanel"];
         }
 
@@ -171,6 +186,19 @@ public sealed partial class LayoutControl : ItemsControl
         }
 
         _configuredPanel = panel;
+    }
+
+    private void PreserveCurrentPresenterContent()
+    {
+        if (ItemsPanelRoot is not { } panel)
+        {
+            return;
+        }
+
+        foreach (var presenter in panel.Children.OfType<ComponentPresenter>())
+        {
+            presenter.PreserveContentForItemsPanelChange();
+        }
     }
 
     private static void UpdateGridDefinitions(Grid grid, ILayoutSettings settings)
@@ -291,4 +319,5 @@ public sealed partial class LayoutControl : ItemsControl
             }
         }
     }
+
 }

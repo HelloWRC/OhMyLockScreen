@@ -21,6 +21,7 @@ public sealed class ComponentPresenter : ContentPresenter
     private FeatureAttacher? _featureAttacher;
     private bool _isLoaded;
     private bool _isUpdating;
+    private bool _preserveContentOnUnload;
 
     public ComponentSettings? Settings
     {
@@ -48,11 +49,20 @@ public sealed class ComponentPresenter : ContentPresenter
 
     private void OnLoaded(object sender, RoutedEventArgs args)
     {
+        Activate();
+    }
+
+    internal void ActivateFromLayout() => Activate();
+    internal void PreserveContentForItemsPanelChange() => _preserveContentOnUnload = true;
+
+    private void Activate()
+    {
         if (_isLoaded)
         {
             return;
         }
 
+        _preserveContentOnUnload = false;
         _isLoaded = true;
         UpdateSubscription(Settings);
         UpdateContent();
@@ -65,7 +75,10 @@ public sealed class ComponentPresenter : ContentPresenter
         var attacher = _featureAttacher;
         _featureAttacher = null;
         attacher?.Dispose();
-        Content = null;
+        if (!_preserveContentOnUnload)
+        {
+            Content = null;
+        }
     }
 
     private void AttachFeatures()

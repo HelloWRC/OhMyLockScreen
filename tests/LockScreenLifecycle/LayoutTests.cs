@@ -34,7 +34,13 @@ internal static class LayoutTests
             foreach (var kind in new[] { LayoutKind.StackPanel, LayoutKind.WrapPanel, LayoutKind.Grid, LayoutKind.Canvas })
             {
                 settings.Kind = kind;
-                Check(control.ItemsPanelRoot?.GetType().Name == kind.ToString(), "Incorrect native panel was selected.");
+                var correctPanel = kind switch
+                {
+                    LayoutKind.Canvas => control.ItemsPanelRoot is AutoSizedCanvas,
+                    LayoutKind.Grid => control.ItemsPanelRoot is AutoSizedGrid,
+                    _ => control.ItemsPanelRoot?.GetType().Name == kind.ToString()
+                };
+                Check(correctPanel, "Incorrect native panel was selected.");
                 Check(ReferenceEquals(control.ItemsSource, source) && ReferenceEquals(control.ItemTemplate, template),
                     "Layout switching overwrote the standard item source or template.");
             }
@@ -286,6 +292,40 @@ internal static class LayoutTests
                 // Only the GridElement.MaxValue property allows named floating-point literals.
             }
         });
+        run("Layout panel selectors write validated values to the rendered settings model", () =>
+        {
+            var settings = new LayerSettings
+            {
+                Kind = LayoutKind.Canvas
+            };
+            var control = new LayoutControl
+            {
+                Settings = settings
+            };
+            control.Load();
+            using var panel = new OhMyLockScreen.ViewModels.LayoutPanelSettingsViewModel
+            {
+                Model = settings
+            };
+            panel.Attach();
+            var changes = 0;
+            panel.PropertyChanged += (_, _) => changes++;
+            panel.KindIndex = (int)LayoutKind.StackPanel;
+            panel.OrientationIndex = (int)Orientation.Horizontal;
+            panel.Spacing = 12;
+            panel.Spacing = double.NaN;
+            panel.KindIndex = -1;
+            Check(settings.Kind == LayoutKind.StackPanel
+                && settings.Orientation == Orientation.Horizontal
+                && settings.Spacing == 12,
+                "Layout selectors did not update the settings model or accepted an invalid value.");
+            Check(panel.KindIndex == (int)LayoutKind.StackPanel
+                && panel.OrientationIndex == (int)Orientation.Horizontal,
+                "Layout selector indices did not reflect the settings model.");
+            Check(control.ItemsPanelRoot is StackPanel, "A layout selector change did not update the rendered panel.");
+            Check(changes > 0, "Layout selector changes did not notify the compiled bindings.");
+            control.Unload();
+        });
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -314,7 +354,7 @@ internal static class LayoutTests
         public double Spacing { get; set; }
         public ObservableCollection<GridElement> Rows { get; set; } = [];
         public ObservableCollection<GridElement> Columns { get; set; } = [];
-        public Orientation Orientation { get; set; }
+        public Orientation Orientation { get; set; } = Windows.UI.Xaml.Controls.Orientation.Horizontal;
 
         public event PropertyChangedEventHandler? PropertyChanged
         {
@@ -327,10 +367,10 @@ internal static class LayoutTests
 
     private sealed class PlainLayoutSettings(LayoutKind kind, double spacing) : ILayoutSettings
     {
-        public LayoutKind Kind => kind;
-        public double Spacing => spacing;
+        public LayoutKind Kind { get; set; } = kind;
+        public double Spacing { get; set; } = spacing;
         public ObservableCollection<GridElement> Rows { get; } = [];
         public ObservableCollection<GridElement> Columns { get; } = [];
-        public Orientation Orientation => Orientation.Horizontal;
+        public Orientation Orientation { get; set; }
     }
 }
