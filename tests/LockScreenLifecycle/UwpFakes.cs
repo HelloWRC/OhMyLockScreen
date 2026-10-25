@@ -88,6 +88,8 @@ namespace Windows.ApplicationModel.Core
 {
     public static class CoreApplication
     {
+        private static readonly global::System.Runtime.CompilerServices.ConditionalWeakTable<Windows.UI.Xaml.Window, CoreApplicationView> Views = new();
+        public static CoreApplicationView GetCurrentView() => Views.GetValue(Windows.UI.Xaml.Window.Current, _ => new());
         public static int ExitCalls
         {
             get; set;
@@ -531,6 +533,10 @@ namespace Windows.UI.Xaml
             get; set;
         }
         public CoreWindow CoreWindow { get; } = new();
+        public CoreDispatcher Dispatcher { get; } = new();
+        public event UwpEventHandler<CoreWindowEventArgs>? Closed;
+        public int ClosedSubscribers => Closed?.GetInvocationList().Length ?? 0;
+        public void Close() => Closed?.Invoke(this, new());
 
         public event UwpEventHandler<WindowActivatedEventArgs>? Activated;
         public event UwpEventHandler<VisibilityChangedEventArgs>? VisibilityChanged;
@@ -651,18 +657,16 @@ namespace Windows.UI.Xaml.Controls
         }
     }
 
-    public class Page
+    public class Page : FrameworkElement
     {
-        public double ActualWidth { get; set; } = 1920;
-        public double ActualHeight { get; set; } = 1080;
-
-        public event UwpEventHandler<RoutedEventArgs>? Loaded;
-        public event UwpEventHandler<RoutedEventArgs>? Unloaded;
-        public void Load() => Loaded?.Invoke(this, new());
-        public void Unload() => Unloaded?.Invoke(this, new());
+        public Page()
+        {
+            ActualWidth = 1920;
+            ActualHeight = 1080;
+        }
     }
 
-    public sealed class Frame
+    public sealed class Frame : FrameworkElement
     {
         public List<object> BackStack { get; } = [];
         public Windows.UI.Xaml.Media.SolidColorBrush? Background
@@ -675,11 +679,14 @@ namespace Windows.UI.Xaml.Controls
         }
 
         public event UwpEventHandler<NavigationFailedEventArgs>? NavigationFailed;
+        public event UwpEventHandler<NavigationEventArgs>? Navigated;
         public bool Navigate(Type pageType)
         {
             try
             {
                 Content = Activator.CreateInstance(pageType);
+                if (Content is DependencyObject child) child.VisualParent = this;
+                Navigated?.Invoke(this, new());
                 return true;
             }
             catch
@@ -690,10 +697,8 @@ namespace Windows.UI.Xaml.Controls
         }
     }
 
-    public sealed class Border
+    public sealed class Border : FrameworkElement
     {
-        public double Opacity { get; set; } = 1;
-        public Visibility Visibility { get; set; } = Visibility.Visible;
     }
 
     public sealed class Viewbox

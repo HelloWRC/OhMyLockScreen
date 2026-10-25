@@ -8,6 +8,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
 using Windows.UI.Xaml.Media;
+using OhMyLockScreen.Shared.Controls.UI;
 
 namespace OhMyLockScreen;
 /// <summary>
@@ -89,18 +90,26 @@ public sealed partial class App : Application
         }
 
         // Window.Current belongs to the view activated by the system host.
-        if (window.Content is not Frame rootFrame)
+        if (window.Content is not WindowToastHost toastHost)
         {
-            rootFrame = new Frame();
-            rootFrame.NavigationFailed += OnNavigationFailed;
-            window.Content = rootFrame;
+            var frame = window.Content as Frame ?? new Frame();
+            if (ReferenceEquals(window.Content, frame))
+            {
+                window.Content = null;
+            }
+
+            frame.NavigationFailed += OnNavigationFailed;
+            toastHost = new WindowToastHost(window, frame);
+            window.Content = toastHost;
         }
 
+        var rootFrame = toastHost.Frame;
         rootFrame.Background = new SolidColorBrush(Windows.UI.Colors.Transparent);
         var pageType = isLockScreen ? typeof(MainPage) : typeof(SceneEditorPage);
         var pageChanged = rootFrame.Content?.GetType() != pageType;
         if (pageChanged)
         {
+            toastHost.Clear();
             rootFrame.Navigate(pageType);
             rootFrame.BackStack.Clear();
         }

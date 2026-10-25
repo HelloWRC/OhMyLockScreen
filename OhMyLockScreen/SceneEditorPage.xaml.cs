@@ -27,6 +27,10 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using OhMyLockScreen.Shared.Controls.UI;
+using OhMyLockScreen.Shared.Helpers.UI;
+using OhMyLockScreen.Shared.Models.UI;
+using OhMyLockScreen.Helpers.UI;
 using TreeViewSelectionChangedEventArgs = Microsoft.UI.Xaml.Controls.TreeViewSelectionChangedEventArgs;
 using TreeViewItem = Microsoft.UI.Xaml.Controls.TreeViewItem;
 
@@ -41,6 +45,8 @@ public sealed partial class SceneEditorPage : Page
     private readonly FeatureRegistryService _featureRegistry;
     private Window? _window;
     private bool _loaded;
+    private readonly HashSet<ToastMessage> _pageToasts = [];
+    private readonly SceneSaveToastTracker _saveToasts = new();
     private bool _syncingLists;
     private bool _enteredFullScreen;
     private bool _updatingInspector;
@@ -117,7 +123,7 @@ public sealed partial class SceneEditorPage : Page
             ShowTab(SceneEditorTab.Home);
             if (_scenes.LoadErrors.Count > 0)
             {
-                ShowMessage("部分场景未能加载", string.Join(Environment.NewLine, _scenes.LoadErrors));
+                ShowMessage("部分场景未能加载", string.Join(Environment.NewLine, _scenes.LoadErrors), InfoBarSeverity.Warning);
             }
         }
         catch (Exception exception)
@@ -135,6 +141,7 @@ public sealed partial class SceneEditorPage : Page
 
         EndDrag();
         ExitPreview();
+        ClearPageToasts();
         _loaded = false;
         ViewModel.SelectionChanged -= OnSelectionChanged;
         ViewModel.StructureChanged -= OnStructureChanged;
@@ -185,10 +192,11 @@ public sealed partial class SceneEditorPage : Page
             if (ViewModel.Scene?.SceneId == args.SceneId)
             {
                 ViewModel.RefreshSaveStatus();
-                if (!_scenes.HasPendingChanges(args.SceneId) && ViewModel.ErrorTitle == "场景尚未保存")
-                {
-                    ViewModel.IsErrorOpen = false;
-                }
+            }
+
+            if (!_scenes.HasPendingChanges(args.SceneId))
+            {
+                _saveToasts.Close(args.SceneId);
             }
 
             if (ViewModel.Scene is { } current && _scenes.GetScenes().All(scene => scene.Id != current.SceneId))
@@ -209,7 +217,7 @@ public sealed partial class SceneEditorPage : Page
                 ViewModel.RefreshSaveStatus();
             }
 
-            ShowMessage("场景尚未保存", args.Error?.Message ?? "请检查数据目录是否可写。");
+            _saveToasts.Replace(args.SceneId, ShowMessage("场景尚未保存", args.Error?.Message ?? "请检查数据目录是否可写。"));
         });
     }
 
@@ -281,7 +289,7 @@ public sealed partial class SceneEditorPage : Page
         RefreshSceneLists();
         if (_scenes.LoadErrors.Count > 0)
         {
-            ShowMessage("部分场景未能加载", string.Join(Environment.NewLine, _scenes.LoadErrors));
+            ShowMessage("部分场景未能加载", string.Join(Environment.NewLine, _scenes.LoadErrors), InfoBarSeverity.Warning);
         }
     });
     private async void OnOpenFolderClick(object sender, RoutedEventArgs args)
@@ -1734,7 +1742,7 @@ public sealed partial class SceneEditorPage : Page
         EndDrag();
         ClearHover();
         ViewModel.IsPreview = true;
-        ViewModel.IsErrorOpen = false;
+        ClearPageToasts();
         InvalidateSelectionGeometry();
         var view = ApplicationView.GetForCurrentView();
         _enteredFullScreen = !view.IsFullScreenMode && view.TryEnterFullScreenMode();
@@ -1817,12 +1825,37 @@ public sealed partial class SceneEditorPage : Page
         }
     }
 
-    private void ShowError(Exception exception) => ShowMessage("操作未完成", exception.Message);
-    private void ShowMessage(string title, string message)
+    private void ShowError(Exception exception) => TrackToast(this.ShowErrorToastRef("操作未完成", exception));
+
+    private ToastMessage ShowMessage(string title, string message, InfoBarSeverity severity = InfoBarSeverity.Error)
     {
-        ViewModel.ErrorTitle = title;
-        ViewModel.ErrorMessage = message;
-        ViewModel.IsErrorOpen = true;
+        return TrackToast(this.ShowToastRef(new ToastMessage(title, message)
+        {
+            Severity = severity,
+            AutoClose = false
+        }));
+    }
+
+    private ToastMessage TrackToast(ToastMessage message)
+    {
+        _pageToasts.RemoveWhere(toast => !toast.IsOpen);
+        _pageToasts.Add(message);
+        return message;
+    }
+
+    private void ClearPageToasts()
+    {
+        foreach (var message in _pageToasts)
+        {
+            message.Close();
+        }
+
+        _pageToasts.Clear();
+        _saveToasts.Clear();
+        if (_window?.Content is WindowToastHost host)
+        {
+            host.Clear();
+        }
     }
 
     private enum ResizeCorner

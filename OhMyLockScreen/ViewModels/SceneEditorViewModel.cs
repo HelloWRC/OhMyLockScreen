@@ -49,12 +49,6 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _dialogNameError = "";
     [ObservableProperty]
-    private string _errorTitle = "";
-    [ObservableProperty]
-    private string _errorMessage = "";
-    [ObservableProperty]
-    private bool _isErrorOpen;
-    [ObservableProperty]
     private SceneSelectionGeometry _selectionGeometry;
     [ObservableProperty]
     private bool _hasSelectionBounds;

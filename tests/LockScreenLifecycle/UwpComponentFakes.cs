@@ -29,6 +29,7 @@ namespace Windows.UI.Xaml
 
     public class DependencyObject
     {
+        public DependencyObject? VisualParent { get; set; }
         private readonly Dictionary<DependencyProperty, object?> _values = [];
         public object? GetValue(DependencyProperty property) => _values.TryGetValue(property, out var value) ? value : property.Metadata.DefaultValue;
         public void SetValue(DependencyProperty property, object? value)
@@ -90,9 +91,23 @@ namespace Windows.UI.Xaml
         Stretch
     }
 
-    public readonly record struct Thickness(double Left, double Top, double Right, double Bottom);
+    public readonly record struct Thickness(double Left, double Top, double Right, double Bottom)
+    {
+        public Thickness(double uniform) : this(uniform, uniform, uniform, uniform) { }
+    }
     public class FrameworkElement : UIElement
     {
+        public Media.GeneralTransform TransformToVisual(UIElement visual) => new();
+        public XamlRoot? XamlRoot { get; set; }
+        public ElementTheme ActualTheme { get; set; }
+        public ElementTheme RequestedTheme { get; set; }
+        public double MaxWidth { get; set; }
+        public event Action<FrameworkElement, object>? ActualThemeChanged;
+        public void ChangeTheme(ElementTheme theme)
+        {
+            ActualTheme = theme;
+            ActualThemeChanged?.Invoke(this, EventArgs.Empty);
+        }
         public double ActualWidth
         {
             get;

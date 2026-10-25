@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OhMyLockScreen;
 using OhMyLockScreen.Shared;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Hosting;
 using OhMyLockScreen.Models;
@@ -181,7 +182,7 @@ internal static class InfrastructureTests
             Check(IAppHost.TryGetService<SettingsService>() == null, "Optional access before startup must return null.");
             var app = new App();
             app.Launch(new LaunchActivatedEventArgs());
-            Check(Window.Current.Content is Frame && File.Exists(SettingsPath), "Production startup did not load local settings.");
+            Check(Window.Current.Content is WindowToastHost && File.Exists(SettingsPath), "Production startup did not load local settings.");
             Check(IAppHost.GetRequiredService<IHostLifetime>() is UwpHostLifetime, "Host used a console lifetime.");
             var service = IAppHost.GetRequiredService<SettingsService>();
             service.Settings.TestValue = 21;
@@ -200,7 +201,7 @@ internal static class InfrastructureTests
             var firstWindow = Window.Current;
             Window.Current = new Window();
             app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
-            Check(Window.Current.Content is Frame && firstWindow.Content is Frame, "Activation lost one of the views.");
+            Check(Window.Current.Content is WindowToastHost && firstWindow.Content is WindowToastHost, "Activation lost one of the views.");
             File.Delete(SettingsPath);
             var suspend = app.Suspend();
             Check(suspend.SuspendingOperation.Deferral.IsComplete && File.Exists(SettingsPath), "Suspend did not save and complete its deferral.");
@@ -236,9 +237,9 @@ internal static class InfrastructureTests
                 secondView.Drain();
                 await Task.Delay(10);
             }
-            Check(firstView.Window.Content is Frame && secondView.Window.Content is Frame, "An asynchronous activation lost its view.");
-            Check(firstView.Window.Content is Frame { Content: SceneEditorPage } &&
-                secondView.Window.Content is Frame { Content: MainPage },
+            Check(firstView.Window.Content is WindowToastHost && secondView.Window.Content is WindowToastHost, "An asynchronous activation lost its view.");
+            Check(firstView.Window.Content is WindowToastHost { Frame.Content: SceneEditorPage } &&
+                secondView.Window.Content is WindowToastHost { Frame.Content: MainPage },
                 "Delayed startup lost the latest activation kind or shared it across views.");
             await app.ExitAsync();
         });
@@ -262,7 +263,7 @@ internal static class InfrastructureTests
             var probe = new HostedProbe { StopGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
             var app = new App(() => BuildHost(probe));
             app.Launch(new LaunchActivatedEventArgs());
-            var page = (MainPage)((Frame)Window.Current.Content!).Content!;
+            var page = (MainPage)((WindowToastHost)Window.Current.Content!).Frame.Content!;
             page.RootScenePresenter.ActualHeight = 720;
             page.Load();
             Window.Current.CoreWindow.PressPointer(PointerDeviceType.Mouse);

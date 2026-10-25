@@ -723,15 +723,6 @@
                     </StackPanel>
                 </Grid>
             </Border>
-            <muxc:InfoBar
-                x:Name="EditorMessage"
-                VerticalAlignment="Bottom"
-                Margin="16"
-                IsOpen="{x:Bind ViewModel.IsErrorOpen, Mode=TwoWay}"
-                IsClosable="True"
-                Severity="Error"
-                Title="{x:Bind ViewModel.ErrorTitle, Mode=OneWay}"
-                Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />
         </Grid>
     </Grid>
 </Page>

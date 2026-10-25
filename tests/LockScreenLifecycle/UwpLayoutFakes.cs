@@ -107,6 +107,8 @@ namespace Windows.UI.Xaml.Controls
     }
     public class Canvas : Panel
     {
+        public static void SetLeft(UIElement element, double value) { }
+        public static void SetTop(UIElement element, double value) { }
         public static double GetLeft(UIElement element) => double.NaN;
         public static double GetTop(UIElement element) => double.NaN;
     }

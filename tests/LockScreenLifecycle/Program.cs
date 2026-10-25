@@ -23,6 +23,13 @@ if (args.Contains("--converter-only"))
     return;
 }
 
+if (args.Contains("--toast-only"))
+{
+    ToastTests.Run(Run);
+    Console.WriteLine($"All {passed} toast checks passed using simulated UWP views and a manual clock.");
+    return;
+}
+
 if (args.Contains("--scene-only"))
 {
     await SceneTests.RunAsync(Run, RunAsync);
@@ -74,6 +81,7 @@ if (args.Contains("--layout-only"))
 }
 
 await InfrastructureTests.RunAsync(Run, RunAsync);
+ToastTests.Run(Run);
 ComponentTests.Run(Run);
 DependencyPropertyBindingTests.Run(Run);
 LayoutFeatureTests.Run(Run);
