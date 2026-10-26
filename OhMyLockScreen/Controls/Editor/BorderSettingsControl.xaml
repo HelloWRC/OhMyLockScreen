@@ -1,0 +1,127 @@
+<local:BorderSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Editor.BorderSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
+    Loaded="OnLoaded"
+    Unloaded="OnUnloaded">
+    <StackPanel Spacing="8">
+        <ui:BrushEditControl
+            Brush="{x:Bind Settings.BorderBrush, Mode=TwoWay}"
+            TargetElement="{x:Bind TargetElement, Mode=OneWay}" />
+        <StackPanel
+            Style="{StaticResource EditorFormStyle}"
+            DataContext="{x:Bind Values, Mode=OneWay}">
+            <TextBlock Text="框线粗细" />
+            <Grid ColumnSpacing="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <muxc:NumberBox
+                    Header="左"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="左框线粗细"
+                    AutomationProperties.Name="左框线粗细"
+                    Value="{Binding ThicknessLeft, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                <muxc:NumberBox
+                    Grid.Column="1"
+                    Header="上"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="上框线粗细"
+                    AutomationProperties.Name="上框线粗细"
+                    Value="{Binding ThicknessTop, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                <muxc:NumberBox
+                    Grid.Column="2"
+                    Header="右"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="右框线粗细"
+                    AutomationProperties.Name="右框线粗细"
+                    Value="{Binding ThicknessRight, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                <muxc:NumberBox
+                    Grid.Column="3"
+                    Header="下"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="下框线粗细"
+                    AutomationProperties.Name="下框线粗细"
+                    Value="{Binding ThicknessBottom, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            </Grid>
+            <TextBlock Text="圆角半径" />
+            <Grid ColumnSpacing="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <muxc:NumberBox
+                    Header="左上"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="左上圆角半径"
+                    AutomationProperties.Name="左上圆角半径"
+                    Value="{Binding RadiusTopLeft, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                <muxc:NumberBox
+                    Grid.Column="1"
+                    Header="右上"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="右上圆角半径"
+                    AutomationProperties.Name="右上圆角半径"
+                    Value="{Binding RadiusTopRight, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                <muxc:NumberBox
+                    Grid.Column="2"
+                    Header="右下"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="右下圆角半径"
+                    AutomationProperties.Name="右下圆角半径"
+                    Value="{Binding RadiusBottomRight, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                <muxc:NumberBox
+                    Grid.Column="3"
+                    Header="左下"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="左下圆角半径"
+                    AutomationProperties.Name="左下圆角半径"
+                    Value="{Binding RadiusBottomLeft, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            </Grid>
+            <TextBlock Text="内边距" />
+            <Grid ColumnSpacing="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <muxc:NumberBox
+                    Header="左"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="左内边距"
+                    AutomationProperties.Name="左内边距"
+                    Value="{Binding PaddingLeft, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                <muxc:NumberBox
+                    Grid.Column="1"
+                    Header="上"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="上内边距"
+                    AutomationProperties.Name="上内边距"
+                    Value="{Binding PaddingTop, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                <muxc:NumberBox
+                    Grid.Column="2"
+                    Header="右"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="右内边距"
+                    AutomationProperties.Name="右内边距"
+                    Value="{Binding PaddingRight, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                <muxc:NumberBox
+                    Grid.Column="3"
+                    Header="下"
+                    Style="{StaticResource EditorNumberStyle}"
+                    ToolTipService.ToolTip="下内边距"
+                    AutomationProperties.Name="下内边距"
+                    Value="{Binding PaddingBottom, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            </Grid>
+        </StackPanel>
+    </StackPanel>
+</local:BorderSettingsControlBase>

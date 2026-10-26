@@ -20,5 +20,14 @@
   <ItemGroup>
     <ProjectReference Include="../../OhMyLockScreen.Shared/OhMyLockScreen.Shared.csproj" />
     <Content Include="../../OhMyLockScreen/Assets/*.png" Link="Assets/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Models/Features/**/*.cs" Link="Models/Features/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BorderFeature.cs" Link="Services/BorderFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/FeatureHost/FeatureService.cs" Link="Services/FeatureService.cs" />
+    <Compile Include="../../OhMyLockScreen/ViewModels/BorderSettingsViewModel.cs" Link="ViewModels/BorderSettingsViewModel.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorViewBases.cs" Link="Controls/Editor/EditorViewBases.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorConverters.cs" Link="Controls/Editor/EditorConverters.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/BorderSettingsControl.xaml.cs" Link="Controls/Editor/BorderSettingsControl.xaml.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/Editor/BorderSettingsControl.xaml" Link="Controls/Editor/BorderSettingsControl.xaml" />
+    <Page Include="../../OhMyLockScreen/Controls/Editor/EditorResources.xaml" Link="Controls/Editor/EditorResources.xaml" />
   </ItemGroup>
 </Project>

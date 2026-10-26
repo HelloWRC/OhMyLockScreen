@@ -52,6 +52,7 @@ public sealed partial class App
         services.AddFeature<LayoutFeature, LayoutSettingsControl>();
         services.AddFeature<GridLayoutFeature, GridLayoutSettingsControl>();
         services.AddFeature<BackgroundFeature, BackgroundSettingsControl>();
+        services.AddFeature<BorderFeature, BorderSettingsControl>();
         services.AddFeature<ForegroundFeature, ForegroundSettingsControl>();
     }
 }

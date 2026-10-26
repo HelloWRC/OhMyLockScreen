@@ -236,6 +236,7 @@ namespace Windows.UI
 {
     public static class Colors
     {
+        public static Color White => Color.FromArgb(255, 255, 255, 255);
         public static Color Transparent => Color.FromArgb(0, 255, 255, 255);
     }
 }
@@ -483,6 +484,8 @@ namespace Windows.UI.Xaml
 
     public class Application
     {
+        public Dictionary<object, object> Resources { get; } = [];
+
         public static Application? Current
         {
             get; set;
@@ -695,6 +698,59 @@ namespace Windows.UI.Xaml.Controls
 
     public sealed class Border : FrameworkElement
     {
+        public static readonly DependencyProperty BorderBrushProperty = DependencyProperty.Register(
+            nameof(BorderBrush), typeof(Windows.UI.Xaml.Media.Brush), typeof(Border), new PropertyMetadata(null));
+        public static readonly DependencyProperty BorderThicknessProperty = DependencyProperty.Register(
+            nameof(BorderThickness), typeof(Thickness), typeof(Border), new PropertyMetadata(default(Thickness), (_, args) =>
+            {
+                var value = (Thickness)args.NewValue!;
+                ValidateGeometry(value.Left, value.Top, value.Right, value.Bottom);
+            }));
+        public static readonly DependencyProperty CornerRadiusProperty = DependencyProperty.Register(
+            nameof(CornerRadius), typeof(CornerRadius), typeof(Border), new PropertyMetadata(default(CornerRadius), (_, args) =>
+            {
+                var value = (CornerRadius)args.NewValue!;
+                ValidateGeometry(value.TopLeft, value.TopRight, value.BottomRight, value.BottomLeft);
+            }));
+        public static readonly DependencyProperty PaddingProperty = DependencyProperty.Register(
+            nameof(Padding), typeof(Thickness), typeof(Border), new PropertyMetadata(default(Thickness), (_, args) =>
+            {
+                var value = (Thickness)args.NewValue!;
+                ValidateGeometry(value.Left, value.Top, value.Right, value.Bottom);
+            }));
+
+        private static void ValidateGeometry(params double[] values)
+        {
+            if (values.Any(value => !double.IsFinite(value) || value < 0))
+            {
+                throw new ArgumentException("Border geometry must be finite and nonnegative.");
+            }
+        }
+
+        public Windows.UI.Xaml.Media.Brush? BorderBrush
+        {
+            get => (Windows.UI.Xaml.Media.Brush?)GetValue(BorderBrushProperty);
+            set => SetValue(BorderBrushProperty, value);
+        }
+
+        public Thickness BorderThickness
+        {
+            get => (Thickness)GetValue(BorderThicknessProperty)!;
+            set => SetValue(BorderThicknessProperty, value);
+        }
+
+        public CornerRadius CornerRadius
+        {
+            get => (CornerRadius)GetValue(CornerRadiusProperty)!;
+            set => SetValue(CornerRadiusProperty, value);
+        }
+
+        public Thickness Padding
+        {
+            get => (Thickness)GetValue(PaddingProperty)!;
+            set => SetValue(PaddingProperty, value);
+        }
+
         public static readonly DependencyProperty BackgroundProperty = DependencyProperty.Register(
             nameof(Background), typeof(Windows.UI.Xaml.Media.Brush), typeof(Border), new PropertyMetadata(null));
 

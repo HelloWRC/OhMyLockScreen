@@ -96,6 +96,50 @@ internal static class SceneTests
             Check(fixture.Service.Load(scene.SceneId).Features.Single().GetSettings<BackgroundFeatureSettings>().Background == null,
                 "Clearing a background did not persist null.");
         });
+        run("Border feature geometry and brush replacements automatically persist through the editor", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var scene = editor.Scene!;
+            var component = scene.Layers[0].Children[0];
+            var border = new BorderFeatureSettings();
+            component.Features.Add(new FeatureInfo { Id = "omls.features.appearance.border", Settings = border });
+            using var values = new BorderSettingsViewModel(border);
+            values.Attach();
+            border.BorderThickness = new Thickness(1.25, 2.5, 3.75, 4);
+            border.CornerRadius = new CornerRadius(5.25, 6.5, 7.75, 8);
+            border.Padding = new Thickness(9.25, 10.5, 11.75, 12);
+            values.RadiusBottomLeft = 13.5;
+            var gradient = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0.2, 0.3),
+                EndPoint = new Windows.Foundation.Point(0.8, 0.9),
+                GradientStops =
+                {
+                    new GradientStop { Color = Windows.UI.Color.FromArgb(255, 12, 34, 56), Offset = 0 },
+                    new GradientStop { Color = Windows.UI.Color.FromArgb(255, 65, 43, 21), Offset = 1 }
+                }
+            };
+            border.BorderBrush = gradient;
+            fixture.Service.FlushPending();
+            BorderFeatureSettings Reload() => fixture.Service.Load(scene.SceneId).Layers[0].Children[0].Features
+                .Single(feature => feature.Id == "omls.features.appearance.border").GetSettings<BorderFeatureSettings>();
+            var restored = Reload();
+            Check(restored.BorderThickness == border.BorderThickness && restored.CornerRadius == new CornerRadius(5.25, 6.5, 7.75, 13.5)
+                && restored.Padding == border.Padding, "Automatic saving lost asymmetric border geometry or an individual corner edit.");
+            Check(restored.BorderBrush is LinearGradientBrush loaded && loaded.StartPoint == gradient.StartPoint
+                && loaded.EndPoint == gradient.EndPoint && loaded.GradientStops.Count == 2
+                && loaded.GradientStops[1].Color == gradient.GradientStops[1].Color,
+                "Automatic saving lost the border gradient.");
+            border.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(128, 23, 45, 67));
+            fixture.Service.FlushPending();
+            Check(Reload().BorderBrush is SolidColorBrush { Color.A: 128, Color.R: 23 },
+                "Replacing the border gradient did not persist the solid brush.");
+            border.BorderBrush = null;
+            fixture.Service.FlushPending();
+            Check(Reload().BorderBrush == null, "Clearing the border brush did not persist null.");
+        });
         run("Foreground feature brush replacements and null automatically persist through the editor", () =>
         {
             using var fixture = new Fixture();

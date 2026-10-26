@@ -79,6 +79,7 @@ internal static class FeatureTests
             FeatureSettingsControlBase[] controls =
             [
                 new OhMyLockScreen.Controls.Editor.BackgroundSettingsControl(),
+                new OhMyLockScreen.Controls.Editor.BorderSettingsControl(),
                 new OhMyLockScreen.Controls.Editor.ForegroundSettingsControl(),
                 new OhMyLockScreen.Controls.Editor.LayoutSettingsControl(),
                 new OhMyLockScreen.Controls.Editor.GridLayoutSettingsControl()
@@ -252,7 +253,10 @@ internal static class FeatureTests
         {
             new App().Launch(new LaunchActivatedEventArgs());
             var registered = IAppHost.Host!.Services.GetRequiredService<FeatureRegistryService>().Registered;
-            Check(registered.Select(feature => feature.Id).ToHashSet().SetEquals(["omls.features.layout.layout", "omls.features.layout.grid", "omls.features.appearance.background", "omls.features.appearance.foreground"]), "The app host did not register the built-in features.");
+            Check(registered.Select(feature => feature.Id).ToHashSet().SetEquals(
+                ["omls.features.layout.layout", "omls.features.layout.grid", "omls.features.appearance.background",
+                    "omls.features.appearance.border", "omls.features.appearance.foreground"]),
+                "The app host did not register the built-in features.");
             Check(IAppHost.Host.Services.GetRequiredService<IFeatureService>() is FeatureService, "The app host did not register the feature service.");
         });
         FeatureAttacherTests.Run(run);

@@ -20,8 +20,10 @@
 - Figma 设计稿中呈现的 Fluent System Icon 等字体图标的版本可能与项目当前安装的不符，此时应该按字体对应位点的名称语义匹配，而不是位点本身或外观。
 - `BrushEditControl.Brush` 使用显式 TwoWay 绑定；编辑整体替换画刷以触发保存。可选 `TargetElement` 仅指定渐变装饰层的坐标区域，显示画刷仍由调用方绑定。
 - 笔刷 Button 手柄需显式启用 IsTabStop；拖动通过 AddHandler 的 handledEventsToo 监听已处理的指针事件。
+- 数字输入框通过共享样式隐藏内部清除按钮，并将其布局宽度归零，避免聚焦编辑时挤占输入空间。
 - 渐变拖拽写回时，仅色标位置按百分比保留一位小数（底层 Offset 精度为 0.001）；坐标和半径保留原始计算精度。
 - 背景 feature 与渐变装饰层共用目标解析：IBorderable 使用其当前 Border，其他 Control 使用自身；装饰层仅关联编辑视图中的实例。
+- 边框 feature 仅附加到 IBorderable 的当前 Border，修改框线、圆角和 Padding；替换或卸载时恢复原值。默认框线复制添加时的主题前景色，作为独立纯色画刷保存。
 - UWP 前景依赖属性不是附加属性；前景 feature 按目标类型绑定 Control、TextBlock、RichTextBlock 或 ContentPresenter 自身的 ForegroundProperty，其他 FrameworkElement 附加时无操作，不递归修改子元素，卸载时恢复原值。
 - 特性设置控件统一继承 FeatureSettingsControlBase（强类型设置使用其泛型版本）；编辑器通过 TargetElement 统一传递并清理编辑目标，沿用上述目标解析规则。
 - ComponentPresenter 通过默认 ContentTemplate 提供装饰 Border，并通过 IBorderable 通知其加载、替换与卸载；背景特性直接修饰 Border，不依赖 UserControl.Background 自动绘制或模板的隐式 DataContext。

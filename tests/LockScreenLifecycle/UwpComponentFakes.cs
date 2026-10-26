@@ -115,6 +115,11 @@ namespace Windows.UI.Xaml
     {
         public Thickness(double uniform) : this(uniform, uniform, uniform, uniform) { }
     }
+
+    public readonly record struct CornerRadius(double TopLeft, double TopRight, double BottomRight, double BottomLeft)
+    {
+        public CornerRadius(double uniform) : this(uniform, uniform, uniform, uniform) { }
+    }
     public class FrameworkElement : UIElement
     {
         public Media.GeneralTransform TransformToVisual(UIElement visual) => new();

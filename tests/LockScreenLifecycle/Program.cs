@@ -58,6 +58,7 @@ if (args.Contains("--binding-only"))
     DependencyPropertyBindingTests.Run(Run);
     LayoutFeatureTests.Run(Run);
     BackgroundFeatureTests.Run(Run);
+    BorderFeatureTests.Run(Run);
     ForegroundFeatureTests.Run(Run);
     Console.WriteLine($"All {passed} property binding checks passed using simulated UWP controls.");
     return;
@@ -100,6 +101,7 @@ ComponentTests.Run(Run);
 DependencyPropertyBindingTests.Run(Run);
 LayoutFeatureTests.Run(Run);
 BackgroundFeatureTests.Run(Run);
+BorderFeatureTests.Run(Run);
 ForegroundFeatureTests.Run(Run);
 FeatureTests.Run(Run);
 LayoutTests.Run(Run);
