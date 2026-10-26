@@ -8,6 +8,8 @@ namespace Windows
 namespace Windows.Foundation
 {
     public readonly record struct Point(double X, double Y);
+    public readonly record struct Size(double Width, double Height);
+    public readonly record struct Rect(double X, double Y, double Width, double Height);
 }
 
 namespace Windows.ApplicationModel.Activation
@@ -243,6 +245,11 @@ namespace Windows.UI
 
 namespace Windows.UI.Xaml.Media
 {
+    public sealed class RectangleGeometry
+    {
+        public Windows.Foundation.Rect Rect { get; set; }
+    }
+
     public class Transform : Windows.UI.Xaml.DependencyObject;
     public sealed class TransformGroup : Transform
     {

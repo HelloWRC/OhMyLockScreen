@@ -235,6 +235,7 @@ namespace OhMyLockScreen.Shared.Controls.Scene
 
     public sealed partial class ScenePresenter
     {
+        private readonly Windows.UI.Xaml.Controls.Grid BackgroundViewport = new();
         private readonly Windows.UI.Xaml.Controls.Grid BackgroundLayer = new();
         private readonly Windows.UI.Xaml.Controls.Grid LayersLayer = new();
         private readonly Windows.UI.Xaml.Media.TranslateTransform LayersTransform = new();
@@ -243,16 +244,18 @@ namespace OhMyLockScreen.Shared.Controls.Scene
         });
 
         internal Windows.UI.Xaml.Controls.Grid BackgroundLayerElement => BackgroundLayer;
+        internal Windows.UI.Xaml.Controls.Grid BackgroundViewportElement => BackgroundViewport;
         internal Windows.UI.Xaml.Controls.Grid LayersLayerElement => LayersLayer;
         internal Windows.UI.Xaml.Media.TranslateTransform LayersTranslation => LayersTransform;
 
         private void InitializeComponent()
         {
+            BackgroundViewport.Children.Add(BackgroundLayer);
             Content = new Windows.UI.Xaml.Controls.Grid
             {
                 Children =
                 {
-                    BackgroundLayer,
+                    BackgroundViewport,
                     LayersLayer
                 }
             };

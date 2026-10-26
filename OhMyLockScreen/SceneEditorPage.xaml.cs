@@ -92,6 +92,7 @@ public sealed partial class SceneEditorPage : Page
         ViewModel = IAppHost.GetRequiredService<SceneEditorViewModel>();
         _observedTreeItemDragOverHandler = OnObservedTreeItemDragOver;
         InitializeComponent();
+        InitializePanelAnimations();
         SceneTree.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnTreeDragOver), true);
         SceneTree.AddHandler(UIElement.DropEvent, new DragEventHandler(OnTreeDrop), true);
         AddHandler(UIElement.DropEvent, new DragEventHandler(OnPageDrop), true);
@@ -113,6 +114,7 @@ public sealed partial class SceneEditorPage : Page
         ViewModel.StructureChanged += OnStructureChanged;
         ViewModel.InspectorChanged += OnInspectorChanged;
         ViewModel.Error += OnEditorError;
+        ViewModel.PropertyChanged += OnPanelViewModelPropertyChanged;
         _scenes.SceneSaved += OnSceneSaved;
         _scenes.ActiveSceneChanged += OnSceneSaved;
         _scenes.SaveFailed += OnSaveFailed;
@@ -134,6 +136,8 @@ public sealed partial class SceneEditorPage : Page
         {
             ShowError(exception);
         }
+
+        UpdatePanelAnimations();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
@@ -144,6 +148,8 @@ public sealed partial class SceneEditorPage : Page
         }
 
         EndDrag();
+        ViewModel.PropertyChanged -= OnPanelViewModelPropertyChanged;
+        StopPanelAnimations();
         ExitPreview();
         ClearPageToasts();
         _loaded = false;
@@ -357,7 +363,9 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnContentSizeChanged(object sender, SizeChangedEventArgs args)
     {
+        EditorPresenter.BackgroundViewportSize = args.NewSize;
         ViewModel.SidePanelWidth = Math.Clamp((args.NewSize.Width - 320) / 2, 200, 341);
+        UpdatePanelViewport();
     }
 
     private void OnTreeSelectionChanged(Microsoft.UI.Xaml.Controls.TreeView sender, TreeViewSelectionChangedEventArgs args)

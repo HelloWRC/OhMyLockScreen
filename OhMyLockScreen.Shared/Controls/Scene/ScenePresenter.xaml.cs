@@ -33,6 +33,7 @@ public sealed partial class ScenePresenter : UserControl
     public ScenePresenter()
     {
         InitializeComponent();
+        InitializeBackgroundLayout();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }

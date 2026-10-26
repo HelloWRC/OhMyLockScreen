@@ -30,6 +30,8 @@
 - 特性设置控件统一继承 FeatureSettingsControlBase（强类型设置使用其泛型版本）；编辑器通过 TargetElement 统一传递并清理编辑目标，沿用上述目标解析规则。
 - ComponentPresenter 通过默认 ContentTemplate 提供装饰 Border，并通过 IBorderable 通知其加载、替换与卸载；背景特性直接修饰 Border，不依赖 UserControl.Background 自动绘制或模板的隐式 DataContext。
 - `XamlCompositionBrushBase` 不支持设置继承的变换属性；其默认单位变换在序列化时规范化为 null，读取时兼容旧的单位矩阵。
+- 编辑器面板动画由页面统一管理可见性与时间进度；入场与出场均使用 cubic-bezier(0,0,0,1)，组件侧栏与画布留白同步变化，不再直接绑定面板 Visibility 或画布 Margin 到最终页签状态。
+- 编辑器通过 ScenePresenter.BackgroundViewportSize 固定视频渲染尺寸，并在场景视口内居中裁剪；侧栏动画的左右留白对齐物理像素，避免视频交换链反复缩放和居中取整产生抖动。
 
 ## 验证原则
 

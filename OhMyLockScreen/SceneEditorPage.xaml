@@ -260,7 +260,6 @@
             <Grid
                 x:Name="SceneViewport"
                 Background="Transparent"
-                Margin="{x:Bind ViewModel.ViewportMargin, Mode=OneWay}"
                 AllowDrop="True"
                 PointerPressed="OnCanvasPointerPressed"
                 PointerMoved="OnCanvasPointerMoved"
@@ -364,8 +363,16 @@
                 HorizontalAlignment="Left"
                 Margin="16,16,0,0"
                 Height="207"
-                Visibility="{x:Bind ViewModel.ShowHome, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}">
-                <Grid>
+                Opacity="0"
+                Visibility="Collapsed">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="HomePanelTransform" />
+                </Border.RenderTransform>
+                <ContentControl
+                    x:Name="HomePanelInput"
+                    IsTabStop="False"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition
@@ -428,246 +435,258 @@
                             SelectionChanged="OnSceneSelectionChanged"
                             RightTapped="OnSceneRightTapped" />
                     </Grid>
-                </Grid>
+                </ContentControl>
             </Border>
-            <Grid
+            <ContentControl
                 x:Name="ComponentPanels"
-                IsHitTestVisible="True"
-                Visibility="{x:Bind ViewModel.ShowComponents, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition
-                        Width="{x:Bind ViewModel.PanelWidth, Mode=OneWay}" />
-                    <ColumnDefinition
-                        Width="*" />
-                    <ColumnDefinition
-                        Width="{x:Bind ViewModel.PanelWidth, Mode=OneWay}" />
-                </Grid.ColumnDefinitions>
-                <Grid
-                    Background="#262626"
-                    Padding="8,0,8,0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition
-                            Height="*" />
-                        <RowDefinition
-                            Height="8" />
-                        <RowDefinition
-                            Height="*" />
-                    </Grid.RowDefinitions>
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition
-                                Height="50" />
-                            <RowDefinition
-                                Height="*" />
-                        </Grid.RowDefinitions>
-                        <StackPanel
-                            Margin="12,0,0,0">
-                            <TextBlock
-                                Text="场景"
-                                FontWeight="Bold"
-                                Height="37"
-                                Padding="0,10,0,0" />
-                            <Border
-                                Style="{StaticResource SectionPillStyle}" />
-                        </StackPanel>
-                        <Button
-                            HorizontalAlignment="Right"
-                            Style="{StaticResource EditorToolbarIconButtonStyle}"
-                            ToolTipService.ToolTip="添加图层"
-                            AutomationProperties.Name="添加图层"
-                            Click="OnAddLayerClick">
-                            <FontIcon
-                                FontFamily="Segoe Fluent Icons"
-                                Glyph="&#xE710;"
-                                FontSize="16" />
-                        </Button>
-                        <muxc:TreeView
-                            x:Name="SceneTree"
-                            Grid.Row="1"
-                            SelectionMode="Single"
-                            AllowDrop="True"
-                            CanDragItems="True"
-                            ItemsSource="{x:Bind ViewModel.Roots}"
-                            SelectedItem="{x:Bind ViewModel.SelectedItem, Mode=OneWay}"
-                            CanReorderItems="True"
-                            DragItemsStarting="OnTreeDragItemsStarting"
-                            DragItemsCompleted="OnDragItemsCompleted"
-                            DragOver="OnTreeDragOver"
-                            SelectionChanged="OnTreeSelectionChanged"
-                            RightTapped="OnTreeRightTapped">
-                            <muxc:TreeView.ItemTemplate>
-                                <DataTemplate
-                                    x:DataType="vm:SceneTreeItem">
-                                    <muxc:TreeViewItem
-                                        ItemsSource="{x:Bind Children}"
-                                        IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
-                                        Loaded="OnTreeItemLoaded"
-                                        Unloaded="OnTreeItemUnloaded">
-                                        <Grid
-                                            x:Name="TreeRow"
-                                            MinHeight="32"
-                                            Padding="0,4"
-                                            Background="Transparent">
-                                            <StackPanel
-                                                Orientation="Horizontal"
-                                                Spacing="8">
-                                                <Viewbox
-                                                    Width="16"
-                                                    Height="16"
-                                                    Stretch="Uniform"
-                                                    VerticalAlignment="Center">
-                                                    <IconSourceElement
-                                                        IconSource="{x:Bind IconSource, Mode=OneWay}" />
-                                                </Viewbox>
-                                                <TextBlock
-                                                    Text="{x:Bind Title, Mode=OneWay}"
-                                                    TextTrimming="CharacterEllipsis"
-                                                    VerticalAlignment="Center" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </muxc:TreeViewItem>
-                                </DataTemplate>
-                            </muxc:TreeView.ItemTemplate>
-                        </muxc:TreeView>
-                    </Grid>
+                IsTabStop="False"
+                HorizontalContentAlignment="Stretch"
+                VerticalContentAlignment="Stretch"
+                Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="{x:Bind ViewModel.PanelWidth, Mode=OneWay}" />
+                        <ColumnDefinition
+                            Width="*" />
+                        <ColumnDefinition
+                            Width="{x:Bind ViewModel.PanelWidth, Mode=OneWay}" />
+                    </Grid.ColumnDefinitions>
                     <Grid
-                        Grid.Row="2">
+                        x:Name="ComponentLeftPanel"
+                        Background="#262626"
+                        Padding="8,0,8,0">
+                        <Grid.RenderTransform>
+                            <TranslateTransform x:Name="ComponentLeftTransform" />
+                        </Grid.RenderTransform>
                         <Grid.RowDefinitions>
                             <RowDefinition
-                                Height="50" />
+                                Height="*" />
+                            <RowDefinition
+                                Height="8" />
                             <RowDefinition
                                 Height="*" />
                         </Grid.RowDefinitions>
-                        <StackPanel
-                            Margin="12,0,0,0">
-                            <TextBlock
-                                Text="组件库"
-                                FontWeight="Bold"
-                                Height="37"
-                                Padding="0,10,0,0" />
-                            <Border
-                                Style="{StaticResource SectionPillStyle}" />
-                        </StackPanel>
-                        <ListView
-                            x:Name="ComponentLibrary"
-                            Grid.Row="1"
-                            CanDragItems="True"
-                            IsDoubleTapEnabled="True"
-                            SelectionMode="None"
-                            ToolTipService.ToolTip="双击添加，或拖到画布和组件树"
-                            DragItemsStarting="OnLibraryDragItemsStarting"
-                            DragItemsCompleted="OnDragItemsCompleted"
-                            DoubleTapped="OnAddComponentDoubleTapped"
-                            ItemsSource="{x:Bind ViewModel.Library}">
-                            <ListView.ItemContainerStyle>
-                                <Style
-                                    TargetType="ListViewItem"
-                                    BasedOn="{StaticResource DefaultListViewItemStyle}">
-                                    <Setter
-                                        Property="Padding"
-                                        Value="16,0" />
-                                    <Setter
-                                        Property="HorizontalContentAlignment"
-                                        Value="Stretch" />
-                                    <Setter
-                                        Property="MinHeight"
-                                        Value="40" />
-                                    <Setter
-                                        Property="VerticalContentAlignment"
-                                        Value="Center" />
-                                </Style>
-                            </ListView.ItemContainerStyle>
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition
+                                    Height="50" />
+                                <RowDefinition
+                                    Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel
+                                Margin="12,0,0,0">
+                                <TextBlock
+                                    Text="场景"
+                                    FontWeight="Bold"
+                                    Height="37"
+                                    Padding="0,10,0,0" />
+                                <Border
+                                    Style="{StaticResource SectionPillStyle}" />
+                            </StackPanel>
+                            <Button
+                                HorizontalAlignment="Right"
+                                Style="{StaticResource EditorToolbarIconButtonStyle}"
+                                ToolTipService.ToolTip="添加图层"
+                                AutomationProperties.Name="添加图层"
+                                Click="OnAddLayerClick">
+                                <FontIcon
+                                    FontFamily="Segoe Fluent Icons"
+                                    Glyph="&#xE710;"
+                                    FontSize="16" />
+                            </Button>
+                            <muxc:TreeView
+                                x:Name="SceneTree"
+                                Grid.Row="1"
+                                SelectionMode="Single"
+                                AllowDrop="True"
+                                CanDragItems="True"
+                                ItemsSource="{x:Bind ViewModel.Roots}"
+                                SelectedItem="{x:Bind ViewModel.SelectedItem, Mode=OneWay}"
+                                CanReorderItems="True"
+                                DragItemsStarting="OnTreeDragItemsStarting"
+                                DragItemsCompleted="OnDragItemsCompleted"
+                                DragOver="OnTreeDragOver"
+                                SelectionChanged="OnTreeSelectionChanged"
+                                RightTapped="OnTreeRightTapped">
+                                <muxc:TreeView.ItemTemplate>
+                                    <DataTemplate
+                                        x:DataType="vm:SceneTreeItem">
+                                        <muxc:TreeViewItem
+                                            ItemsSource="{x:Bind Children}"
+                                            IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
+                                            Loaded="OnTreeItemLoaded"
+                                            Unloaded="OnTreeItemUnloaded">
+                                            <Grid
+                                                x:Name="TreeRow"
+                                                MinHeight="32"
+                                                Padding="0,4"
+                                                Background="Transparent">
+                                                <StackPanel
+                                                    Orientation="Horizontal"
+                                                    Spacing="8">
+                                                    <Viewbox
+                                                        Width="16"
+                                                        Height="16"
+                                                        Stretch="Uniform"
+                                                        VerticalAlignment="Center">
+                                                        <IconSourceElement
+                                                            IconSource="{x:Bind IconSource, Mode=OneWay}" />
+                                                    </Viewbox>
+                                                    <TextBlock
+                                                        Text="{x:Bind Title, Mode=OneWay}"
+                                                        TextTrimming="CharacterEllipsis"
+                                                        VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </muxc:TreeViewItem>
+                                    </DataTemplate>
+                                </muxc:TreeView.ItemTemplate>
+                            </muxc:TreeView>
+                        </Grid>
+                        <Grid
+                            Grid.Row="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition
+                                    Height="50" />
+                                <RowDefinition
+                                    Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel
+                                Margin="12,0,0,0">
+                                <TextBlock
+                                    Text="组件库"
+                                    FontWeight="Bold"
+                                    Height="37"
+                                    Padding="0,10,0,0" />
+                                <Border
+                                    Style="{StaticResource SectionPillStyle}" />
+                            </StackPanel>
+                            <ListView
+                                x:Name="ComponentLibrary"
+                                Grid.Row="1"
+                                CanDragItems="True"
+                                IsDoubleTapEnabled="True"
+                                SelectionMode="None"
+                                ToolTipService.ToolTip="双击添加，或拖到画布和组件树"
+                                DragItemsStarting="OnLibraryDragItemsStarting"
+                                DragItemsCompleted="OnDragItemsCompleted"
+                                DoubleTapped="OnAddComponentDoubleTapped"
+                                ItemsSource="{x:Bind ViewModel.Library}">
+                                <ListView.ItemContainerStyle>
+                                    <Style
+                                        TargetType="ListViewItem"
+                                        BasedOn="{StaticResource DefaultListViewItemStyle}">
+                                        <Setter
+                                            Property="Padding"
+                                            Value="16,0" />
+                                        <Setter
+                                            Property="HorizontalContentAlignment"
+                                            Value="Stretch" />
+                                        <Setter
+                                            Property="MinHeight"
+                                            Value="40" />
+                                        <Setter
+                                            Property="VerticalContentAlignment"
+                                            Value="Center" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel
+                                            Orientation="Horizontal"
+                                            Spacing="8">
+                                            <Viewbox
+                                                Width="16"
+                                                Height="16"
+                                                Stretch="Uniform"
+                                                VerticalAlignment="Center">
+                                                <IconSourceElement
+                                                    IconSource="{Binding IconSource}" />
+                                            </Viewbox>
+                                            <TextBlock
+                                                Text="{Binding Name}"
+                                                VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+                    </Grid>
+                    <Border
+                        x:Name="ComponentRightPanel"
+                        Grid.Column="2"
+                        Background="#262626"
+                        Padding="8,0">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="ComponentRightTransform" />
+                        </Border.RenderTransform>
+                        <ScrollViewer
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel
+                                Spacing="8"
+                                Padding="0,0,0,16">
+                                <ItemsControl
+                                    ItemsSource="{x:Bind ViewModel.InspectorSections}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate
+                                            x:DataType="vm:InspectorSection">
+                                            <StackPanel
+                                                Spacing="8"
+                                                Margin="0,0,0,8">
+                                                <Grid
+                                                    Height="40">
+                                                    <TextBlock
+                                                        Text="{x:Bind Title}"
+                                                        FontWeight="Bold"
+                                                        Margin="12,0,40,0"
+                                                        VerticalAlignment="Center" />
+                                                    <Border
+                                                        Style="{StaticResource EditorSectionPillStyle}"
+                                                        Margin="12,0,0,0" />
+                                                    <Button
+                                                        HorizontalAlignment="Right"
+                                                        Style="{StaticResource EditorToolbarIconButtonStyle}"
+                                                        Command="{x:Bind RemoveCommand}"
+                                                        ToolTipService.ToolTip="移除特性"
+                                                        AutomationProperties.Name="移除特性"
+                                                        Visibility="{x:Bind CanRemove, Converter={StaticResource BooleanVisibilityConverter}}">
+                                                        <FontIcon
+                                                            Glyph="&#xE711;"
+                                                            FontSize="12" />
+                                                    </Button>
+                                                </Grid>
+                                                <ContentControl
+                                                    Content="{x:Bind}"
+                                                    HorizontalContentAlignment="Stretch"
+                                                    ContentTemplateSelector="{StaticResource InspectorEditorTemplateSelector}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button
+                                    HorizontalAlignment="Stretch">
                                     <StackPanel
                                         Orientation="Horizontal"
                                         Spacing="8">
-                                        <Viewbox
-                                            Width="16"
-                                            Height="16"
-                                            Stretch="Uniform"
-                                            VerticalAlignment="Center">
-                                            <IconSourceElement
-                                                IconSource="{Binding IconSource}" />
-                                        </Viewbox>
+                                        <FontIcon
+                                            Glyph="&#xE710;"
+                                            FontSize="16" />
                                         <TextBlock
-                                            Text="{Binding Name}"
-                                            VerticalAlignment="Center" />
+                                            Text="添加特性" />
                                     </StackPanel>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                    </Grid>
+                                    <Button.Flyout>
+                                        <MenuFlyout
+                                            x:Name="AddFeatureFlyout"
+                                            Opening="OnAddFeatureMenuOpening" />
+                                    </Button.Flyout>
+                                </Button>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
                 </Grid>
-                <Border
-                    Grid.Column="2"
-                    Background="#262626"
-                    Padding="8,0">
-                    <ScrollViewer
-                        VerticalScrollBarVisibility="Auto"
-                        HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel
-                            Spacing="8"
-                            Padding="0,0,0,16">
-                            <ItemsControl
-                                ItemsSource="{x:Bind ViewModel.InspectorSections}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate
-                                        x:DataType="vm:InspectorSection">
-                                        <StackPanel
-                                            Spacing="8"
-                                            Margin="0,0,0,8">
-                                            <Grid
-                                                Height="40">
-                                                <TextBlock
-                                                    Text="{x:Bind Title}"
-                                                    FontWeight="Bold"
-                                                    Margin="12,0,40,0"
-                                                    VerticalAlignment="Center" />
-                                                <Border
-                                                    Style="{StaticResource EditorSectionPillStyle}"
-                                                    Margin="12,0,0,0" />
-                                                <Button
-                                                    HorizontalAlignment="Right"
-                                                    Style="{StaticResource EditorToolbarIconButtonStyle}"
-                                                    Command="{x:Bind RemoveCommand}"
-                                                    ToolTipService.ToolTip="移除特性"
-                                                    AutomationProperties.Name="移除特性"
-                                                    Visibility="{x:Bind CanRemove, Converter={StaticResource BooleanVisibilityConverter}}">
-                                                    <FontIcon
-                                                        Glyph="&#xE711;"
-                                                        FontSize="12" />
-                                                </Button>
-                                            </Grid>
-                                            <ContentControl
-                                                Content="{x:Bind}"
-                                                HorizontalContentAlignment="Stretch"
-                                                ContentTemplateSelector="{StaticResource InspectorEditorTemplateSelector}" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <Button
-                                HorizontalAlignment="Stretch">
-                                <StackPanel
-                                    Orientation="Horizontal"
-                                    Spacing="8">
-                                    <FontIcon
-                                        Glyph="&#xE710;"
-                                        FontSize="16" />
-                                    <TextBlock
-                                        Text="添加特性" />
-                                </StackPanel>
-                                <Button.Flyout>
-                                    <MenuFlyout
-                                        x:Name="AddFeatureFlyout"
-                                        Opening="OnAddFeatureMenuOpening" />
-                                </Button.Flyout>
-                            </Button>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Border>
-            </Grid>
+            </ContentControl>
             <Border
                 x:Name="BackgroundPanel"
                 Style="{StaticResource FloatingPanelStyle}"
@@ -675,8 +694,16 @@
                 Margin="0,16,16,0"
                 MinHeight="207"
                 VerticalAlignment="Top"
-                Visibility="{x:Bind ViewModel.ShowBackground, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}">
-                <Grid>
+                Opacity="0"
+                Visibility="Collapsed">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="BackgroundPanelTransform" />
+                </Border.RenderTransform>
+                <ContentControl
+                    x:Name="BackgroundPanelInput"
+                    IsTabStop="False"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch">
                     <StackPanel
                         Spacing="4"
                         VerticalAlignment="Top">
@@ -721,7 +748,7 @@
                                 IsChecked="{x:Bind ViewModel.Scene.Background.EnableSound, Mode=TwoWay}" />
                         </StackPanel>
                     </StackPanel>
-                </Grid>
+                </ContentControl>
             </Border>
         </Grid>
     </Grid>

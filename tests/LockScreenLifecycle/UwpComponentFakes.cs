@@ -72,6 +72,8 @@ namespace Windows.UI.Xaml
 
     public class UIElement : DependencyObject
     {
+        public Media.RectangleGeometry? Clip { get; set; }
+
         public static readonly DependencyProperty OpacityProperty = DependencyProperty.Register(
             nameof(Opacity),
             typeof(double),

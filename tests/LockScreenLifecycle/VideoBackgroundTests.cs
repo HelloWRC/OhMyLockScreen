@@ -14,12 +14,45 @@ using OhMyLockScreen.Shared.Controls.Scene;
 using OhMyLockScreen.Shared.Models.Scene;
 using OhMyLockScreen.Shared.Services.FeatureHost;
 using Windows.Storage;
+using Windows.Foundation;
 using Windows.UI.Xaml;
 
 internal static class VideoBackgroundTests
 {
     internal static void Run(Action<string, Action> run)
     {
+        run("Editor viewport changes clip a fixed video surface without changing its crop or restarting playback", () =>
+        {
+            using var fixture = new Fixture();
+            var presenter = fixture.Presenter;
+            presenter.BackgroundViewportSize = new Size(1920, 1080);
+            presenter.BackgroundLayerElement.Resize(1920, 1080);
+            fixture.View.Initialize("fixed-editor-viewport");
+            var player = fixture.View.MediaPlayer!;
+            var view = fixture.View;
+
+            foreach (var width in new[] { 1920d, 1763.25, 1401.75, 1238, 1579.5, 1920 })
+            {
+                presenter.BackgroundViewportElement.Resize(width, 1080);
+                var layer = presenter.BackgroundLayerElement;
+                Check(layer.Width == 1920 && layer.Height == 1080 && layer.HorizontalAlignment == HorizontalAlignment.Center
+                    && layer.VerticalAlignment == VerticalAlignment.Center, "Animating the editor viewport changed the video surface dimensions or alignment.");
+                Check(presenter.BackgroundViewportElement.Clip!.Rect == new Rect(0, 0, width, 1080),
+                    "Video clipping did not follow the editor viewport.");
+                Check(ReferenceEquals(view, fixture.View) && player.PlayCalls == 1 && player.CropGeometry == "1920:1080",
+                    "Animating the viewport restarted playback or changed native cropping.");
+            }
+
+            presenter.BackgroundViewportSize = new Size(1600, 900);
+            presenter.BackgroundLayerElement.Resize(1600, 900);
+            Check(player.CropGeometry == "1600:900" && player.PlayCalls == 1, "A real window resize did not update cropping without restarting playback.");
+            presenter.BackgroundViewportSize = default;
+            Check(double.IsNaN(presenter.BackgroundLayerElement.Width) && double.IsNaN(presenter.BackgroundLayerElement.Height)
+                && presenter.BackgroundLayerElement.HorizontalAlignment == HorizontalAlignment.Stretch
+                && presenter.BackgroundLayerElement.VerticalAlignment == VerticalAlignment.Stretch,
+                "Clearing the fixed editor size did not restore the default scene layout.");
+        });
+
         run("Video waits for its own swapchain and preserves path, mute and crop settings", () =>
         {
             using var fixture = new Fixture();

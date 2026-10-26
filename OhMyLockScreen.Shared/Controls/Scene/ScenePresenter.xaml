@@ -17,9 +17,13 @@
         VerticalAlignment="Stretch"
         Background="{x:Bind Background, Mode=OneWay, TargetNullValue=Transparent}">
         <Grid
-            x:Name="BackgroundLayer"
-            IsHitTestVisible="False"
-            Visibility="Collapsed" />
+            x:Name="BackgroundViewport"
+            IsHitTestVisible="False">
+            <Grid
+                x:Name="BackgroundLayer"
+                IsHitTestVisible="False"
+                Visibility="Collapsed" />
+        </Grid>
         <Grid
             x:Name="LayersLayer"
             HorizontalAlignment="Stretch"
