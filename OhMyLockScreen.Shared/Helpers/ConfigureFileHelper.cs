@@ -11,25 +11,23 @@ namespace OhMyLockScreen.Shared.Helpers;
 /// <summary>JSON 配置读写，沿用 ClassIsland 的加载备份与错误记录约定。</summary>
 public class ConfigureFileHelper
 {
-    private static JsonSerializerOptions _serializerOptions = new()
-    {
-    };
-    private static JsonSerializerOptions _indentedSerializerOptions = new()
-    {
-        WriteIndented = true
-    };
+    private static JsonSerializerOptions _serializerOptions = CreateSerializerOptions(false);
+    private static JsonSerializerOptions _indentedSerializerOptions = CreateSerializerOptions(true);
 
     internal static void InvalidatesSerializerOptions()
     {
         var resolver = AutoJsonPolymorphicRegistrationHelper.CreateJsonTypeInfoResolver();
-        _indentedSerializerOptions = new JsonSerializerOptions
+        _indentedSerializerOptions = CreateSerializerOptions(true, resolver);
+        _serializerOptions = CreateSerializerOptions(false, resolver);
+    }
+
+    private static JsonSerializerOptions CreateSerializerOptions(bool writeIndented, IJsonTypeInfoResolver? resolver = null)
+    {
+        return new JsonSerializerOptions
         {
-            WriteIndented = true,
-            TypeInfoResolver = resolver
-        };
-        _serializerOptions = new JsonSerializerOptions()
-        {
-            TypeInfoResolver = resolver
+            WriteIndented = writeIndented,
+            TypeInfoResolver = resolver,
+            Converters = { new BrushJsonConverterFactory() }
         };
     }
 
@@ -50,7 +48,7 @@ public class ConfigureFileHelper
                 throw new FileNotFoundException("配置备份不存在。", path);
             }
 
-            var config = Activator.CreateInstance<T>();
+            var config = CreateDefault<T>();
             SaveConfig(path, config);
             return config;
         }
@@ -86,7 +84,7 @@ public class ConfigureFileHelper
     public static T LoadConfigUnWrapped<T>(Stream stream)
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, true, 1024, leaveOpen: true);
-        return JsonSerializer.Deserialize<T>(reader.ReadToEnd(), _serializerOptions) ?? Activator.CreateInstance<T>();
+        return JsonSerializer.Deserialize<T>(reader.ReadToEnd(), _serializerOptions) ?? CreateDefault<T>();
     }
 
     /// <summary>读取及备份恢复均失败时，记录错误并返回默认配置。</summary>
@@ -100,7 +98,7 @@ public class ConfigureFileHelper
         {
             Logger?.LogError(exception, "无法读取 JSON 文件 {Path}，已返回默认值", path);
             RecordError(new ConfigError(path, 1, true, exception));
-            return Activator.CreateInstance<T>();
+            return CreateDefault<T>();
         }
     }
 
@@ -114,7 +112,7 @@ public class ConfigureFileHelper
         {
             Logger?.LogError(exception, "无法从流中读取 JSON 文件，已返回默认值");
             RecordError(new ConfigError("<stream>", 1, true, exception));
-            return Activator.CreateInstance<T>();
+            return CreateDefault<T>();
         }
     }
 
@@ -145,8 +143,12 @@ public class ConfigureFileHelper
     public static T CopyObject<T>(T o)
     {
         return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(o, _serializerOptions), _serializerOptions)
-               ?? Activator.CreateInstance<T>();
+               ?? CreateDefault<T>();
     }
+
+    // A null brush is a valid value, including when Brush itself is the root type.
+    private static T CreateDefault<T>()
+        => typeof(Windows.UI.Xaml.Media.Brush).IsAssignableFrom(typeof(T)) ? default! : Activator.CreateInstance<T>();
 
     private static JsonSerializerOptions GetOptions(bool writeIndented)
         => writeIndented ? _indentedSerializerOptions : _serializerOptions;

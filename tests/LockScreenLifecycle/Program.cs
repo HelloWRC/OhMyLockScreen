@@ -16,6 +16,13 @@ async Task RunAsync(string name, Func<Task> test)
     Console.WriteLine($"PASS: {name}");
 }
 
+if (args.Contains("--brush-only"))
+{
+    BrushSerializationTests.Run(Run);
+    Console.WriteLine($"All {passed} brush serialization checks passed using simulated UWP values.");
+    return;
+}
+
 if (args.Contains("--converter-only"))
 {
     EditorConverterTests.Run(Run);
@@ -81,6 +88,7 @@ if (args.Contains("--layout-only"))
 }
 
 await InfrastructureTests.RunAsync(Run, RunAsync);
+BrushSerializationTests.Run(Run);
 ToastTests.Run(Run);
 ComponentTests.Run(Run);
 DependencyPropertyBindingTests.Run(Run);

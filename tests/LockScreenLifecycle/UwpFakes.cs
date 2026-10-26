@@ -236,21 +236,17 @@ namespace Windows.UI
 {
     public static class Colors
     {
-        public static object Transparent { get; } = new();
+        public static Color Transparent => Color.FromArgb(0, 255, 255, 255);
     }
 }
 
 namespace Windows.UI.Xaml.Media
 {
-    public sealed class SolidColorBrush(object color)
-    {
-        public object Color => color;
-    }
-
     public class Transform : Windows.UI.Xaml.DependencyObject;
     public sealed class TransformGroup : Transform
     {
         public List<Transform> Children { get; } = [];
+        public Matrix Value => Children.Aggregate(Matrix.Identity, (matrix, child) => matrix.Append(BrushFakeTransforms.GetMatrix(child)));
     }
 
     public sealed class TranslateTransform : Transform
