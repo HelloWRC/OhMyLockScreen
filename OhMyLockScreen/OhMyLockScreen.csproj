@@ -5,8 +5,8 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <Nullable>enable</Nullable>
     <UseUwp>true</UseUwp>
-    <Platforms>x86;x64;arm64</Platforms>
-    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <Platforms>x86;x64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
     <SelfContained>true</SelfContained>
     <PublishSelfContained>true</PublishSelfContained>
     <DefaultLanguage>zh-CN</DefaultLanguage>
@@ -27,10 +27,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="VideoLAN.LibVLC.UWP" Version="3.3.2" />
     <ProjectReference Include="..\OhMyLockScreen.Shared\OhMyLockScreen.Shared.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Helpers\" />
     <Folder Include="Models\Scene\" />
   </ItemGroup>
+  <!-- VideoLAN.LibVLC.UWP 3.3.2 incorrectly names the VC++ 14 UWP SDK as VCLibs.120. -->
+  <Target Name="CorrectLibVlcUwpRuntimeSdk" BeforeTargets="ResolveSDKReferences">
+    <ItemGroup>
+      <SDKReference Remove="Microsoft.VCLibs.120, Version=14.0" />
+      <SDKReference Include="Microsoft.VCLibs, Version=14.0" />
+    </ItemGroup>
+  </Target>
 </Project>

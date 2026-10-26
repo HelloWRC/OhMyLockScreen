@@ -21,6 +21,7 @@ internal sealed class TestEnvironment : IDisposable
         CoreApplication.ExitCalls = 0;
         Storyboard.LastCreated = null;
         Storyboard.FailOnBegin = false;
+        LibVLCSharp.Shared.MediaPlayer.FailOnPlay = false;
         DispatcherTimer.Created.Clear();
         ConfigureFileHelper.Errors.Clear();
         ConfigureFileHelper.IsBackupEnabled = true;

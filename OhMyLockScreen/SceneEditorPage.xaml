@@ -697,7 +697,7 @@
                             <ComboBox
                                 Header="背景模式"
                                 MinWidth="110"
-                                SelectedIndex="{Binding Mode, Mode=TwoWay, Converter={StaticResource EnumIndexConverter}}">
+                                SelectedIndex="{x:Bind ViewModel.Scene.Background.Mode, Mode=TwoWay, Converter={StaticResource EnumIndexConverter}}">
                                 <ComboBoxItem
                                     Content="无" />
                                 <ComboBoxItem

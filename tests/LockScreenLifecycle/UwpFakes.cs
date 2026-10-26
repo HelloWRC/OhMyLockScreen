@@ -493,6 +493,8 @@ namespace Windows.UI.Xaml
 
         public Application() => Current = this;
         public event UwpEventHandler<SuspendingEventArgs>? Suspending;
+        public event UwpEventHandler<object>? Resuming;
+        public void Resume() => Resuming?.Invoke(this, EventArgs.Empty);
         protected virtual void OnLaunched(LaunchActivatedEventArgs args)
         {
         }
@@ -609,51 +611,6 @@ namespace Windows.UI.Xaml.Controls
             get;
             init;
         } = "";
-    }
-
-    public sealed class MediaElement : FrameworkElement
-    {
-        public bool AutoPlay
-        {
-            get; set;
-        }
-
-        public bool IsLooping
-        {
-            get; set;
-        }
-
-        public bool IsMuted
-        {
-            get; set;
-        }
-
-        public bool AreTransportControlsEnabled
-        {
-            get; set;
-        }
-
-        public bool IsHitTestVisible
-        {
-            get; set;
-        }
-
-        public object? Source
-        {
-            get; set;
-        }
-
-        public Stretch Stretch
-        {
-            get; set;
-        }
-
-        public event UwpEventHandler<ExceptionRoutedEventArgs>? MediaFailed;
-
-        internal void Fail(string message)
-        {
-            MediaFailed?.Invoke(this, new ExceptionRoutedEventArgs { ErrorMessage = message });
-        }
     }
 
     public class Page : FrameworkElement

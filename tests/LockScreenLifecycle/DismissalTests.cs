@@ -68,18 +68,6 @@ internal static class DismissalTests
             presenter.Unload();
         });
 
-        run("ScenePresenter forwards background media failures to its editor host", () =>
-        {
-            var presenter = new ScenePresenter();
-            string? failure = null;
-            presenter.BackgroundFailed += (_, message) => failure = message;
-
-            presenter.FailBackgroundMedia("simulated media failure");
-
-            Check(failure == "无法播放背景视频：simulated media failure",
-                "Background playback failures were not forwarded by ScenePresenter.");
-        });
-
         run("Unloading ScenePresenter releases an interrupted unlock animation", () =>
         {
             var presenter = new ScenePresenter { ActualHeight = 1080 };

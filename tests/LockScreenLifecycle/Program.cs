@@ -53,6 +53,13 @@ if (args.Contains("--dismissal-only"))
     return;
 }
 
+if (args.Contains("--video-only"))
+{
+    VideoBackgroundTests.Run(Run);
+    Console.WriteLine($"All {passed} video background checks passed using simulated libvlc and UWP views.");
+    return;
+}
+
 if (args.Contains("--binding-only"))
 {
     DependencyPropertyBindingTests.Run(Run);
@@ -108,4 +115,5 @@ LayoutTests.Run(Run);
 EditorConverterTests.Run(Run);
 await SceneTests.RunAsync(Run, RunAsync);
 await DismissalTests.RunAsync(Run, RunAsync);
+VideoBackgroundTests.Run(Run);
 Console.WriteLine($"All {passed} checks passed using temporary settings and simulated UWP views and animations.");

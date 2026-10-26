@@ -928,7 +928,15 @@ public sealed partial class SceneEditorPage : Page
                 ".wmv",
                 ".mov",
                 ".m4v",
-                ".avi"
+                ".avi",
+                ".mkv",
+                ".webm",
+                ".ts",
+                ".m2ts",
+                ".mpg",
+                ".mpeg",
+                ".flv",
+                ".ogv"
             }
 
             )

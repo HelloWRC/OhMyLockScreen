@@ -18,18 +18,8 @@
         Background="{x:Bind Background, Mode=OneWay, TargetNullValue=Transparent}">
         <Grid
             x:Name="BackgroundLayer"
-            Visibility="{x:Bind GetVideoVisibility(Scene.Background.Mode, Scene.Background.Source), Mode=OneWay}">
-            <MediaElement
-                x:Name="BackgroundVideo"
-                AutoPlay="True"
-                IsLooping="True"
-                IsMuted="{x:Bind IsSoundMuted(Scene.Background.EnableSound), Mode=OneWay}"
-                Source="{x:Bind GetVideoSource(Scene.SceneId, Scene.Background.Mode, Scene.Background.Source, IsActive), Mode=OneWay}"
-                AreTransportControlsEnabled="False"
-                IsHitTestVisible="False"
-                Stretch="UniformToFill"
-                MediaFailed="OnMediaFailed" />
-        </Grid>
+            IsHitTestVisible="False"
+            Visibility="Collapsed" />
         <Grid
             x:Name="LayersLayer"
             HorizontalAlignment="Stretch"

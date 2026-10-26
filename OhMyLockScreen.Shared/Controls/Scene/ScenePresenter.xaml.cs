@@ -1,8 +1,5 @@
 using System;
-using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
-using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
 using Windows.Foundation;
@@ -58,19 +55,32 @@ public sealed partial class ScenePresenter : UserControl
         {
             presenter._featureAttacher.FeatureContainer = presenter.Scene;
         }
+
+        if (presenter.IsActive)
+        {
+            presenter.UpdateBackgroundSubscriptions();
+            presenter.UpdateBackground();
+        }
     }
 
     private void OnLoaded(object sender, RoutedEventArgs args)
     {
+        if (IsActive)
+        {
+            return;
+        }
+
         IsActive = true;
         Bindings.Update();
         _featureAttacher ??= new FeatureAttacher(this) { FeatureContainer = Scene };
         _featureAttacher.Attach();
+        AttachBackground();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
         IsActive = false;
+        DetachBackground();
         CancelUnlockAnimation();
         Bindings.Update();
         Bindings.StopTracking();
@@ -180,50 +190,5 @@ public sealed partial class ScenePresenter : UserControl
         {
             completion?.TrySetException(exception);
         }
-    }
-
-    private bool IsSoundMuted(bool enableSound)
-    {
-        return !enableSound;
-    }
-
-    private Visibility GetVideoVisibility(BackgroundMode mode, string? source)
-    {
-        return mode == BackgroundMode.Video && !string.IsNullOrWhiteSpace(source)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-    }
-
-    private Uri? GetVideoSource(Guid sceneId, BackgroundMode mode, string? source, bool isActive)
-    {
-        if (!isActive || mode != BackgroundMode.Video || string.IsNullOrWhiteSpace(source))
-        {
-            return null;
-        }
-
-        try
-        {
-            var service = IAppHost.GetRequiredService<ISceneService>();
-            var directory = service.GetSceneDirectory(sceneId);
-            var path = Path.GetFullPath(Path.Combine(directory, source));
-            if (!path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidDataException("背景资源必须位于当前场景目录内。");
-            }
-
-            var relative = Path.GetRelativePath(directory, path).Replace('\\', '/');
-            var escaped = string.Join("/", relative.Split('/').Select(Uri.EscapeDataString));
-            return new Uri($"ms-appdata:///local/Scenes/{sceneId:N}/{escaped}");
-        }
-        catch (Exception exception)
-        {
-            BackgroundFailed?.Invoke(this, $"无法加载背景视频：{exception.Message}");
-            return null;
-        }
-    }
-
-    private void OnMediaFailed(object sender, ExceptionRoutedEventArgs args)
-    {
-        BackgroundFailed?.Invoke(this, $"无法播放背景视频：{args.ErrorMessage}");
     }
 }

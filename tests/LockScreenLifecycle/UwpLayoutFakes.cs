@@ -237,7 +237,6 @@ namespace OhMyLockScreen.Shared.Controls.Scene
     {
         private readonly Windows.UI.Xaml.Controls.Grid BackgroundLayer = new();
         private readonly Windows.UI.Xaml.Controls.Grid LayersLayer = new();
-        private readonly Windows.UI.Xaml.Controls.MediaElement BackgroundVideo = new();
         private readonly Windows.UI.Xaml.Media.TranslateTransform LayersTransform = new();
         private new readonly TestCompiledBindings Bindings = new(() =>
         {
@@ -246,11 +245,9 @@ namespace OhMyLockScreen.Shared.Controls.Scene
         internal Windows.UI.Xaml.Controls.Grid BackgroundLayerElement => BackgroundLayer;
         internal Windows.UI.Xaml.Controls.Grid LayersLayerElement => LayersLayer;
         internal Windows.UI.Xaml.Media.TranslateTransform LayersTranslation => LayersTransform;
-        internal void FailBackgroundMedia(string message) => BackgroundVideo.Fail(message);
 
         private void InitializeComponent()
         {
-            BackgroundVideo.MediaFailed += OnMediaFailed;
             Content = new Windows.UI.Xaml.Controls.Grid
             {
                 Children =

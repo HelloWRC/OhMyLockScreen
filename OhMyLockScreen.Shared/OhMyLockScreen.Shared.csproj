@@ -14,6 +14,7 @@
     </ItemGroup>
     
     <ItemGroup>
+        <PackageReference Include="LibVLCSharp.UWP" Version="3.10.2" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
         <PackageReference Include="CommunityToolkit.Uwp.Controls.Primitives" Version="8.2.251219" />

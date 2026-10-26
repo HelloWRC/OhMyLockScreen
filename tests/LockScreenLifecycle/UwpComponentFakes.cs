@@ -184,6 +184,13 @@ namespace Windows.UI.Xaml
 
         public event UwpEventHandler<RoutedEventArgs>? Loaded;
         public event UwpEventHandler<RoutedEventArgs>? Unloaded;
+        public event UwpEventHandler<SizeChangedEventArgs>? SizeChanged;
+        public void Resize(double width, double height)
+        {
+            ActualWidth = width;
+            ActualHeight = height;
+            SizeChanged?.Invoke(this, new SizeChangedEventArgs());
+        }
         public event UwpEventHandler<object>? LayoutUpdated;
         public Dictionary<DependencyProperty, Data.Binding> Bindings { get; } = [];
 

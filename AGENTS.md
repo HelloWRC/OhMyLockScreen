@@ -15,7 +15,9 @@
 - 应用使用 Microsoft.Extensions.Hosting 和 UWP 生命周期。服务统一在 App.Services.cs 中注册，业务服务优先使用构造函数注入；重复激活和多视图共用应用主机。
 - 设置通过 SettingsService 管理，使用 ConfigureFileHelper 读写应用 LocalFolder 下的 Settings.json。设置属性使用 CommunityToolkit.Mvvm 的变更通知机制触发自动保存。
 - 当计划使用 OnPropertyChanged/OnPropertyChanging 实现属性变化监听的实现比较繁复复杂，可能会产生较多模板代码时，考虑用 ReactiveUI 和 DynamicData 的方法简化代码。
-- 构建需要 .NET 10 SDK、UWP/XAML 构建工具和对应 Windows SDK，沿用项目现有签名配置。
+- 构建需要 .NET 10 SDK、UWP/XAML 构建工具、对应 Windows SDK 和 VC++ 14 UWP 运行库 SDK，沿用项目现有签名配置。
+- 动态背景使用 LibVLCSharp.UWP 和 VideoLAN.LibVLC.UWP，各 ScenePresenter 独立管理播放器与交换链，卸载时释放。官方原生包不含 ARM64，应用仅构建和发布 x86、x64。
+- VLC 3 不将负数 input-repeat 视为无限循环；背景通过 EndReached 调度到所属 UI 线程后 Stop/Play 重播，每次启动前设置裁剪比例，并仅在有效视频输出建立后重新应用。LibVLCSharp 回调的 sender 是内部事件管理器，订阅时需捕获对应播放器，不能用 sender 识别播放器。
 - 锁屏选择通过 windows.lockScreen 扩展和当前用户的 LockAppAumId 配置实现。启用前备份原设置，移除应用包前恢复原设置。
 - Figma 设计稿中呈现的 Fluent System Icon 等字体图标的版本可能与项目当前安装的不符，此时应该按字体对应位点的名称语义匹配，而不是位点本身或外观。
 - `BrushEditControl.Brush` 使用显式 TwoWay 绑定；编辑整体替换画刷以触发保存。可选 `TargetElement` 仅指定渐变装饰层的坐标区域，显示画刷仍由调用方绑定。
