@@ -14,8 +14,10 @@ namespace OhMyLockScreen
 
 namespace OhMyLockScreen.Controls.Editor
 {
-    public sealed class LayoutSettingsControl : OhMyLockScreen.Shared.Abstractions.Controls.ControlWithSettingsBase<OhMyLockScreen.Models.Features.Layout.LayoutFeatureSettings>;
-    public sealed class GridLayoutSettingsControl : OhMyLockScreen.Shared.Abstractions.Controls.ControlWithSettingsBase<OhMyLockScreen.Models.Features.Layout.GridLayoutFeatureSettings>;
+    public sealed class BackgroundSettingsControl : BackgroundSettingsControlBase;
+    public sealed class ForegroundSettingsControl : ForegroundSettingsControlBase;
+    public sealed class LayoutSettingsControl : LayoutSettingsControlBase;
+    public sealed class GridLayoutSettingsControl : GridLayoutSettingsControlBase;
 }
 
 namespace OhMyLockScreen.Controls.Components

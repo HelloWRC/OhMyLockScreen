@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OhMyLockScreen;
 using OhMyLockScreen.Controls.Components;
 using OhMyLockScreen.Models.Features.Layout;
+using OhMyLockScreen.Models.Features.Appearance;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Services;
 using OhMyLockScreen.Services.Scene;
@@ -13,6 +14,7 @@ using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Shared.Helpers.Serialization;
 using OhMyLockScreen.Shared.Models.Scene;
+using OhMyLockScreen.Shared.Models.FeatureHost;
 using OhMyLockScreen.Shared.Services.Scene;
 using OhMyLockScreen.ViewModels;
 using Windows.ApplicationModel.Activation;
@@ -59,6 +61,74 @@ internal static class SceneTests
             var restoredDate = ((ContainerComponentSettings)loaded.Layers[0].Children[0].Settings!).Children[1];
             Check(restoredClock.ShowSeconds && loaded.Background.EnableSound && restoredDate.Id == DateComponent.Id && restoredDate.Settings is DateComponentSettings, "Nested component/background settings were lost.");
             Check(File.ReadAllText(Path.Combine(fixture.Service.GetSceneDirectory(scene.SceneId), "scene.json")).Contains('\n'), "Scene JSON is not formatted.");
+        });
+        run("Background feature brush replacements and null automatically persist through the editor", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var scene = editor.Scene!;
+            var background = new BackgroundFeatureSettings();
+            scene.Features.Add(new FeatureInfo { Id = "omls.features.appearance.background", Settings = background });
+            var gradient = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0.2, 0.3),
+                EndPoint = new Windows.Foundation.Point(0.8, 0.9),
+                GradientStops =
+                {
+                    new GradientStop { Color = Windows.UI.Color.FromArgb(255, 12, 34, 56), Offset = 0 },
+                    new GradientStop { Color = Windows.UI.Color.FromArgb(255, 65, 43, 21), Offset = 1 }
+                }
+            };
+            background.Background = gradient;
+            fixture.Service.FlushPending();
+            var restored = fixture.Service.Load(scene.SceneId).Features.Single().GetSettings<BackgroundFeatureSettings>();
+            Check(restored.Background is LinearGradientBrush loaded && loaded.StartPoint == gradient.StartPoint
+                && loaded.EndPoint == gradient.EndPoint && loaded.GradientStops.Count == 2
+                && loaded.GradientStops[1].Color == gradient.GradientStops[1].Color,
+                "Automatic saving lost the background feature or gradient values.");
+            background.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(128, 23, 45, 67));
+            fixture.Service.FlushPending();
+            Check(fixture.Service.Load(scene.SceneId).Features.Single().GetSettings<BackgroundFeatureSettings>().Background
+                is SolidColorBrush { Color.A: 128, Color.R: 23 }, "Replacing a gradient did not persist the solid brush.");
+            background.Background = null;
+            fixture.Service.FlushPending();
+            Check(fixture.Service.Load(scene.SceneId).Features.Single().GetSettings<BackgroundFeatureSettings>().Background == null,
+                "Clearing a background did not persist null.");
+        });
+        run("Foreground feature brush replacements and null automatically persist through the editor", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var scene = editor.Scene!;
+            var foreground = new ForegroundFeatureSettings();
+            scene.Features.Add(new FeatureInfo { Id = "omls.features.appearance.foreground", Settings = foreground });
+            var gradient = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0.2, 0.3),
+                EndPoint = new Windows.Foundation.Point(0.8, 0.9),
+                GradientStops =
+                {
+                    new GradientStop { Color = Windows.UI.Color.FromArgb(255, 12, 34, 56), Offset = 0 },
+                    new GradientStop { Color = Windows.UI.Color.FromArgb(255, 65, 43, 21), Offset = 1 }
+                }
+            };
+            foreground.Foreground = gradient;
+            fixture.Service.FlushPending();
+            var restored = fixture.Service.Load(scene.SceneId).Features.Single().GetSettings<ForegroundFeatureSettings>();
+            Check(restored.Foreground is LinearGradientBrush loaded && loaded.StartPoint == gradient.StartPoint
+                && loaded.EndPoint == gradient.EndPoint && loaded.GradientStops.Count == 2
+                && loaded.GradientStops[1].Color == gradient.GradientStops[1].Color,
+                "Automatic saving lost the foreground feature or gradient values.");
+            foreground.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(128, 23, 45, 67));
+            fixture.Service.FlushPending();
+            Check(fixture.Service.Load(scene.SceneId).Features.Single().GetSettings<ForegroundFeatureSettings>().Foreground
+                is SolidColorBrush { Color.A: 128, Color.R: 23 }, "Replacing a foreground gradient did not persist the solid brush.");
+            foreground.Foreground = null;
+            fixture.Service.FlushPending();
+            Check(fixture.Service.Load(scene.SceneId).Features.Single().GetSettings<ForegroundFeatureSettings>().Foreground == null,
+                "Clearing a foreground did not persist null.");
         });
         run("Reload discovers scene folders and skips corrupt folders without overwriting them", () =>
         {

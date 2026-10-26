@@ -1,0 +1,10 @@
+<local:ForegroundSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Editor.ForegroundSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor"
+    xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI">
+    <ui:BrushEditControl
+        Brush="{x:Bind Settings.Foreground, Mode=TwoWay}"
+        TargetElement="{x:Bind TargetElement, Mode=OneWay}" />
+</local:ForegroundSettingsControlBase>

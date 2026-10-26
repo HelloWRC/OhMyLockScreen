@@ -695,6 +695,14 @@ namespace Windows.UI.Xaml.Controls
 
     public sealed class Border : FrameworkElement
     {
+        public static readonly DependencyProperty BackgroundProperty = DependencyProperty.Register(
+            nameof(Background), typeof(Windows.UI.Xaml.Media.Brush), typeof(Border), new PropertyMetadata(null));
+
+        public Windows.UI.Xaml.Media.Brush? Background
+        {
+            get => (Windows.UI.Xaml.Media.Brush?)GetValue(BackgroundProperty);
+            set => SetValue(BackgroundProperty, value);
+        }
     }
 
     public sealed class Viewbox
@@ -711,6 +719,15 @@ namespace Windows.UI.Xaml.Controls
 
     public sealed class TextBlock : FrameworkElement
     {
+        public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
+            nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(TextBlock), new PropertyMetadata(null));
+
+        public Windows.UI.Xaml.Media.Brush? Foreground
+        {
+            get => (Windows.UI.Xaml.Media.Brush?)GetValue(ForegroundProperty);
+            set => SetValue(ForegroundProperty, value);
+        }
+
         public object? FontWeight
         {
             get; set;
@@ -725,6 +742,18 @@ namespace Windows.UI.Xaml.Controls
         public double FontSize
         {
             get => (double)GetValue(FontSizeProperty)!; set => SetValue(FontSizeProperty, value);
+        }
+    }
+
+    public sealed class RichTextBlock : FrameworkElement
+    {
+        public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
+            nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(RichTextBlock), new PropertyMetadata(null));
+
+        public Windows.UI.Xaml.Media.Brush? Foreground
+        {
+            get => (Windows.UI.Xaml.Media.Brush?)GetValue(ForegroundProperty);
+            set => SetValue(ForegroundProperty, value);
         }
     }
 }

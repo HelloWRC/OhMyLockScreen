@@ -15,7 +15,7 @@
         x:Name="SceneRoot"
         HorizontalAlignment="Stretch"
         VerticalAlignment="Stretch"
-        Background="Transparent">
+        Background="{x:Bind Background, Mode=OneWay, TargetNullValue=Transparent}">
         <Grid
             x:Name="BackgroundLayer"
             Visibility="{x:Bind GetVideoVisibility(Scene.Background.Mode, Scene.Background.Source), Mode=OneWay}">

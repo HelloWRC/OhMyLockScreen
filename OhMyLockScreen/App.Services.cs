@@ -17,6 +17,7 @@ using OhMyLockScreen.Shared.Services.FeatureHost;
 using OhMyLockScreen.Shared.Services.Scene;
 using Windows.Storage;
 using OhMyLockScreen.Services.Features.Layout;
+using OhMyLockScreen.Services.Features.Appearance;
 using OhMyLockScreen.Services.Scene;
 using OhMyLockScreen.Shared.Extensions.FeatureHost;
 
@@ -50,5 +51,7 @@ public sealed partial class App
         // Features
         services.AddFeature<LayoutFeature, LayoutSettingsControl>();
         services.AddFeature<GridLayoutFeature, GridLayoutSettingsControl>();
+        services.AddFeature<BackgroundFeature, BackgroundSettingsControl>();
+        services.AddFeature<ForegroundFeature, ForegroundSettingsControl>();
     }
 }

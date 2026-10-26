@@ -34,14 +34,33 @@ namespace Windows.UI.Xaml.Media
 {
     public class Brush : DependencyObject
     {
+        public static bool RejectCompositionTransforms { get; set; }
+        private Transform? _transform;
+        private Transform? _relativeTransform;
         public double Opacity { get; set; } = 1;
         public Transform? Transform
         {
-            get; set;
+            get => _transform ?? (RejectCompositionTransforms && this is XamlCompositionBrushBase ? new MatrixTransform() : null);
+            set
+            {
+                if (RejectCompositionTransforms && this is XamlCompositionBrushBase)
+                {
+                    throw new ArgumentException("Composition brushes do not support transforms, including null assignments.");
+                }
+                _transform = value;
+            }
         }
         public Transform? RelativeTransform
         {
-            get; set;
+            get => _relativeTransform ?? (RejectCompositionTransforms && this is XamlCompositionBrushBase ? new MatrixTransform() : null);
+            set
+            {
+                if (RejectCompositionTransforms && this is XamlCompositionBrushBase)
+                {
+                    throw new ArgumentException("Composition brushes do not support transforms, including null assignments.");
+                }
+                _relativeTransform = value;
+            }
         }
     }
 

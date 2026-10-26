@@ -19,6 +19,8 @@ async Task RunAsync(string name, Func<Task> test)
 if (args.Contains("--brush-only"))
 {
     BrushSerializationTests.Run(Run);
+    BrushEditorTests.Run(Run);
+    await BrushEditorTests.RunImportAsync(RunAsync);
     Console.WriteLine($"All {passed} brush serialization checks passed using simulated UWP values.");
     return;
 }
@@ -55,6 +57,8 @@ if (args.Contains("--binding-only"))
 {
     DependencyPropertyBindingTests.Run(Run);
     LayoutFeatureTests.Run(Run);
+    BackgroundFeatureTests.Run(Run);
+    ForegroundFeatureTests.Run(Run);
     Console.WriteLine($"All {passed} property binding checks passed using simulated UWP controls.");
     return;
 }
@@ -89,10 +93,14 @@ if (args.Contains("--layout-only"))
 
 await InfrastructureTests.RunAsync(Run, RunAsync);
 BrushSerializationTests.Run(Run);
+BrushEditorTests.Run(Run);
+await BrushEditorTests.RunImportAsync(RunAsync);
 ToastTests.Run(Run);
 ComponentTests.Run(Run);
 DependencyPropertyBindingTests.Run(Run);
 LayoutFeatureTests.Run(Run);
+BackgroundFeatureTests.Run(Run);
+ForegroundFeatureTests.Run(Run);
 FeatureTests.Run(Run);
 LayoutTests.Run(Run);
 EditorConverterTests.Run(Run);

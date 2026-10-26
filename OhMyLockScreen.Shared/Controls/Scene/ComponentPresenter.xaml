@@ -1,0 +1,20 @@
+<ContentPresenter
+    x:Class="OhMyLockScreen.Shared.Controls.Scene.ComponentPresenter"
+    x:Name="RootPresenter"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    HorizontalContentAlignment="Stretch"
+    VerticalContentAlignment="Stretch">
+    <ContentPresenter.ContentTemplate>
+        <DataTemplate>
+            <Border
+                Loaded="OnDecorationBorderLoaded"
+                Unloaded="OnDecorationBorderUnloaded">
+                <ContentPresenter
+                    Content="{Binding Content, ElementName=RootPresenter, Mode=OneWay}"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch" />
+            </Border>
+        </DataTemplate>
+    </ContentPresenter.ContentTemplate>
+</ContentPresenter>

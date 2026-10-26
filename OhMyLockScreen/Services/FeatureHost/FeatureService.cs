@@ -29,7 +29,7 @@ public sealed class FeatureService(
         return feature;
     }
 
-    public ControlWithSettingsBase? CreateSettingsControl(FeatureInfo settings)
+    public FeatureSettingsControlBase? CreateSettingsControl(FeatureInfo settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         var info = Find(settings.Id);
@@ -39,7 +39,7 @@ public sealed class FeatureService(
         }
 
         var clientSettings = info.ClientSettingsType != null ? settings.GetSettingsOrCreate(info.ClientSettingsType) : null;
-        var control = (ControlWithSettingsBase)services.GetRequiredService(info.SettingsType);
+        var control = (FeatureSettingsControlBase)services.GetRequiredService(info.SettingsType);
         control.SetSettings(clientSettings);
         control.DataContext = clientSettings;
         settings.Settings = clientSettings;

@@ -10,5 +10,5 @@ public interface IFeatureService
     FeatureBase? CreateFeature(FeatureInfo settings);
 
     /// <summary>在当前视图的 UI 线程创建独立设置控件并注入设置，同时以设置模型作为 DataContext；未注册 Id 或设置控件时返回空。</summary>
-    ControlWithSettingsBase? CreateSettingsControl(FeatureInfo settings);
+    FeatureSettingsControlBase? CreateSettingsControl(FeatureInfo settings);
 }

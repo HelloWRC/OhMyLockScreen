@@ -22,7 +22,7 @@ public static class FeatureRegistryExtensions
     /// <summary>注册特性及其设置控件，设置数据模型仍由特性基类推断。</summary>
     public static IServiceCollection AddFeature<TFeature, TSettings>(this IServiceCollection services)
         where TFeature : class
-        where TSettings : ControlWithSettingsBase
+        where TSettings : FeatureSettingsControlBase
     {
         return Register(services, typeof(TFeature), typeof(TSettings));
     }
@@ -68,7 +68,7 @@ public static class FeatureRegistryExtensions
 
         for (var baseType = settingsType?.BaseType; baseType != null; baseType = baseType.BaseType)
         {
-            if (baseType.IsGenericType && baseType.GetGenericTypeDefinition() == typeof(ControlWithSettingsBase<>))
+            if (baseType.IsGenericType && baseType.GetGenericTypeDefinition() == typeof(FeatureSettingsControlBase<>))
             {
                 if (clientSettingsType == null || !baseType.GenericTypeArguments[0].IsAssignableFrom(clientSettingsType))
                 {

@@ -515,7 +515,7 @@ internal static class FeatureAttacherTests
             return feature;
         }
 
-        public ControlWithSettingsBase? CreateSettingsControl(FeatureInfo settings) => null;
+        public FeatureSettingsControlBase? CreateSettingsControl(FeatureInfo settings) => null;
     }
 
     private sealed class Probe(Fixture fixture, string id, int number)

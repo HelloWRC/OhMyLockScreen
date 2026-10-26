@@ -40,8 +40,30 @@ internal static class BrushJsonSerialization
         }
 
         fields.Apply("Opacity", value => brush.Opacity = ReadNumber(value, "Opacity", 0, 1));
-        fields.Apply("Transform", value => brush.Transform = ReadTransform(value, "Transform"));
-        fields.Apply("RelativeTransform", value => brush.RelativeTransform = ReadTransform(value, "RelativeTransform"));
+        fields.Apply("Transform", value =>
+        {
+            var transform = ReadTransform(value, "Transform");
+            if (brush is XamlCompositionBrushBase)
+            {
+                EnsureCompositionIdentity(transform, "Transform");
+            }
+            else
+            {
+                brush.Transform = transform;
+            }
+        });
+        fields.Apply("RelativeTransform", value =>
+        {
+            var transform = ReadTransform(value, "RelativeTransform");
+            if (brush is XamlCompositionBrushBase)
+            {
+                EnsureCompositionIdentity(transform, "RelativeTransform");
+            }
+            else
+            {
+                brush.RelativeTransform = transform;
+            }
+        });
 
         switch (brush)
         {
@@ -102,8 +124,8 @@ internal static class BrushJsonSerialization
         {
             ["$type"] = discriminator,
             ["Opacity"] = Number(brush.Opacity, "Opacity", 0, 1),
-            ["Transform"] = WriteTransform(brush.Transform),
-            ["RelativeTransform"] = WriteTransform(brush.RelativeTransform)
+            ["Transform"] = WriteBrushTransform(brush, brush.Transform, "Transform"),
+            ["RelativeTransform"] = WriteBrushTransform(brush, brush.RelativeTransform, "RelativeTransform")
         };
 
         switch (brush)
@@ -309,6 +331,29 @@ internal static class BrushJsonSerialization
         return new MatrixTransform { Matrix = matrix };
     }
 
+    private static bool IsIdentity(Matrix matrix) => matrix.M11 == 1 && matrix.M12 == 0
+        && matrix.M21 == 0 && matrix.M22 == 1 && matrix.OffsetX == 0 && matrix.OffsetY == 0;
+
+    private static void EnsureCompositionIdentity(Transform? transform, string path)
+    {
+        if (transform != null && !IsIdentity(GetMatrix(transform)))
+        {
+            throw Error(path, "Composition 画刷不支持变换。");
+        }
+    }
+
+    private static JsonObject? WriteBrushTransform(Brush brush, Transform? transform, string path)
+    {
+        if (brush is XamlCompositionBrushBase)
+        {
+            // Native composition brushes return identity transforms but reject all
+            // assignments. Normalize them to null and accept legacy identity JSON.
+            EnsureCompositionIdentity(transform, path);
+            return null;
+        }
+        return WriteTransform(transform);
+    }
+
     private static JsonObject? WriteTransform(Transform? transform)
     {
         if (transform == null)
@@ -328,7 +373,7 @@ internal static class BrushJsonSerialization
         };
     }
 
-    private static Matrix GetMatrix(Transform transform)
+    internal static Matrix GetMatrix(Transform transform)
     {
         if (transform is MatrixTransform matrix)
         {

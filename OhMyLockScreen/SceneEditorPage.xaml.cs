@@ -1,12 +1,15 @@
 using Microsoft.UI.Xaml.Controls;
+using System.ComponentModel;
 using OhMyLockScreen.Controls.Editor;
 using OhMyLockScreen.Models.Features.Layout;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Services.Scene;
+using OhMyLockScreen.Services.Features.Appearance;
 using OhMyLockScreen.Shared.Abstractions.Models.Scene;
 using OhMyLockScreen.Services;
 using OhMyLockScreen.Shared;
 using OhMyLockScreen.Shared.Abstractions.Models.FeatureHost;
+using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Controls.Scene;
@@ -54,6 +57,7 @@ public sealed partial class SceneEditorPage : Page
     private bool _selectionPending;
     private SceneInfo? _contextScene;
     private IFeatureContainer? _featureTarget;
+    private IBorderable? _featureBorderHost;
     private uint? _dragPointer;
     private bool _resizing;
     private bool _dragChanged;
@@ -143,6 +147,7 @@ public sealed partial class SceneEditorPage : Page
         ExitPreview();
         ClearPageToasts();
         _loaded = false;
+        RefreshFeatureEditorTargets();
         ViewModel.SelectionChanged -= OnSelectionChanged;
         ViewModel.StructureChanged -= OnStructureChanged;
         ViewModel.InspectorChanged -= OnInspectorChanged;
@@ -346,6 +351,7 @@ public sealed partial class SceneEditorPage : Page
         EndDrag();
         ClearHover();
         ViewModel.ActiveTab = tab;
+        RefreshFeatureEditorTargets();
         InvalidateSelectionGeometry();
     }
 
@@ -754,6 +760,10 @@ public sealed partial class SceneEditorPage : Page
 
                 foreach (var removed in ViewModel.InspectorSections.Where(section => !desired.Contains(section)).ToArray())
                 {
+                    if (removed.Editor is FeatureSettingsControlBase featureEditor)
+                    {
+                        featureEditor.TargetElement = null;
+                    }
                     ViewModel.InspectorSections.Remove(removed);
                 }
 
@@ -774,12 +784,70 @@ public sealed partial class SceneEditorPage : Page
         }
         catch (Exception exception)
         {
+            foreach (var section in ViewModel.InspectorSections)
+            {
+                if (section.Editor is FeatureSettingsControlBase featureEditor)
+                {
+                    featureEditor.TargetElement = null;
+                }
+            }
             ViewModel.InspectorSections.Clear();
             ShowError(exception);
         }
         finally
         {
             _updatingInspector = false;
+            RefreshFeatureEditorTargets();
+        }
+    }
+
+    private void RefreshFeatureEditorTargets()
+    {
+        FrameworkElement? presenter = null;
+        if (_loaded && ViewModel.ShowComponents && ViewModel.InspectorSections.Any(section =>
+            section.Editor is FeatureSettingsControlBase && ReferenceEquals(section.Model, ViewModel.SelectedModel)))
+        {
+            presenter = ReferenceEquals(ViewModel.SelectedModel, ViewModel.Scene)
+                ? EditorPresenter
+                : FindModelPresenter(ViewModel.SelectedModel!);
+        }
+
+        var borderHost = presenter as IBorderable;
+        if (!ReferenceEquals(_featureBorderHost, borderHost))
+        {
+            if (_featureBorderHost != null)
+            {
+                _featureBorderHost.PropertyChanged -= OnFeatureBorderChanged;
+            }
+            _featureBorderHost = borderHost;
+            if (_featureBorderHost != null)
+            {
+                _featureBorderHost.PropertyChanged += OnFeatureBorderChanged;
+            }
+        }
+
+        var featureTarget = BackgroundFeature.ResolveBackgroundTarget(presenter);
+        foreach (var section in ViewModel.InspectorSections)
+        {
+            if (section.Editor is not FeatureSettingsControlBase editor)
+            {
+                continue;
+            }
+
+            var target = ReferenceEquals(section.Model, ViewModel.SelectedModel) ? featureTarget : null;
+
+            if (!ReferenceEquals(editor.TargetElement, target))
+            {
+                editor.TargetElement = target;
+            }
+        }
+    }
+
+    private void OnFeatureBorderChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (string.IsNullOrEmpty(args.PropertyName) || args.PropertyName == nameof(IBorderable.Border))
+        {
+            RefreshFeatureEditorTargets();
         }
     }
 
@@ -1593,6 +1661,7 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnViewportLayoutUpdated(object? sender, object args)
     {
+        RefreshFeatureEditorTargets();
         if (!_selectionPending)
         {
             UpdateSelectionGeometry();
@@ -1742,6 +1811,7 @@ public sealed partial class SceneEditorPage : Page
         EndDrag();
         ClearHover();
         ViewModel.IsPreview = true;
+        RefreshFeatureEditorTargets();
         ClearPageToasts();
         InvalidateSelectionGeometry();
         var view = ApplicationView.GetForCurrentView();
@@ -1780,6 +1850,7 @@ public sealed partial class SceneEditorPage : Page
         }
 
         ViewModel.IsPreview = false;
+        RefreshFeatureEditorTargets();
         if (_window != null)
         {
             _window.CoreWindow.KeyDown -= OnPreviewKeyDown;

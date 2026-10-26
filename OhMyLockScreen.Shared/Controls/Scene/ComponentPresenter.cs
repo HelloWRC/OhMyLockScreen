@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
@@ -11,7 +12,7 @@ using Windows.UI.Xaml.Controls;
 namespace OhMyLockScreen.Shared.Controls.Scene;
 
 /// <summary>根据组件配置创建并显示组件。每个 Presenter 拥有独立控件。</summary>
-public sealed class ComponentPresenter : ContentPresenter
+public sealed partial class ComponentPresenter : ContentPresenter, IBorderable
 {
     public static readonly DependencyProperty SettingsProperty = DependencyProperty.Register(
         nameof(Settings), typeof(ComponentSettings), typeof(ComponentPresenter),
@@ -22,6 +23,26 @@ public sealed class ComponentPresenter : ContentPresenter
     private bool _isLoaded;
     private bool _isUpdating;
     private bool _preserveContentOnUnload;
+    private Border? _border;
+
+    public event PropertyChangingEventHandler? PropertyChanging;
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public Border? Border
+    {
+        get => _border;
+        private set
+        {
+            if (ReferenceEquals(_border, value))
+            {
+                return;
+            }
+
+            PropertyChanging?.Invoke(this, new PropertyChangingEventArgs(nameof(Border)));
+            _border = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Border)));
+        }
+    }
 
     public ComponentSettings? Settings
     {
@@ -31,6 +52,7 @@ public sealed class ComponentPresenter : ContentPresenter
 
     public ComponentPresenter()
     {
+        InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -71,6 +93,7 @@ public sealed class ComponentPresenter : ContentPresenter
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
         _isLoaded = false;
+        Border = null;
         UpdateSubscription(null);
         var attacher = _featureAttacher;
         _featureAttacher = null;
@@ -78,6 +101,19 @@ public sealed class ComponentPresenter : ContentPresenter
         if (!_preserveContentOnUnload)
         {
             Content = null;
+        }
+    }
+
+    private void OnDecorationBorderLoaded(object sender, RoutedEventArgs args)
+    {
+        Border = (Border)sender;
+    }
+
+    private void OnDecorationBorderUnloaded(object sender, RoutedEventArgs args)
+    {
+        if (ReferenceEquals(Border, sender))
+        {
+            Border = null;
         }
     }
 

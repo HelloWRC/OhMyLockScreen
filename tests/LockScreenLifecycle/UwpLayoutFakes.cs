@@ -132,7 +132,7 @@ namespace Windows.UI.Xaml.Controls
         public static readonly DependencyProperty ColumnSpanProperty = RegisterPosition("ColumnSpan", 1);
         private static DependencyProperty RegisterPosition(string name, int minimum)
         {
-            return DependencyProperty.Register(name, typeof(int), typeof(Grid), new PropertyMetadata(minimum, (_, args) =>
+            return DependencyProperty.RegisterAttached(name, typeof(int), typeof(Grid), new PropertyMetadata(minimum, (_, args) =>
             {
                 if ((int)args.NewValue! < minimum)
                 {
@@ -195,6 +195,20 @@ namespace CommunityToolkit.WinUI.Controls
 
 namespace OhMyLockScreen.Shared.Controls.Scene
 {
+    public sealed partial class ComponentPresenter
+    {
+        internal void LoadDecorationBorder(Windows.UI.Xaml.Controls.Border border)
+            => OnDecorationBorderLoaded(border, new Windows.UI.Xaml.RoutedEventArgs());
+
+        internal void UnloadDecorationBorder(Windows.UI.Xaml.Controls.Border border)
+            => OnDecorationBorderUnloaded(border, new Windows.UI.Xaml.RoutedEventArgs());
+
+        // Native content templating and rendering are verified by the UWP preview.
+        private void InitializeComponent()
+        {
+        }
+    }
+
     public sealed partial class LayoutControl
     {
         private void InitializeComponent()

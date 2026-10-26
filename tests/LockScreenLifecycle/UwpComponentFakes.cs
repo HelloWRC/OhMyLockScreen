@@ -23,15 +23,35 @@ namespace Windows.UI.Xaml
             get;
         }
 
-        private DependencyProperty(PropertyMetadata metadata) => Metadata = metadata;
-        public static DependencyProperty Register(string name, Type type, Type owner, PropertyMetadata metadata) => new(metadata);
+        private readonly Type? _owner;
+
+        private DependencyProperty(PropertyMetadata metadata, Type? owner)
+        {
+            Metadata = metadata;
+            _owner = owner;
+        }
+
+        public static DependencyProperty Register(string name, Type type, Type owner, PropertyMetadata metadata) => new(metadata, owner);
+        public static DependencyProperty RegisterAttached(string name, Type type, Type owner, PropertyMetadata metadata) => new(metadata, null);
+
+        internal void ValidateOwner(DependencyObject target)
+        {
+            if (_owner != null && !_owner.IsInstanceOfType(target))
+            {
+                throw new global::System.Runtime.InteropServices.COMException("The dependency property does not belong to this target.");
+            }
+        }
     }
 
     public class DependencyObject
     {
         public DependencyObject? VisualParent { get; set; }
         private readonly Dictionary<DependencyProperty, object?> _values = [];
-        public object? GetValue(DependencyProperty property) => _values.TryGetValue(property, out var value) ? value : property.Metadata.DefaultValue;
+        public object? GetValue(DependencyProperty property)
+        {
+            property.ValidateOwner(this);
+            return _values.TryGetValue(property, out var value) ? value : property.Metadata.DefaultValue;
+        }
         public void SetValue(DependencyProperty property, object? value)
         {
             var previous = GetValue(property);
@@ -218,6 +238,24 @@ namespace Windows.UI.Xaml.Controls
 
     public class Control : FrameworkElement
     {
+        public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
+            nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(Control), new PropertyMetadata(null));
+
+        public Windows.UI.Xaml.Media.Brush? Foreground
+        {
+            get => (Windows.UI.Xaml.Media.Brush?)GetValue(ForegroundProperty);
+            set => SetValue(ForegroundProperty, value);
+        }
+
+        public static readonly DependencyProperty BackgroundProperty = DependencyProperty.Register(
+            nameof(Background), typeof(Windows.UI.Xaml.Media.Brush), typeof(Control), new PropertyMetadata(null));
+
+        public Windows.UI.Xaml.Media.Brush? Background
+        {
+            get => (Windows.UI.Xaml.Media.Brush?)GetValue(BackgroundProperty);
+            set => SetValue(BackgroundProperty, value);
+        }
+
         public object? DefaultStyleKey
         {
             get; set;
@@ -238,6 +276,15 @@ namespace Windows.UI.Xaml.Controls
 
     public class ContentPresenter : FrameworkElement
     {
+        public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
+            nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(ContentPresenter), new PropertyMetadata(null));
+
+        public Windows.UI.Xaml.Media.Brush? Foreground
+        {
+            get => (Windows.UI.Xaml.Media.Brush?)GetValue(ForegroundProperty);
+            set => SetValue(ForegroundProperty, value);
+        }
+
         public object? Content
         {
             get; set;
@@ -249,6 +296,21 @@ namespace Windows.UI.Xaml.Controls
         Fill,
         Uniform,
         UniformToFill
+    }
+}
+
+namespace Windows.UI.Xaml.Documents
+{
+    public class TextElement : DependencyObject
+    {
+        public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
+            nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(TextElement), new PropertyMetadata(null));
+
+        public Windows.UI.Xaml.Media.Brush? Foreground
+        {
+            get => (Windows.UI.Xaml.Media.Brush?)GetValue(ForegroundProperty);
+            set => SetValue(ForegroundProperty, value);
+        }
     }
 }
 

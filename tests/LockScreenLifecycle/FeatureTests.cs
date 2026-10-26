@@ -58,6 +58,42 @@ internal static class FeatureTests
             Throws<InvalidOperationException>(() => _ = control.Settings);
             Check(notifications == 3 && control.SettingsCallbacks == 3, "Clearing settings did not notify the control.");
         });
+        run("Feature settings controls preserve typed settings notifications when replaced or cleared", () =>
+        {
+            var control = new ProbeSettingsControl(new ProbeDependency());
+            Throws<InvalidOperationException>(() => _ = control.Settings);
+            var first = new ProbeSettings();
+            control.SetSettings(first);
+            Check(ReferenceEquals(control.Settings, first) && control.SettingsNotifications == 1 && control.SettingsCallbacks == 1, "Feature settings injection did not expose or notify the model.");
+            control.SetSettings(first);
+            Check(control.SettingsNotifications == 1 && control.SettingsCallbacks == 1, "Repeated injection duplicated feature settings notifications.");
+            var second = new ProbeSettings();
+            control.SetSettings(second);
+            Check(ReferenceEquals(control.Settings, second) && control.SettingsNotifications == 2 && control.SettingsCallbacks == 2, "Replacing feature settings did not update the control.");
+            control.SetSettings(null);
+            Throws<InvalidOperationException>(() => _ = control.Settings);
+            Check(control.SettingsInternal == null && control.SettingsNotifications == 3 && control.SettingsCallbacks == 3, "Clearing feature settings did not notify the control.");
+        });
+        run("Built-in feature settings controls share the target property without sharing target values", () =>
+        {
+            FeatureSettingsControlBase[] controls =
+            [
+                new OhMyLockScreen.Controls.Editor.BackgroundSettingsControl(),
+                new OhMyLockScreen.Controls.Editor.ForegroundSettingsControl(),
+                new OhMyLockScreen.Controls.Editor.LayoutSettingsControl(),
+                new OhMyLockScreen.Controls.Editor.GridLayoutSettingsControl()
+            ];
+            Check(controls.All(control => control.TargetElement == null), "Feature editor targets did not default to null.");
+            var first = new Border();
+            var second = new UserControl();
+            controls[0].TargetElement = first;
+            Check(controls.Skip(1).All(control => control.TargetElement == null), "Assigning one feature editor target changed another control.");
+            controls[1].SetValue(FeatureSettingsControlBase.TargetElementProperty, second);
+            Check(ReferenceEquals(controls[0].TargetElement, first) && ReferenceEquals(controls[1].TargetElement, second), "The inherited target property did not preserve independent values.");
+            controls[0].TargetElement = second;
+            controls[0].TargetElement = null;
+            Check(controls[0].GetValue(FeatureSettingsControlBase.TargetElementProperty) == null && ReferenceEquals(controls[1].TargetElement, second), "Clearing an editor target changed another control.");
+        });
         run("Feature registration infers targets and settings across intermediate generic bases", () =>
         {
             var services = new ServiceCollection();
@@ -212,11 +248,11 @@ internal static class FeatureTests
             Throws<InvalidOperationException>(() => service.CreateSettingsControl(settings));
             Check(ReferenceEquals(settings.Settings, createdSettings), "Settings injection failure replaced the existing model.");
         });
-        run("The app host provides the built-in layout features and feature service", () =>
+        run("The app host provides the built-in features and feature service", () =>
         {
             new App().Launch(new LaunchActivatedEventArgs());
             var registered = IAppHost.Host!.Services.GetRequiredService<FeatureRegistryService>().Registered;
-            Check(registered.Select(feature => feature.Id).ToHashSet().SetEquals(["omls.features.layout.layout", "omls.features.layout.grid"]), "The app host did not register the built-in layout features.");
+            Check(registered.Select(feature => feature.Id).ToHashSet().SetEquals(["omls.features.layout.layout", "omls.features.layout.grid", "omls.features.appearance.background", "omls.features.appearance.foreground"]), "The app host did not register the built-in features.");
             Check(IAppHost.Host.Services.GetRequiredService<IFeatureService>() is FeatureService, "The app host did not register the feature service.");
         });
         FeatureAttacherTests.Run(run);
@@ -358,7 +394,7 @@ internal static class FeatureTests
         }
     }
 
-    private abstract class IntermediateSettingsControl<TSettings> : ControlWithSettingsBase<TSettings> where TSettings : class;
+    private abstract class IntermediateSettingsControl<TSettings> : FeatureSettingsControlBase<TSettings> where TSettings : class;
     private sealed class ProbeSettingsControl : IntermediateSettingsControl<ProbeSettings>
     {
         public ProbeSettingsControl(ProbeDependency dependency)
@@ -399,13 +435,16 @@ internal static class FeatureTests
                 throw new InvalidOperationException("Settings control initialization failed.");
             }
 
-            Check(ReferenceEquals(Settings, SettingsInternal), "The typed model was unavailable during initialization.");
+            if (SettingsInternal != null)
+            {
+                Check(ReferenceEquals(Settings, SettingsInternal), "The typed model was unavailable during initialization.");
+            }
             SettingsCallbacks++;
         }
     }
 
-    private sealed class PlainSettingsControl : ControlWithSettingsBase;
-    private sealed class WrongSettingsControl : ControlWithSettingsBase<OtherSettings>;
+    private sealed class PlainSettingsControl : FeatureSettingsControlBase;
+    private sealed class WrongSettingsControl : FeatureSettingsControlBase<OtherSettings>;
     [FeatureInfo("test.plain", "Plain", "Plain description")]
     private class PlainFeature : TestFeature<object>;
     [FeatureInfo("test.probe", "Duplicate")]
@@ -420,5 +459,5 @@ internal static class FeatureTests
     private sealed class InheritedInfoFeature : PlainFeature;
     [FeatureInfo("test.invalid", "Invalid")]
     private sealed class NotAFeature;
-    private abstract class AbstractSettingsControl : ControlWithSettingsBase;
+    private abstract class AbstractSettingsControl : FeatureSettingsControlBase;
 }
