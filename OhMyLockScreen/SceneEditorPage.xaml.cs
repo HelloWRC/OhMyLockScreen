@@ -842,7 +842,9 @@ public sealed partial class SceneEditorPage : Page
                 continue;
             }
 
-            var target = ReferenceEquals(section.Model, ViewModel.SelectedModel) ? featureTarget : null;
+            var target = ReferenceEquals(section.Model, ViewModel.SelectedModel)
+                ? editor is LayoutSettingsControl ? presenter : featureTarget
+                : null;
 
             if (!ReferenceEquals(editor.TargetElement, target))
             {

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using CommunityToolkit.WinUI.Controls;
 using OhMyLockScreen.Models.Features.Layout;
+using OhMyLockScreen.Services.Scene;
 using OhMyLockScreen.ViewModels;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -12,6 +13,7 @@ public sealed partial class LayoutSettingsControl : LayoutSettingsControlBase
     private bool _loaded;
     private bool _settingsAttached;
     private LayoutFeatureSettings? _settings;
+    private FrameworkElement? _sizeTarget;
     public LayoutMarginsViewModel? Margins
     {
         get; private set;
@@ -23,7 +25,12 @@ public sealed partial class LayoutSettingsControl : LayoutSettingsControlBase
         ? -1
         : GetEnumIndex(_settings.VerticalAlignment);
 
-    public LayoutSettingsControl() => InitializeComponent();
+    public LayoutSettingsControl()
+    {
+        InitializeComponent();
+        RegisterPropertyChangedCallback(TargetElementProperty, OnTargetElementChanged);
+    }
+
     protected override void OnSettingsChanged()
     {
         DetachSettings();
@@ -34,6 +41,7 @@ public sealed partial class LayoutSettingsControl : LayoutSettingsControlBase
         {
             Margins.Attach();
             AttachSettings();
+            SynchronizeAutoSize();
         }
 
         OnPropertyChanged(nameof(Margins));
@@ -46,12 +54,14 @@ public sealed partial class LayoutSettingsControl : LayoutSettingsControlBase
         _loaded = true;
         Margins?.Attach();
         AttachSettings();
+        RefreshSizeTarget();
         RefreshAlignmentControls();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
         _loaded = false;
+        RefreshSizeTarget();
         DetachSettings();
         Margins?.Dispose();
     }
@@ -81,10 +91,63 @@ public sealed partial class LayoutSettingsControl : LayoutSettingsControlBase
     private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
         if (string.IsNullOrEmpty(args.PropertyName)
+            || args.PropertyName is nameof(LayoutFeatureSettings.IsAutoWidth)
+                or nameof(LayoutFeatureSettings.IsAutoHeight))
+        {
+            SynchronizeAutoSize();
+        }
+
+        if (string.IsNullOrEmpty(args.PropertyName)
             || args.PropertyName is nameof(LayoutFeatureSettings.HorizontalAlignment)
                 or nameof(LayoutFeatureSettings.VerticalAlignment))
         {
             RefreshAlignmentControls();
+        }
+    }
+
+    private void OnTargetElementChanged(DependencyObject sender, DependencyProperty property) => RefreshSizeTarget();
+
+    private void RefreshSizeTarget()
+    {
+        var target = _loaded ? TargetElement : null;
+        if (!ReferenceEquals(_sizeTarget, target))
+        {
+            if (_sizeTarget != null)
+            {
+                _sizeTarget.Loaded -= OnSizeTargetLoaded;
+                _sizeTarget.SizeChanged -= OnSizeTargetSizeChanged;
+            }
+
+            _sizeTarget = target;
+            if (_sizeTarget != null)
+            {
+                _sizeTarget.Loaded += OnSizeTargetLoaded;
+                _sizeTarget.SizeChanged += OnSizeTargetSizeChanged;
+            }
+        }
+
+        SynchronizeAutoSize();
+    }
+
+    private void OnSizeTargetLoaded(object sender, RoutedEventArgs args) => SynchronizeAutoSize();
+
+    private void OnSizeTargetSizeChanged(object sender, SizeChangedEventArgs args) => SynchronizeAutoSize();
+
+    private void SynchronizeAutoSize()
+    {
+        if (!_loaded || _settings == null || _sizeTarget is not { IsLoaded: true } target)
+        {
+            return;
+        }
+
+        if (_settings.IsAutoWidth && double.IsFinite(target.ActualWidth) && target.ActualWidth > 0)
+        {
+            _settings.Width = SceneLayoutEditing.Round(target.ActualWidth);
+        }
+
+        if (_settings.IsAutoHeight && double.IsFinite(target.ActualHeight) && target.ActualHeight > 0)
+        {
+            _settings.Height = SceneLayoutEditing.Round(target.ActualHeight);
         }
     }
 

@@ -32,6 +32,7 @@
 - 文本与字体 feature 按目标类型应用原生字体属性并沿用 UWP 继承；组件通过 ITextStyleTarget 公开行高、对齐和装饰线的文本目标，不递归查找子元素。行高使用逻辑像素（0 为自动），字距使用千分之一 em。
 - 文本、时钟和日期的字号及字重由默认特性提供，不在组件内部设置；依赖属性绑定卸载时恢复原绑定或本地值，无本地值时 ClearValue，以保留原生继承。
 - 特性设置控件统一继承 FeatureSettingsControlBase（强类型设置使用其泛型版本）；编辑器通过 TargetElement 统一传递并清理编辑目标，沿用上述目标解析规则。
+- 布局设置控件的 TargetElement 使用布局特性所在的 Presenter；仅在编辑控件加载期间，将自动方向的实际宽高按逻辑像素取整回写设置，初次加载与目标变更时同步，不改变自动开关。
 - ComponentPresenter 通过默认 ContentTemplate 提供装饰 Border，并通过 IBorderable 通知其加载、替换与卸载；背景特性直接修饰 Border，不依赖 UserControl.Background 自动绘制或模板的隐式 DataContext。
 - 组件可通过 ComponentDefaultFeaturesAttribute 指定具有公开无参构造函数的 IComponentDefaultFeaturesProvider；ComponentRegisterInfo.CreateSettings 仅在新建配置时生成独立的默认特性及设置，加载或重建视图时不补齐。编辑器仅在未声明布局特性时添加居中布局。
 - `XamlCompositionBrushBase` 不支持设置继承的变换属性；其默认单位变换在序列化时规范化为 null，读取时兼容旧的单位矩阵。
