@@ -695,7 +695,7 @@ public sealed partial class BrushEditControl : UserControl
         try
         {
             var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
-            foreach (var extension in new[] { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff" })
+            foreach (var extension in BrushImageImport.Extensions)
             {
                 picker.FileTypeFilter.Add(extension);
             }

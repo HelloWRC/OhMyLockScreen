@@ -12,6 +12,7 @@ public sealed partial class LayoutSettingsControl : LayoutSettingsControlBase
 {
     private bool _loaded;
     private bool _settingsAttached;
+    private bool _updatingAlignment;
     private LayoutFeatureSettings? _settings;
     private FrameworkElement? _sizeTarget;
     public LayoutMarginsViewModel? Margins
@@ -153,8 +154,16 @@ public sealed partial class LayoutSettingsControl : LayoutSettingsControlBase
 
     private void RefreshAlignmentControls()
     {
-        OnPropertyChanged(nameof(HorizontalAlignmentIndex));
-        OnPropertyChanged(nameof(VerticalAlignmentIndex));
+        _updatingAlignment = true;
+        try
+        {
+            OnPropertyChanged(nameof(HorizontalAlignmentIndex));
+            OnPropertyChanged(nameof(VerticalAlignmentIndex));
+        }
+        finally
+        {
+            _updatingAlignment = false;
+        }
     }
 
     private static int GetEnumIndex<TEnum>(TEnum value)
@@ -165,7 +174,8 @@ public sealed partial class LayoutSettingsControl : LayoutSettingsControlBase
 
     private void OnHorizontalAlignmentSelectionChanged(object sender, SelectionChangedEventArgs args)
     {
-        if (sender is Segmented { SelectedIndex: var index }
+        if (_loaded && !_updatingAlignment
+            && sender is Segmented { SelectedIndex: var index }
             && DataContext is LayoutFeatureSettings settings
             && TryGetEnumValue<HorizontalAlignment>(index, out var alignment))
         {
@@ -175,7 +185,8 @@ public sealed partial class LayoutSettingsControl : LayoutSettingsControlBase
 
     private void OnVerticalAlignmentSelectionChanged(object sender, SelectionChangedEventArgs args)
     {
-        if (sender is Segmented { SelectedIndex: var index }
+        if (_loaded && !_updatingAlignment
+            && sender is Segmented { SelectedIndex: var index }
             && DataContext is LayoutFeatureSettings settings
             && TryGetEnumValue<VerticalAlignment>(index, out var alignment))
         {

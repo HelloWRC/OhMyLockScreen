@@ -73,6 +73,7 @@ public sealed partial class SceneEditorPage : Page
     private SceneTreeItem? _draggedTreeItem;
     private ComponentRegisterInfo? _draggedLibraryItem;
     private (SceneTreeItem Parent, int Index)? _treeDropTarget;
+    private readonly Dictionary<ComponentSettings, object> _pendingDropAlignments = [];
     private readonly HashSet<TreeViewItem> _observedTreeItems = [];
     private readonly DragEventHandler _observedTreeItemDragOverHandler;
     private static readonly ComponentSettings LibraryDragPlaceholder = new();
@@ -116,6 +117,7 @@ public sealed partial class SceneEditorPage : Page
         ViewModel.InspectorChanged += OnInspectorChanged;
         ViewModel.Error += OnEditorError;
         ViewModel.PropertyChanged += OnPanelViewModelPropertyChanged;
+        ViewModel.PropertyChanged += OnMediaImportStateChanged;
         _scenes.SceneSaved += OnSceneSaved;
         _scenes.ActiveSceneChanged += OnSceneSaved;
         _scenes.SaveFailed += OnSaveFailed;
@@ -154,6 +156,9 @@ public sealed partial class SceneEditorPage : Page
         ExitPreview();
         ClearPageToasts();
         _loaded = false;
+        _pendingDropAlignments.Clear();
+        _mediaImportRevision++;
+        ViewModel.PropertyChanged -= OnMediaImportStateChanged;
         DetachSystemBackground();
         RefreshFeatureEditorTargets();
         ViewModel.SelectionChanged -= OnSelectionChanged;
@@ -381,6 +386,11 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnTreeDragOver(object sender, DragEventArgs args)
     {
+        if (HandleFileDragOver(args))
+        {
+            return;
+        }
+
         var target = ResolveTreeDropTarget(args);
         if (target == null)
         {
@@ -415,6 +425,11 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnObservedTreeItemDragOver(object sender, DragEventArgs args)
     {
+        if (HandleFileDragOver(args))
+        {
+            return;
+        }
+
         if (!TryGetDraggedModel(out var model))
         {
             return;
@@ -437,6 +452,12 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnTreeDrop(object sender, DragEventArgs args)
     {
+        if (IsFileDrag(args))
+        {
+            OnMediaFileDrop(SceneTree, args);
+            return;
+        }
+
         if (_draggedTreeItem != null)
         {
             return;
@@ -454,6 +475,18 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnPageDrop(object sender, DragEventArgs args)
     {
+        if (IsFileDrag(args))
+        {
+            var treePoint = args.GetPosition(SceneTree);
+            if (!args.Handled && treePoint.X >= 0 && treePoint.Y >= 0
+                && treePoint.X <= SceneTree.ActualWidth && treePoint.Y <= SceneTree.ActualHeight)
+            {
+                OnMediaFileDrop(SceneTree, args);
+            }
+
+            return;
+        }
+
         if (_draggedLibraryItem == null)
         {
             return;
@@ -923,61 +956,40 @@ public sealed partial class SceneEditorPage : Page
 
     private async void OnBrowseBackgroundClick(object sender, RoutedEventArgs args)
     {
-        if (ViewModel.Scene is not { } scene)
+        if (ViewModel.IsPreview || ViewModel.Scene is not { } scene)
         {
             return;
         }
 
+        var revision = ++_mediaImportRevision;
         try
         {
             var picker = new FileOpenPicker
             {
                 SuggestedStartLocation = PickerLocationId.VideosLibrary
             };
-            foreach (var extension in new[]
-            {
-                ".mp4",
-                ".wmv",
-                ".mov",
-                ".m4v",
-                ".avi",
-                ".mkv",
-                ".webm",
-                ".ts",
-                ".m2ts",
-                ".mpg",
-                ".mpeg",
-                ".flv",
-                ".ogv"
-            }
-
-            )
+            foreach (var extension in SceneMediaImport.VideoExtensions)
             {
                 picker.FileTypeFilter.Add(extension);
             }
 
             var file = await picker.PickSingleFileAsync();
-            if (file == null || !ReferenceEquals(scene, ViewModel.Scene))
+            if (file == null || !IsCurrentMediaImport(scene, revision))
             {
                 return;
             }
 
-            var path = Path.Combine(_scenes.GetSceneDirectory(scene.SceneId), "Assets");
-            Directory.CreateDirectory(path);
-            var folder = await StorageFolder.GetFolderFromPathAsync(path);
-            var name = $"{Guid.NewGuid():N}{file.FileType.ToLowerInvariant()}";
-            await file.CopyAsync(folder, name, NameCollisionOption.FailIfExists);
-            if (!ReferenceEquals(scene, ViewModel.Scene))
+            if (await ImportVideoBackgroundAsync(file, scene, revision))
             {
-                return;
+                TrackToast(this.ShowSuccessToastRef($"已设置视频背景：{file.Name}"));
             }
-
-            scene.Background.Source = $"Assets/{name}";
-            scene.Background.Mode = BackgroundMode.Video;
         }
         catch (Exception exception)
         {
-            ShowError(exception);
+            if (IsCurrentMediaImport(scene, revision))
+            {
+                ShowError(exception);
+            }
         }
     }
 
@@ -1206,7 +1218,7 @@ public sealed partial class SceneEditorPage : Page
 
     private void StartDrag(PointerRoutedEventArgs args, bool resizing)
     {
-        if (ViewModel.SelectedModel is not ComponentSettings || FindSelectedPresenter() is not ComponentPresenter target)
+        if (ViewModel.SelectedModel is not ComponentSettings component || FindSelectedPresenter() is not ComponentPresenter target)
         {
             return;
         }
@@ -1218,6 +1230,7 @@ public sealed partial class SceneEditorPage : Page
         }
 
         EndDrag();
+        _pendingDropAlignments.Remove(component);
         _dragPanel = panel;
         _dragKind = panel switch
         {
@@ -1440,6 +1453,11 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnCanvasDragOver(object sender, DragEventArgs args)
     {
+        if (HandleFileDragOver(args))
+        {
+            return;
+        }
+
         if (ViewModel.IsPreview || ViewModel.ActiveTab != SceneEditorTab.Components || !TryGetDraggedModel(out var model))
         {
             return;
@@ -1458,6 +1476,12 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnCanvasDrop(object sender, DragEventArgs args)
     {
+        if (IsFileDrag(args))
+        {
+            OnMediaFileDrop(SceneViewport, args);
+            return;
+        }
+
         if (!TryGetDraggedModel(out var model))
         {
             return;
@@ -1471,19 +1495,70 @@ public sealed partial class SceneEditorPage : Page
 
         var excluded = ReferenceEquals(_draggedTreeItem?.Parent, target.Parent) ? _draggedTreeItem?.Model : null;
         var index = GetInsertionIndex(target.Panel, point, excluded);
+        var panelPoint = SceneViewport.TransformToVisual(target.Panel).TransformPoint(point);
         TryAction(() =>
         {
+            ComponentSettings? component = null;
             if (_draggedLibraryItem is { } info)
             {
-                ViewModel.AddComponent(info, target.Parent, index);
+                component = ViewModel.AddComponent(info, target.Parent, index);
             }
             else if (_draggedTreeItem is { } item)
             {
-                ViewModel.MoveItem(item, target.Parent, index);
+                var sameParent = ReferenceEquals(item.Parent, target.Parent);
+                if (ViewModel.MoveItem(item, target.Parent, index) || sameParent)
+                {
+                    component = item.Model as ComponentSettings;
+                }
+            }
+
+            if (component != null)
+            {
+                ApplyCanvasDropPosition(component, target.Panel, panelPoint);
             }
         });
         ClearDragPayload();
         args.Handled = true;
+    }
+
+    private void ApplyCanvasDropPosition(ComponentSettings component, Panel panel, Point point)
+    {
+        SceneLayoutEditing.ApplyDropPosition(component, panel, point);
+        if (panel is Grid && SceneLayoutEditing.GetLayout(component, create: false) is { IsAutoAlignment: true }
+            && ViewModel.FindItem(component)?.Parent is { } parent)
+        {
+            _pendingDropAlignments[component] = parent.Model;
+        }
+    }
+
+    private void AlignPendingDrops()
+    {
+        if (!_loaded || ViewModel.IsPreview)
+        {
+            _pendingDropAlignments.Clear();
+            return;
+        }
+
+        foreach (var (component, parent) in _pendingDropAlignments.ToArray())
+        {
+            if (!ReferenceEquals(ViewModel.FindItem(component)?.Parent?.Model, parent))
+            {
+                _pendingDropAlignments.Remove(component);
+                continue;
+            }
+
+            if (FindModelPresenter(component) is not ComponentPresenter { IsLoaded: true, ActualWidth: > 0, ActualHeight: > 0 } presenter)
+            {
+                continue;
+            }
+
+            _pendingDropAlignments.Remove(component);
+            if (FindParent<Panel>(VisualTreeHelper.GetParent(presenter)) is { } panel)
+            {
+                var bounds = presenter.TransformToVisual(panel).TransformBounds(new Rect(0, 0, presenter.ActualWidth, presenter.ActualHeight));
+                SceneLayoutEditing.AlignDropPosition(component, panel, bounds);
+            }
+        }
     }
 
     private bool TryGetDraggedModel(out object model)
@@ -1616,30 +1691,8 @@ public sealed partial class SceneEditorPage : Page
     }
 
     private static Rect GetLayoutArea(Panel panel, FrameworkElement child)
-    {
-        if (panel is not Grid grid)
-        {
-            return new Rect(0, 0, panel.ActualWidth, panel.ActualHeight);
-        }
-
-        var columns = grid.ColumnDefinitions.Select(column => column.ActualWidth).ToArray();
-        var rows = grid.RowDefinitions.Select(row => row.ActualHeight).ToArray();
-        var (x, width) = GetAxisArea(columns, Grid.GetColumn(child), Grid.GetColumnSpan(child), grid.ColumnSpacing, grid.ActualWidth);
-        var (y, height) = GetAxisArea(rows, Grid.GetRow(child), Grid.GetRowSpan(child), grid.RowSpacing, grid.ActualHeight);
-        return new Rect(x, y, width, height);
-    }
-
-    private static (double Start, double Length) GetAxisArea(double[] lengths, int index, int span, double spacing, double fallback)
-    {
-        if (lengths.Length == 0)
-        {
-            return (0, fallback);
-        }
-
-        index = Math.Clamp(index, 0, lengths.Length - 1);
-        span = Math.Clamp(span, 1, lengths.Length - index);
-        return (lengths.Take(index).Sum() + index * spacing, lengths.Skip(index).Take(span).Sum() + (span - 1) * spacing);
-    }
+        => SceneLayoutEditing.GetLayoutArea(panel, Grid.GetRow(child), Grid.GetColumn(child),
+            Grid.GetRowSpan(child), Grid.GetColumnSpan(child));
 
     private void OnCanvasPointerReleased(object sender, PointerRoutedEventArgs args)
     {
@@ -1682,6 +1735,7 @@ public sealed partial class SceneEditorPage : Page
     private void OnViewportLayoutUpdated(object? sender, object args)
     {
         RefreshFeatureEditorTargets();
+        AlignPendingDrops();
         if (!_selectionPending)
         {
             UpdateSelectionGeometry();

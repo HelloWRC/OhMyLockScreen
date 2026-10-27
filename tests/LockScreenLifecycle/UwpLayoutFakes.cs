@@ -156,6 +156,7 @@ namespace Windows.UI.Xaml.Controls
 
     public sealed class RowDefinition
     {
+        public double ActualHeight { get; set; }
         public GridLength Height { get; set; } = new(1, GridUnitType.Star);
         public double MinHeight
         {
@@ -166,6 +167,7 @@ namespace Windows.UI.Xaml.Controls
 
     public sealed class ColumnDefinition
     {
+        public double ActualWidth { get; set; }
         public GridLength Width { get; set; } = new(1, GridUnitType.Star);
         public double MinWidth
         {

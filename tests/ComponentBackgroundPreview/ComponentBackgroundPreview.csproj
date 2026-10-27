@@ -24,6 +24,9 @@
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BorderFeature.cs" Link="Services/BorderFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/TextFeature.cs" Link="Services/TextFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/FontFeature.cs" Link="Services/FontFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Layout/LayoutFeature.cs" Link="Services/LayoutFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Layout/GridLayoutFeature.cs" Link="Services/GridLayoutFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Scene/SceneLayoutEditing.cs" Link="Services/SceneLayoutEditing.cs" />
     <Compile Include="../../OhMyLockScreen/Services/FontCatalogService.cs" Link="Services/FontCatalogService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/FeatureHost/FeatureService.cs" Link="Services/FeatureService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/ComponentsService.cs" Link="Services/ComponentsService.cs" />
@@ -33,6 +36,9 @@
     <Compile Include="../../OhMyLockScreen/Controls/Components/TextDefaultFeaturesProviders.cs" Link="Controls/Components/TextDefaultFeaturesProviders.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Components/*Component.xaml" Link="Controls/Components/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/ViewModels/BorderSettingsViewModel.cs" Link="ViewModels/BorderSettingsViewModel.cs" />
+    <Compile Include="../../OhMyLockScreen/ViewModels/LayoutMarginsViewModel.cs" Link="ViewModels/LayoutMarginsViewModel.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/LayoutSettingsControl.xaml.cs" Link="Controls/Editor/LayoutSettingsControl.xaml.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/Editor/LayoutSettingsControl.xaml" Link="Controls/Editor/LayoutSettingsControl.xaml" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorViewBases.cs" Link="Controls/Editor/EditorViewBases.cs" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorConverters.cs" Link="Controls/Editor/EditorConverters.cs" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorChoice.cs" Link="Controls/Editor/EditorChoice.cs" />

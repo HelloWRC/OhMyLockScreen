@@ -42,6 +42,7 @@ if (args.Contains("--toast-only"))
 if (args.Contains("--scene-only"))
 {
     await SceneTests.RunAsync(Run, RunAsync);
+    await SceneMediaImportTests.RunAsync(RunAsync);
     Console.WriteLine($"All {passed} scene checks passed using independent temporary scene folders and simulated UWP views.");
     return;
 }
@@ -123,6 +124,7 @@ FeatureTests.Run(Run);
 LayoutTests.Run(Run);
 EditorConverterTests.Run(Run);
 await SceneTests.RunAsync(Run, RunAsync);
+await SceneMediaImportTests.RunAsync(RunAsync);
 await DismissalTests.RunAsync(Run, RunAsync);
 VideoBackgroundTests.Run(Run);
 await SystemBackgroundTests.RunAsync(Run, RunAsync);

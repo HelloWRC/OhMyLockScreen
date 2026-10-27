@@ -1,0 +1,203 @@
+using System.ComponentModel;
+using Microsoft.UI.Xaml.Controls;
+using OhMyLockScreen.Models.Scene;
+using OhMyLockScreen.Services.Scene;
+using OhMyLockScreen.Shared.Helpers.UI;
+using OhMyLockScreen.Shared.Models.Scene;
+using OhMyLockScreen.ViewModels;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Foundation;
+using Windows.Storage;
+using Windows.UI.Xaml;
+using Windows.UI.Xaml.Media.Imaging;
+
+namespace OhMyLockScreen;
+
+public sealed partial class SceneEditorPage
+{
+    private long _mediaImportRevision;
+
+    private void OnMediaImportStateChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(SceneEditorViewModel.Scene) or nameof(SceneEditorViewModel.IsPreview))
+        {
+            _mediaImportRevision++;
+        }
+    }
+
+    private bool IsCurrentMediaImport(SceneSettings scene, long revision) =>
+        _loaded && !ViewModel.IsPreview && ReferenceEquals(scene, ViewModel.Scene) && revision == _mediaImportRevision;
+
+    private bool IsFileDrag(DragEventArgs args) =>
+        _draggedLibraryItem == null && _draggedTreeItem == null
+        && args.DataView.Contains(StandardDataFormats.StorageItems);
+
+    private bool HandleFileDragOver(DragEventArgs args)
+    {
+        if (!IsFileDrag(args))
+        {
+            return false;
+        }
+
+        args.AcceptedOperation = _loaded && !ViewModel.IsPreview && ViewModel.Scene != null
+            ? DataPackageOperation.Copy : DataPackageOperation.None;
+        args.DragUIOverride.Caption = "导入图片或设置视频背景";
+        args.Handled = true;
+        return true;
+    }
+
+    private async void OnMediaFileDrop(object sender, DragEventArgs args)
+    {
+        if (!IsFileDrag(args))
+        {
+            return;
+        }
+
+        args.Handled = true;
+        args.AcceptedOperation = DataPackageOperation.None;
+        if (!_loaded || ViewModel.IsPreview || ViewModel.Scene is not { } scene)
+        {
+            return;
+        }
+
+        var deferral = args.GetDeferral();
+        var revision = ++_mediaImportRevision;
+        bool IsCurrent() => IsCurrentMediaImport(scene, revision);
+        try
+        {
+            // Resolve once, before awaiting files or selecting newly inserted components.
+            var tree = ReferenceEquals(sender, SceneTree);
+            var target = ResolveMediaDropTarget(args, tree);
+            var parentModel = target?.Parent.Model ?? ViewModel.GetCanvasLayer(null)?.Model ?? (object)scene;
+            var index = target?.Index ?? SceneHierarchyEditing.GetChildren(parentModel)?.Count ?? 0;
+            var dropParent = tree ? null : ViewModel.FindItem(parentModel);
+            var dropPanel = dropParent == null ? null : FindLayoutPanel(dropParent);
+            if (!tree && ReferenceEquals(parentModel, scene))
+            {
+                // A newly created first layer fills the viewport and has no realized panel yet.
+                dropPanel = SceneViewport;
+            }
+            Point? dropPoint = dropPanel == null ? null
+                : SceneViewport.TransformToVisual(dropPanel).TransformPoint(args.GetPosition(SceneViewport));
+            args.AcceptedOperation = DataPackageOperation.Copy;
+            var items = await args.DataView.GetStorageItemsAsync();
+            if (!IsCurrent())
+            {
+                return;
+            }
+
+            async Task<bool> ImportImage(StorageFile file)
+            {
+                bool CanInsert() => IsCurrent() && ViewModel.FindItem(parentModel) != null;
+                var width = 0;
+                var height = 0;
+                return await BrushImageImport.RunAsync(
+                    () => file.OpenStreamForReadAsync(), file.FileType,
+                    Path.Combine(ApplicationData.Current.LocalFolder.Path, "BrushAssets"),
+                    async path =>
+                    {
+                        var imported = await StorageFile.GetFileFromPathAsync(path);
+                        using var stream = await imported.OpenReadAsync();
+                        var bitmap = new BitmapImage();
+                        await bitmap.SetSourceAsync(stream);
+                        width = bitmap.PixelWidth;
+                        height = bitmap.PixelHeight;
+                        if (width <= 0 || height <= 0)
+                        {
+                            throw new InvalidDataException("无法读取图片尺寸。");
+                        }
+                    },
+                    CanInsert,
+                    uri =>
+                    {
+                        var component = ViewModel.AddImageComponent(file.DisplayName, uri, width, height, parentModel, index)
+                            ?? throw new InvalidOperationException("图片导入目标已失效。");
+                        var parent = ViewModel.FindItem(component)!.Parent!;
+                        parentModel = parent.Model;
+                        if (dropPoint is { } position)
+                        {
+                            var panel = FindLayoutPanel(parent) ?? dropPanel;
+                            if (panel != null)
+                            {
+                                ApplyCanvasDropPosition(component, panel, position);
+                            }
+                        }
+                        index++;
+                    });
+            }
+
+            var result = await SceneMediaImport.RunAsync(
+                items.OfType<StorageFile>(), file => file.Name, ImportImage,
+                file => ImportVideoBackgroundAsync(file, scene, revision), IsCurrent);
+            if (!IsCurrent())
+            {
+                return;
+            }
+
+            result.UnsupportedFiles.AddRange(items.Where(item => item is not StorageFile).Select(item => item.Name));
+            ShowMediaImportResult(result);
+        }
+        catch (Exception exception)
+        {
+            if (IsCurrent())
+            {
+                ShowError(exception);
+            }
+        }
+        finally
+        {
+            deferral.Complete();
+        }
+    }
+
+    private (SceneTreeItem Parent, int Index)? ResolveMediaDropTarget(DragEventArgs args, bool tree)
+    {
+        if (tree)
+        {
+            var point = args.GetPosition(SceneTree);
+            return FindTreeTargetAtPoint(point) is { } hit
+                ? ResolveTreeDropTarget(hit.Target, LibraryDragPlaceholder, GetTreeDropRegion(hit.Target, hit.Row, point))
+                : null;
+        }
+
+        var canvasPoint = args.GetPosition(SceneViewport);
+        return ResolveCanvasDrop(canvasPoint, LibraryDragPlaceholder) is { } target
+            ? (target.Parent, GetInsertionIndex(target.Panel, canvasPoint, null))
+            : null;
+    }
+
+    private Task<bool> ImportVideoBackgroundAsync(StorageFile file, SceneSettings scene, long revision) =>
+        SceneMediaImport.ImportVideoAsync(
+            () => file.OpenStreamForReadAsync(), file.FileType, _scenes.GetSceneDirectory(scene.SceneId),
+            () => IsCurrentMediaImport(scene, revision),
+            source =>
+            {
+                scene.Background.Source = source;
+                scene.Background.Mode = BackgroundMode.Video;
+            });
+
+    private void ShowMediaImportResult(SceneMediaImportResult result)
+    {
+        if (result.VideoName is { } video)
+        {
+            TrackToast(this.ShowSuccessToastRef($"已设置视频背景：{video}"));
+        }
+
+        var messages = new List<string>();
+        if (result.SkippedVideos > 0)
+        {
+            messages.Add($"仅使用首个视频，已跳过其余 {result.SkippedVideos} 个视频。");
+        }
+
+        if (result.UnsupportedFiles.Count > 0)
+        {
+            messages.Add($"不支持的文件或文件夹：{string.Join("、", result.UnsupportedFiles)}");
+        }
+
+        messages.AddRange(result.FailedFiles);
+        if (messages.Count > 0)
+        {
+            ShowMessage("部分文件未导入", string.Join(Environment.NewLine, messages), InfoBarSeverity.Warning);
+        }
+    }
+}

@@ -16,6 +16,10 @@ using OhMyLockScreen.Services.Scene;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Media;
 using OhMyLockScreen.Models.Scene;
+using OhMyLockScreen.Models.Features.Appearance;
+using OhMyLockScreen.Controls.Components;
+using Windows.UI.Xaml.Media.Imaging;
+using Stretch = Windows.UI.Xaml.Media.Stretch;
 
 namespace OhMyLockScreen.ViewModels;
 
@@ -404,6 +408,19 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             return null;
         }
 
+        var component = CreateComponent(info);
+        if (!SceneHierarchyEditing.CanAccept(parent.Model, component))
+        {
+            return null;
+        }
+
+        children.Insert(Math.Clamp(index, 0, children.Count), component);
+        Select(component);
+        return component;
+    }
+
+    private static ComponentSettings CreateComponent(ComponentRegisterInfo info)
+    {
         var component = info.CreateSettings();
         if (!component.Features.Any(feature => feature.Id == "omls.features.layout.layout"))
         {
@@ -417,7 +434,48 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
                 }
             });
         }
-        if (!SceneHierarchyEditing.CanAccept(parent.Model, component))
+        return component;
+    }
+
+    internal ComponentSettings? AddImageComponent(string name, Uri source, int width, int height, object parentModel, int index)
+    {
+        if (Scene == null || IsPreview || FindItem(parentModel) == null)
+        {
+            return null;
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        var info = _components.Find(ContainerComponent.Id)
+            ?? throw new InvalidOperationException("布局容器未注册。");
+        var component = CreateComponent(info);
+        component.Name = name;
+        var layout = SceneLayoutEditing.GetLayout(component, create: true)!;
+        layout.Width = width;
+        layout.Height = height;
+        layout.IsAutoWidth = false;
+        layout.IsAutoHeight = false;
+        component.Features.Add(new FeatureInfo
+        {
+            Id = "omls.features.appearance.background",
+            Settings = new BackgroundFeatureSettings
+            {
+                Background = new ImageBrush { ImageSource = new BitmapImage(source), Stretch = Stretch.Uniform }
+            }
+        });
+
+        if (ReferenceEquals(parentModel, Scene))
+        {
+            if (Scene.Layers.Count == 0)
+            {
+                AddLayer();
+            }
+
+            parentModel = Scene.Layers[0];
+        }
+
+        if (!SceneHierarchyEditing.CanAccept(parentModel, component)
+            || SceneHierarchyEditing.GetChildren(parentModel) is not { } children)
         {
             return null;
         }
@@ -532,25 +590,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     }
 
     public LayoutFeatureSettings? GetLayout(bool create)
-    {
-        if (SelectedModel is not IFeatureContainer container)
-        {
-            return null;
-        }
-
-        var feature = container.Features.FirstOrDefault(item => item.Id == "omls.features.layout.layout");
-        if (feature == null && create)
-        {
-            feature = new FeatureInfo
-            {
-                Id = "omls.features.layout.layout",
-                Settings = new LayoutFeatureSettings()
-            };
-            container.Features.Add(feature);
-        }
-
-        return feature?.GetSettingsOrCreate<LayoutFeatureSettings>();
-    }
+        => SceneLayoutEditing.GetLayout(SelectedModel as IFeatureContainer, create);
 
     public void Dispose()
     {

@@ -18,17 +18,263 @@ using OhMyLockScreen.Shared.Models.FeatureHost;
 using OhMyLockScreen.Shared.Services.Scene;
 using OhMyLockScreen.ViewModels;
 using Windows.ApplicationModel.Activation;
+using Windows.Foundation;
 using Windows.Storage;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
+using OhMyLockScreen.Shared.Helpers.UI;
+using Windows.UI.Xaml.Media.Imaging;
 
 internal static class SceneTests
 {
     internal static async Task RunAsync(Action<string, Action> run, Func<string, Func<Task>, Task> runAsync)
     {
+        await runAsync("Dropped images retain pixel dimensions, persistent brushes and their original parent", async () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var parent = editor.Roots[0].Children[0].Children[0].Model;
+            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, "BrushAssets");
+            var original = Path.Combine(ApplicationData.Current.LocalFolder.Path, "original.PNG");
+            File.WriteAllBytes(original, [1, 2, 3]);
+            ComponentSettings? first = null;
+            var imported = await BrushImageImport.RunAsync(
+                () => Task.FromResult<Stream>(File.OpenRead(original)), ".PNG", directory,
+                _ => Task.CompletedTask, () => editor.FindItem(parent) != null,
+                uri =>
+                {
+                    first = editor.AddImageComponent("First", uri, 1920, 1080, parent, 0);
+                    SceneLayoutEditing.ApplyDropPosition(first!, new Canvas(), new Point(123.6, 45.2));
+                });
+            File.Delete(original);
+            var second = editor.AddImageComponent("Second", new Uri("ms-appdata:///local/BrushAssets/second.png"), 640, 480, parent, 1)!;
+            SceneLayoutEditing.ApplyDropPosition(second, new Canvas(), new Point(123.6, 45.2));
+            Check(imported && first is { Settings: ContainerComponentSettings { Children.Count: 0 } },
+                "The image did not create an empty layout container.");
+            var children = ((ContainerComponentSettings)((ComponentSettings)parent).Settings!).Children;
+            Check(ReferenceEquals(children[0], first) && ReferenceEquals(children[1], second)
+                && ReferenceEquals(editor.SelectedModel, second), "Images were reordered, nested or not selected.");
+            var layout = first!.Features.Single(feature => feature.Settings is LayoutFeatureSettings).GetSettings<LayoutFeatureSettings>();
+            Check(layout is { Width: 1920, Height: 1080, IsAutoWidth: false, IsAutoHeight: false,
+                HorizontalAlignment: HorizontalAlignment.Left, VerticalAlignment: VerticalAlignment.Top }
+                && layout.Margin == new Thickness(124, 45, 0, 0)
+                && SceneLayoutEditing.GetLayout(second, create: false)!.Margin == layout.Margin,
+                "Image dimensions or alignment did not preserve the original pixel size.");
+            var brush = (ImageBrush)first.Features.Single(feature => feature.Settings is BackgroundFeatureSettings)
+                .GetSettings<BackgroundFeatureSettings>().Background!;
+            Check(brush.Stretch == Windows.UI.Xaml.Media.Stretch.Uniform && brush.ImageSource is BitmapImage { UriSource.Scheme: "ms-appdata" }
+                && File.ReadAllBytes(Directory.GetFiles(directory).Single()).SequenceEqual(new byte[] { 1, 2, 3 }),
+                "The brush was cropped or still depended on the original file.");
+            fixture.Service.FlushPending();
+            var restored = (ContainerComponentSettings)fixture.Service.Load(editor.Scene!.SceneId).Layers[0].Children[0].Settings!;
+            var restoredImage = restored.Children[0];
+            Check(restoredImage.Name == "First"
+                && restoredImage.Features.Single(feature => feature.Settings is LayoutFeatureSettings).GetSettings<LayoutFeatureSettings>().Width == 1920
+                && SceneLayoutEditing.GetLayout(restoredImage, create: false)!.Margin == layout.Margin
+                && ((BitmapImage)((ImageBrush)restoredImage.Features.Single(feature => feature.Settings is BackgroundFeatureSettings)
+                    .GetSettings<BackgroundFeatureSettings>().Background!).ImageSource!).UriSource == ((BitmapImage)brush.ImageSource!).UriSource,
+                "Image layout or persistent brush was lost after reloading the scene.");
+        });
+        await runAsync("Removed image targets cancel copied assets and empty scenes create a layer only on insertion", async () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var scene = editor.Scene!;
+            var parent = scene.Layers[0];
+            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, "BrushAssets");
+            var imported = await BrushImageImport.RunAsync(
+                () => Task.FromResult<Stream>(new MemoryStream([1, 2, 3])), ".png", directory,
+                _ =>
+                {
+                    scene.Layers.Remove(parent);
+                    return Task.CompletedTask;
+                },
+                () => editor.FindItem(parent) != null,
+                _ => throw new Exception("A removed target accepted an image."));
+            Check(!imported && Directory.GetFiles(directory).Length == 0 && scene.Layers.Count == 0,
+                "A removed target leaked an image or created a layer.");
+            var uri = new Uri("ms-appdata:///local/BrushAssets/image.png");
+            Check(editor.AddImageComponent("Removed", uri, 10, 20, parent, 0) == null, "A stale parent accepted an image.");
+            editor.IsPreview = true;
+            Check(editor.AddImageComponent("Preview", uri, 10, 20, scene, 0) == null && scene.Layers.Count == 0,
+                "Preview inserted an image or created a layer.");
+            editor.IsPreview = false;
+            var image = editor.AddImageComponent("Image", uri, 10, 20, scene, 0);
+            Check(scene.Layers.Count == 1 && ReferenceEquals(scene.Layers[0].Children.Single(), image),
+                "An empty scene did not receive an image layer.");
+            editor.Open(scene.SceneId);
+            Check(editor.AddImageComponent("Stale scene", uri, 10, 20, scene, 0) == null,
+                "An image was inserted into a superseded scene instance.");
+        });
+        run("Free-layout drops replace alignment and margins without changing size or automatic switches", () =>
+        {
+            foreach (Panel panel in new Panel[] { new Grid(), new Canvas() })
+            {
+                var component = new ComponentSettings();
+                var layout = SceneLayoutEditing.GetLayout(component, create: true)!;
+                layout.Width = 123.45;
+                layout.Height = 67.89;
+                layout.IsAutoWidth = false;
+                layout.IsAutoHeight = true;
+                layout.IsAutoAlignment = false;
+                layout.HorizontalAlignment = HorizontalAlignment.Stretch;
+                layout.VerticalAlignment = VerticalAlignment.Bottom;
+                layout.Margin = new Thickness(4, 5, 6, 7);
+
+                SceneLayoutEditing.ApplyDropPosition(component, panel, new Point(234.5, -12.5));
+
+                Check(layout.Margin == new Thickness(235, -13, 0, 0)
+                    && layout.HorizontalAlignment == HorizontalAlignment.Left && layout.VerticalAlignment == VerticalAlignment.Top,
+                    "The drop retained old margins, clamped its position or failed to align its top-left corner.");
+                Check(layout is { Width: 123.45, Height: 67.89, IsAutoWidth: false, IsAutoHeight: true, IsAutoAlignment: false }
+                    && component.Features.Count == 1 && ReferenceEquals(layout, SceneLayoutEditing.GetLayout(component, create: false)),
+                    "A drop replaced existing settings or changed size and automatic switches.");
+            }
+
+            var withoutLayout = new ComponentSettings();
+            Check(SceneLayoutEditing.GetLayout(withoutLayout, create: false) == null && withoutLayout.Features.Count == 0,
+                "Reading a missing layout created a feature.");
+            SceneLayoutEditing.ApplyDropPosition(withoutLayout, new Canvas(), new Point(-0.1, 8.6));
+            var created = SceneLayoutEditing.GetLayout(withoutLayout, create: false)!;
+            Check(created.Margin == new Thickness(0, 9, 0, 0)
+                && BitConverter.DoubleToInt64Bits(created.Margin.Left) == 0
+                && created.IsAutoWidth && created.IsAutoHeight && created.IsAutoAlignment,
+                "A drop without a layout failed to create positioning settings with automatic sizing.");
+        });
+        run("Measured Grid drops use movement alignment and convert margins without resizing", () =>
+        {
+            var panel = new Grid { ActualWidth = 1000, ActualHeight = 800 };
+            var component = new ComponentSettings();
+            var layout = SceneLayoutEditing.GetLayout(component, create: true)!;
+            layout.Width = 123.45;
+            layout.Height = 67.89;
+            layout.IsAutoWidth = true;
+            layout.IsAutoHeight = false;
+            (Point Point, HorizontalAlignment Horizontal, VerticalAlignment Vertical, Thickness Margin)[] cases =
+            [
+                (new Point(24, 32), HorizontalAlignment.Left, VerticalAlignment.Top, new Thickness(24, 32, 0, 0)),
+                (new Point(400, 340), HorizontalAlignment.Center, VerticalAlignment.Center, new Thickness()),
+                (new Point(760, 660), HorizontalAlignment.Right, VerticalAlignment.Bottom, new Thickness(0, 0, 40, 20))
+            ];
+            foreach (var test in cases)
+            {
+                SceneLayoutEditing.ApplyDropPosition(component, panel, test.Point);
+                SceneLayoutEditing.AlignDropPosition(component, panel, new Rect(test.Point.X, test.Point.Y, 200, 120));
+                Check(layout.HorizontalAlignment == test.Horizontal && layout.VerticalAlignment == test.Vertical
+                    && layout.Margin == test.Margin, "Drop alignment or converted margins differ from movement alignment.");
+                Check(layout is { Width: 123.45, Height: 67.89, IsAutoWidth: true, IsAutoHeight: false, IsAutoAlignment: true },
+                    "Drop alignment changed stored dimensions or automatic switches.");
+            }
+
+            layout.IsAutoAlignment = false;
+            SceneLayoutEditing.ApplyDropPosition(component, panel, new Point(760, 660));
+            SceneLayoutEditing.AlignDropPosition(component, panel, new Rect(760, 660, 200, 120));
+            Check(layout.HorizontalAlignment == HorizontalAlignment.Left && layout.VerticalAlignment == VerticalAlignment.Top
+                && layout.Margin == new Thickness(760, 660, 0, 0), "Drop alignment ignored the automatic alignment switch.");
+            layout.IsAutoAlignment = true;
+            SceneLayoutEditing.AlignDropPosition(component, new Canvas(), new Rect(760, 660, 200, 120));
+            Check(layout.Margin == new Thickness(760, 660, 0, 0) && layout.HorizontalAlignment == HorizontalAlignment.Left,
+                "Canvas acquired Grid alignment behavior.");
+        });
+        run("Dropped images save converted right and bottom margins with original dimensions", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var parent = editor.Scene!.Layers[0];
+            var panel = new Grid { ActualWidth = 1000, ActualHeight = 800 };
+            var image = editor.AddImageComponent("Positioned", new Uri("ms-appdata:///local/BrushAssets/positioned.png"),
+                200, 120, parent, 0)!;
+            SceneLayoutEditing.ApplyDropPosition(image, panel, new Point(760, 660));
+            SceneLayoutEditing.AlignDropPosition(image, panel, new Rect(760, 660, 200, 120));
+            fixture.Service.FlushPending();
+            var restored = fixture.Service.Load(editor.Scene.SceneId).Layers[0].Children[0];
+            var layout = SceneLayoutEditing.GetLayout(restored, create: false)!;
+            Check(layout is { Width: 200, Height: 120, IsAutoWidth: false, IsAutoHeight: false,
+                HorizontalAlignment: HorizontalAlignment.Right, VerticalAlignment: VerticalAlignment.Bottom }
+                && layout.Margin == new Thickness(0, 0, 40, 20),
+                "An inserted image lost its dimensions or converted margins after saving.");
+        });
+        run("Grid drops preserve cells and spans while using the cell origin and spacing", () =>
+        {
+            var panel = new Grid { ActualWidth = 700, ActualHeight = 500, ColumnSpacing = 12, RowSpacing = 8 };
+            panel.ColumnDefinitions.AddRange([
+                new ColumnDefinition { ActualWidth = 100 },
+                new ColumnDefinition { ActualWidth = 200 },
+                new ColumnDefinition { ActualWidth = 376 }
+            ]);
+            panel.RowDefinitions.AddRange([
+                new RowDefinition { ActualHeight = 60 },
+                new RowDefinition { ActualHeight = 180 },
+                new RowDefinition { ActualHeight = 244 }
+            ]);
+            var grid = new GridLayoutFeatureSettings { Row = 1, Column = 1, RowSpan = 2, ColumnSpan = 2 };
+            var component = new ComponentSettings
+            {
+                Features = [new FeatureInfo { Id = "omls.features.layout.grid", Settings = grid }]
+            };
+            var area = SceneLayoutEditing.GetLayoutArea(panel, grid.Row, grid.Column, grid.RowSpan, grid.ColumnSpan);
+            Check(area == new Rect(112, 68, 588, 432), "The grid cell area ignored definitions, spans or spacing.");
+            SceneLayoutEditing.ApplyDropPosition(component, panel, new Point(150.6, 30.4));
+            Check(SceneLayoutEditing.GetLayout(component, create: false)!.Margin == new Thickness(39, -38, 0, 0)
+                && grid is { Row: 1, Column: 1, RowSpan: 2, ColumnSpan: 2 } && component.Features.Count == 2,
+                "The grid drop used panel coordinates as cell margins or changed the assigned cells.");
+            SceneLayoutEditing.ApplyDropPosition(component, panel, new Point(650, 440));
+            SceneLayoutEditing.AlignDropPosition(component, panel, new Rect(650, 440, 40, 30));
+            var aligned = SceneLayoutEditing.GetLayout(component, create: false)!;
+            Check(aligned.HorizontalAlignment == HorizontalAlignment.Right && aligned.VerticalAlignment == VerticalAlignment.Bottom
+                && aligned.Margin == new Thickness(0, 0, 10, 30)
+                && grid is { Row: 1, Column: 1, RowSpan: 2, ColumnSpan: 2 },
+                "Grid drop alignment ignored the cell extent or rewrote its row and column span.");
+            Check(SceneLayoutEditing.GetLayoutArea(panel, 99, 99, 99, 99) == new Rect(324, 256, 376, 244)
+                && SceneLayoutEditing.GetLayoutArea(new Grid { ActualWidth = 700, ActualHeight = 500 }, 99, 99, 2, 2)
+                    == new Rect(0, 0, 700, 500), "Grid area fallback no longer matches native default and clamped cells.");
+        });
+        run("Flow-layout drops leave positioning features untouched", () =>
+        {
+            foreach (Panel panel in new Panel[] { new StackPanel(), new CommunityToolkit.WinUI.Controls.WrapPanel() })
+            {
+                var component = new ComponentSettings();
+                SceneLayoutEditing.ApplyDropPosition(component, panel, new Point(300, 200));
+                Check(component.Features.Count == 0, "A flow-layout drop added a positioning feature.");
+                var layout = SceneLayoutEditing.GetLayout(component, create: true)!;
+                layout.HorizontalAlignment = HorizontalAlignment.Right;
+                layout.VerticalAlignment = VerticalAlignment.Bottom;
+                layout.Margin = new Thickness(1, 2, 3, 4);
+                SceneLayoutEditing.ApplyDropPosition(component, panel, new Point(400, 250));
+                Check(layout.Margin == new Thickness(1, 2, 3, 4)
+                    && layout.HorizontalAlignment == HorizontalAlignment.Right && layout.VerticalAlignment == VerticalAlignment.Bottom,
+                    "A flow-layout drop overwrote positioning settings.");
+            }
+        });
+        run("Tree-to-canvas placement updates unchanged insertion slots and survives reparenting and reload", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            var component = editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, layer, 0)!;
+            var item = editor.FindItem(component)!;
+            editor.Select(layer.Model);
+            Check(!editor.MoveItem(item, layer, 0), "An unchanged insertion slot unexpectedly reordered the tree.");
+            SceneLayoutEditing.ApplyDropPosition(component, new Grid(), new Point(75.6, 39.4));
+            Check(SceneLayoutEditing.GetLayout(component, create: false)!.Margin == new Thickness(76, 39, 0, 0)
+                && ReferenceEquals(editor.SelectedModel, layer.Model), "Placement relied on selection or ignored the unchanged insertion slot.");
+            editor.AddLayer();
+            var target = editor.SelectedItem!;
+            Check(editor.MoveItem(item, target, 0), "A valid cross-parent drop was rejected.");
+            SceneLayoutEditing.ApplyDropPosition(component, new Canvas(), new Point(101.2, 202.8));
+            Check(ReferenceEquals(editor.FindItem(component)!.Parent, target), "Placement changed the target parent.");
+            fixture.Service.FlushPending();
+            var restored = fixture.Service.Load(editor.Scene!.SceneId).Layers[1].Children.Single();
+            Check(SceneLayoutEditing.GetLayout(restored, create: false)!.Margin == new Thickness(101, 203, 0, 0),
+                "Reparented drop coordinates were not saved and restored.");
+        });
         run("Editor additions preserve declared defaults and use centered layout only as a fallback", () =>
         {
             using var fixture = new Fixture(services =>
@@ -900,11 +1146,11 @@ internal static class SceneTests
             var initialize = (Lazy<Task>)typeof(App).GetField("_initializeHost", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(app)!;
             await initialize.Value;
             await Task.Delay(20);
+            Window.Current = window;
             Check(window.Content is WindowToastHost { Frame.Content: SceneEditorPage }, "Manual launch did not open the editor.");
             var toastHost = (WindowToastHost)window.Content!;
             var notification = new ToastMessage("正在编辑");
             toastHost.Show(notification);
-            Window.Current = window;
             var host = IAppHost.Host;
             app.Launch(new LaunchActivatedEventArgs());
             Check(ReferenceEquals(host, IAppHost.Host), "Repeated manual activation replaced the app host.");

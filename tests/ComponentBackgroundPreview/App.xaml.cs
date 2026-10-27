@@ -7,6 +7,7 @@ using OhMyLockScreen.Services;
 using OhMyLockScreen.Services.Scene;
 using OhMyLockScreen.Services.FeatureHost;
 using OhMyLockScreen.Services.Features.Appearance;
+using OhMyLockScreen.Services.Features.Layout;
 using OhMyLockScreen.Shared;
 using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
@@ -55,6 +56,8 @@ public sealed partial class App : Application
             services.AddFeature<BorderFeature, BorderSettingsControl>();
             services.AddFeature<TextFeature, TextFeatureSettingsControl>();
             services.AddFeature<FontFeature, FontSettingsControl>();
+            services.AddFeature<LayoutFeature>();
+            services.AddFeature<GridLayoutFeature>();
             services.AddComponent<TextComponent>();
             services.AddComponent<ClockComponent>();
             services.AddComponent<DateComponent>();
@@ -145,6 +148,8 @@ public sealed partial class App : Application
             await ExpectPixelAsync(Colors.Green, "The default template still paints after unload and reload");
             await VerifyBorderAsync(root);
             await VerifyTypographyAsync(root);
+            await VerifyDropPositionAsync(root);
+            await VerifyRealizedGridDropAsync(root);
         }
         catch (Exception exception)
         {

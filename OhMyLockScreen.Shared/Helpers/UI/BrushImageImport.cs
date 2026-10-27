@@ -3,6 +3,11 @@ namespace OhMyLockScreen.Shared.Helpers.UI;
 /// <summary>Copies and validates an image before publishing its persistent URI.</summary>
 internal static class BrushImageImport
 {
+    internal static IReadOnlyList<string> Extensions { get; } = Array.AsReadOnly(
+        new[] { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff" });
+
+    internal static bool IsSupported(string extension) => Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
+
     internal static async Task<bool> RunAsync(
         Func<Task<Stream>> openSource,
         string extension,
@@ -15,7 +20,7 @@ internal static class BrushImageImport
         {
             return false;
         }
-        if (!new[] { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff" }.Contains(extension.ToLowerInvariant()))
+        if (!IsSupported(extension))
         {
             throw new ArgumentException("不支持的图片格式。", nameof(extension));
         }

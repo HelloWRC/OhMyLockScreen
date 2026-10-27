@@ -1,10 +1,94 @@
 using OhMyLockScreen.Models.Features.Layout;
+using OhMyLockScreen.Shared.Abstractions.Models.FeatureHost;
+using OhMyLockScreen.Shared.Models.FeatureHost;
+using OhMyLockScreen.Shared.Models.Scene;
+using Windows.Foundation;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
 
 namespace OhMyLockScreen.Services.Scene;
 /// <summary>直接修改原生布局参数，不引入与布局分离的位置状态。</summary>
 internal static class SceneLayoutEditing
 {
+    internal static LayoutFeatureSettings? GetLayout(IFeatureContainer? container, bool create)
+    {
+        if (container == null)
+        {
+            return null;
+        }
+
+        var feature = container.Features.FirstOrDefault(item => item.Id == "omls.features.layout.layout");
+        if (feature == null && create)
+        {
+            feature = new FeatureInfo
+            {
+                Id = "omls.features.layout.layout",
+                Settings = new LayoutFeatureSettings()
+            };
+            container.Features.Add(feature);
+        }
+
+        return feature?.GetSettingsOrCreate<LayoutFeatureSettings>();
+    }
+
+    internal static void ApplyDropPosition(ComponentSettings component, Panel panel, Point point)
+    {
+        if (panel is not Grid and not Canvas)
+        {
+            return;
+        }
+
+        var gridSettings = component.Features.FirstOrDefault(feature => feature.Id == "omls.features.layout.grid")
+            ?.TryGetSettings<GridLayoutFeatureSettings>();
+        var area = GetLayoutArea(panel, gridSettings?.Row ?? 0, gridSettings?.Column ?? 0,
+            gridSettings?.RowSpan ?? 1, gridSettings?.ColumnSpan ?? 1);
+        var layout = GetLayout(component, create: true)!;
+        layout.HorizontalAlignment = HorizontalAlignment.Left;
+        layout.VerticalAlignment = VerticalAlignment.Top;
+        layout.Margin = new Thickness(Round(point.X - area.X), Round(point.Y - area.Y), 0, 0);
+    }
+
+    internal static void AlignDropPosition(ComponentSettings component, Panel panel, Rect bounds)
+    {
+        if (panel is not Grid || GetLayout(component, create: false) is not { IsAutoAlignment: true } layout)
+        {
+            return;
+        }
+
+        var gridSettings = component.Features.FirstOrDefault(feature => feature.Id == "omls.features.layout.grid")
+            ?.TryGetSettings<GridLayoutFeatureSettings>();
+        var area = GetLayoutArea(panel, gridSettings?.Row ?? 0, gridSettings?.Column ?? 0,
+            gridSettings?.RowSpan ?? 1, gridSettings?.ColumnSpan ?? 1);
+        ApplyPosition(layout, bounds.X - area.X, bounds.Y - area.Y, bounds.Width, bounds.Height,
+            area.Width, area.Height, resize: false, canvas: false, autoAlignment: true);
+    }
+
+    internal static Rect GetLayoutArea(Panel panel, int row, int column, int rowSpan, int columnSpan)
+    {
+        if (panel is not Grid grid)
+        {
+            return new Rect(0, 0, panel.ActualWidth, panel.ActualHeight);
+        }
+
+        var columns = grid.ColumnDefinitions.Select(definition => definition.ActualWidth).ToArray();
+        var rows = grid.RowDefinitions.Select(definition => definition.ActualHeight).ToArray();
+        var (x, width) = GetAxisArea(columns, column, columnSpan, grid.ColumnSpacing, grid.ActualWidth);
+        var (y, height) = GetAxisArea(rows, row, rowSpan, grid.RowSpacing, grid.ActualHeight);
+        return new Rect(x, y, width, height);
+    }
+
+    private static (double Start, double Length) GetAxisArea(double[] lengths, int index, int span, double spacing, double fallback)
+    {
+        if (lengths.Length == 0)
+        {
+            return (0, fallback);
+        }
+
+        index = Math.Clamp(index, 0, lengths.Length - 1);
+        span = Math.Clamp(span, 1, lengths.Length - index);
+        return (lengths.Take(index).Sum() + index * spacing, lengths.Skip(index).Take(span).Sum() + (span - 1) * spacing);
+    }
+
     internal static double Round(double value)
     {
         var rounded = Math.Round(value, MidpointRounding.AwayFromZero);
@@ -31,6 +115,21 @@ internal static class SceneLayoutEditing
             settings.IsAutoHeight = false;
         }
 
+        ApplyPosition(settings, x, y, width, height, availableWidth, availableHeight, resize, canvas, autoAlignment);
+    }
+
+    private static void ApplyPosition(
+        LayoutFeatureSettings settings,
+        double x,
+        double y,
+        double width,
+        double height,
+        double availableWidth,
+        double availableHeight,
+        bool resize,
+        bool canvas,
+        bool autoAlignment)
+    {
         var horizontalAlignment = canvas
             ? HorizontalAlignment.Left
             : autoAlignment
