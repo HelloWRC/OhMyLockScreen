@@ -6,6 +6,6 @@
     Loaded="OnLoaded"
     Unloaded="OnUnloaded">
     <TextBlock
-        Text="{x:Bind DisplayText, Mode=OneWay}"
-        FontSize="24" />
+        x:Name="TextContent"
+        Text="{x:Bind DisplayText, Mode=OneWay}" />
 </local:DateComponentBase>

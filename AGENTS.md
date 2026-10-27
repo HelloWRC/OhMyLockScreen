@@ -29,8 +29,11 @@
 - 背景 feature 与渐变装饰层共用目标解析：IBorderable 使用其当前 Border，其他 Control 使用自身；装饰层仅关联编辑视图中的实例。
 - 边框 feature 仅附加到 IBorderable 的当前 Border，修改框线、圆角和 Padding；替换或卸载时恢复原值。默认框线复制添加时的主题前景色，作为独立纯色画刷保存。
 - UWP 前景依赖属性不是附加属性；前景 feature 按目标类型绑定 Control、TextBlock、RichTextBlock 或 ContentPresenter 自身的 ForegroundProperty，其他 FrameworkElement 附加时无操作，不递归修改子元素，卸载时恢复原值。
+- 文本与字体 feature 按目标类型应用原生字体属性并沿用 UWP 继承；组件通过 ITextStyleTarget 公开行高、对齐和装饰线的文本目标，不递归查找子元素。行高使用逻辑像素（0 为自动），字距使用千分之一 em。
+- 文本、时钟和日期的字号及字重由默认特性提供，不在组件内部设置；依赖属性绑定卸载时恢复原绑定或本地值，无本地值时 ClearValue，以保留原生继承。
 - 特性设置控件统一继承 FeatureSettingsControlBase（强类型设置使用其泛型版本）；编辑器通过 TargetElement 统一传递并清理编辑目标，沿用上述目标解析规则。
 - ComponentPresenter 通过默认 ContentTemplate 提供装饰 Border，并通过 IBorderable 通知其加载、替换与卸载；背景特性直接修饰 Border，不依赖 UserControl.Background 自动绘制或模板的隐式 DataContext。
+- 组件可通过 ComponentDefaultFeaturesAttribute 指定具有公开无参构造函数的 IComponentDefaultFeaturesProvider；ComponentRegisterInfo.CreateSettings 仅在新建配置时生成独立的默认特性及设置，加载或重建视图时不补齐。编辑器仅在未声明布局特性时添加居中布局。
 - `XamlCompositionBrushBase` 不支持设置继承的变换属性；其默认单位变换在序列化时规范化为 null，读取时兼容旧的单位矩阵。
 - 编辑器面板动画由页面统一管理可见性与时间进度；入场与出场均使用 cubic-bezier(0,0,0,1)，组件侧栏与画布留白同步变化，不再直接绑定面板 Visibility 或画布 Margin 到最终页签状态。
 - 编辑器通过 ScenePresenter.BackgroundViewportSize 固定视频渲染尺寸，并在场景视口内居中裁剪；侧栏动画的左右留白对齐物理像素，避免视频交换链反复缩放和居中取整产生抖动。

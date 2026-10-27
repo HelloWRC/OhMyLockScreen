@@ -2,10 +2,15 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OhMyLockScreen.Controls.Editor;
+using OhMyLockScreen.Controls.Components;
+using OhMyLockScreen.Services;
+using OhMyLockScreen.Services.Scene;
 using OhMyLockScreen.Services.FeatureHost;
 using OhMyLockScreen.Services.Features.Appearance;
 using OhMyLockScreen.Shared;
 using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
+using OhMyLockScreen.Shared.Abstractions.Services.Scene;
+using OhMyLockScreen.Shared.Extensions.Scene;
 using OhMyLockScreen.Shared.Controls.Scene;
 using OhMyLockScreen.Shared.Extensions.FeatureHost;
 using OhMyLockScreen.Shared.Models.FeatureHost;
@@ -44,7 +49,15 @@ public sealed partial class App : Application
         {
             services.AddLogging();
             services.AddSingleton<IFeatureService, FeatureService>();
+            services.AddSingleton<IComponentsService, ComponentsService>();
+            services.AddSingleton(TimeProvider.System);
+            services.AddSingleton<FontCatalogService>();
             services.AddFeature<BorderFeature, BorderSettingsControl>();
+            services.AddFeature<TextFeature, TextFeatureSettingsControl>();
+            services.AddFeature<FontFeature, FontSettingsControl>();
+            services.AddComponent<TextComponent>();
+            services.AddComponent<ClockComponent>();
+            services.AddComponent<DateComponent>();
         }).Build();
         _presenter = new ComponentPresenter { Width = 240, Height = 120 };
         var root = new StackPanel { Background = new SolidColorBrush(Colors.Black), Spacing = 16 };
@@ -131,6 +144,7 @@ public sealed partial class App : Application
             _presenter.Border!.Background = new SolidColorBrush(Colors.Green);
             await ExpectPixelAsync(Colors.Green, "The default template still paints after unload and reload");
             await VerifyBorderAsync(root);
+            await VerifyTypographyAsync(root);
         }
         catch (Exception exception)
         {

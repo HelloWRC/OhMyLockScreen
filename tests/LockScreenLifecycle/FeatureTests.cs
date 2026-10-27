@@ -255,7 +255,8 @@ internal static class FeatureTests
             var registered = IAppHost.Host!.Services.GetRequiredService<FeatureRegistryService>().Registered;
             Check(registered.Select(feature => feature.Id).ToHashSet().SetEquals(
                 ["omls.features.layout.layout", "omls.features.layout.grid", "omls.features.appearance.background",
-                    "omls.features.appearance.border", "omls.features.appearance.foreground"]),
+                    "omls.features.appearance.border", "omls.features.appearance.foreground",
+                    "omls.features.appearance.text", "omls.features.appearance.font"]),
                 "The app host did not register the built-in features.");
             Check(IAppHost.Host.Services.GetRequiredService<IFeatureService>() is FeatureService, "The app host did not register the feature service.");
         });

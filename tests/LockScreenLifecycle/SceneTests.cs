@@ -29,6 +29,111 @@ internal static class SceneTests
 {
     internal static async Task RunAsync(Action<string, Action> run, Func<string, Func<Task>, Task> runAsync)
     {
+        run("Editor additions preserve declared defaults and use centered layout only as a fallback", () =>
+        {
+            using var fixture = new Fixture(services =>
+            {
+                OhMyLockScreen.Shared.Extensions.Scene.ComponentRegistryExtensions
+                    .AddComponent<ComponentDefaultFeaturesTests.DefaultFeaturesComponent>(services);
+                OhMyLockScreen.Shared.Extensions.Scene.ComponentRegistryExtensions
+                    .AddComponent<ComponentDefaultFeaturesTests.AppearanceDefaultsComponent>(services);
+            });
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            var group = layer.Children[0];
+            editor.Select(layer.Model);
+            editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!);
+            var text = (ComponentSettings)editor.SelectedModel!;
+            var centered = text.Features.Single(feature => feature.Settings is LayoutFeatureSettings).GetSettings<LayoutFeatureSettings>();
+            Check(centered.HorizontalAlignment == HorizontalAlignment.Center
+                && centered.VerticalAlignment == VerticalAlignment.Center,
+                "An existing component lost the editor's centered layout.");
+
+            var info = fixture.Registry.Find(ComponentDefaultFeaturesTests.DefaultFeaturesComponent.Id)!;
+            editor.Select(layer.Model);
+            editor.AddComponent(info);
+            var clicked = (ComponentSettings)editor.SelectedModel!;
+            var nested = editor.AddComponent(info, group, 0)!;
+            foreach (var added in new[] { clicked, nested })
+            {
+                Check(added.Features.Select(feature => feature.Id).SequenceEqual(
+                    ["omls.features.appearance.border", "omls.features.layout.layout"]),
+                    "An editor addition lost declared order or duplicated the layout.");
+                var layout = added.Features[1].GetSettings<LayoutFeatureSettings>();
+                Check(layout.HorizontalAlignment == HorizontalAlignment.Right
+                    && layout.VerticalAlignment == VerticalAlignment.Bottom
+                    && layout.Margin == new Thickness(1, 2, 3, 4),
+                    "The editor replaced a component's declared layout values.");
+            }
+
+            var appearance = editor.AddComponent(
+                fixture.Registry.Find(ComponentDefaultFeaturesTests.AppearanceDefaultsComponent.Id)!, layer, 0)!;
+            Check(appearance.Features.Select(feature => feature.Id).SequenceEqual(
+                ["omls.features.appearance.foreground", "omls.features.layout.layout"])
+                && appearance.Features[1].GetSettings<LayoutFeatureSettings>() is
+                { HorizontalAlignment: HorizontalAlignment.Center, VerticalAlignment: VerticalAlignment.Center },
+                "The editor lost appearance defaults or failed to supply the centered layout.");
+        });
+        run("Failed default feature creation does not insert a partial component or change selection", () =>
+        {
+            using var fixture = new Fixture(services =>
+                OhMyLockScreen.Shared.Extensions.Scene.ComponentRegistryExtensions
+                    .AddComponent<ComponentDefaultFeaturesTests.FailingDefaultsComponent>(services));
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            editor.Select(layer.Model);
+            var children = editor.Scene!.Layers[0].Children.ToArray();
+            var structures = 0;
+            editor.StructureChanged += (_, _) => structures++;
+            Throws<InvalidOperationException>(() => editor.AddComponent(
+                fixture.Registry.Find(ComponentDefaultFeaturesTests.FailingDefaultsComponent.Id)!));
+            Check(editor.Scene.Layers[0].Children.SequenceEqual(children)
+                && ReferenceEquals(editor.SelectedItem, layer) && structures == 0,
+                "A provider failure inserted a partial component or changed the editor state.");
+        });
+        run("Edited and removed default features persist without being restored by reload or multiple views", () =>
+        {
+            using var fixture = new Fixture(services =>
+                OhMyLockScreen.Shared.Extensions.Scene.ComponentRegistryExtensions
+                    .AddComponent<ComponentDefaultFeaturesTests.DefaultFeaturesComponent>(services));
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            var info = fixture.Registry.Find(ComponentDefaultFeaturesTests.DefaultFeaturesComponent.Id)!;
+            var added = editor.AddComponent(info, layer, 0)!;
+            added.Features[0].GetSettings<BorderFeatureSettings>().BorderThickness = new Thickness(7);
+            added.Features.RemoveAt(1);
+            fixture.Service.FlushPending();
+            var sceneId = editor.Scene!.SceneId;
+            editor.Open(sceneId);
+            var restored = editor.Scene!.Layers[0].Children[0];
+            Check(restored.Features.Count == 1
+                && restored.Features[0].GetSettings<BorderFeatureSettings>().BorderThickness == new Thickness(7),
+                "Reload lost edited defaults or restored a removed layout.");
+
+            var services = new ServiceCollection();
+            services.AddTransient<ComponentDefaultFeaturesTests.DefaultFeaturesComponent>();
+            using var provider = services.BuildServiceProvider();
+            var factory = new ComponentsService(fixture.Registry, provider, NullLogger<ComponentsService>.Instance);
+            var providersCreated = ComponentDefaultFeaturesTests.DefaultFeaturesProvider.Created;
+            var first = factory.CreateComponent(restored)!;
+            var second = factory.CreateComponent(restored)!;
+            Check(!ReferenceEquals(first, second)
+                && ComponentDefaultFeaturesTests.DefaultFeaturesProvider.Created == providersCreated
+                && restored.Features.Count == 1
+                && restored.Features[0].GetSettings<BorderFeatureSettings>().BorderThickness == new Thickness(7),
+                "Creating multiple component views regenerated defaults or changed saved features.");
+
+            restored.Features.Clear();
+            fixture.Service.FlushPending();
+            var empty = fixture.Service.Load(sceneId).Layers[0].Children[0];
+            _ = factory.CreateComponent(empty);
+            Check(empty.Features.Count == 0
+                && ComponentDefaultFeaturesTests.DefaultFeaturesProvider.Created == providersCreated,
+                "An intentionally empty feature list was repopulated.");
+        });
         run("New scenes use independent directories and default to the system background without video resources", () =>
         {
             using var fixture = new Fixture();
@@ -626,7 +731,8 @@ internal static class SceneTests
             fixture.Service.FlushPending();
             var loaded = fixture.Service.Load(editor.Scene!.SceneId);
             Check(loaded.Layers[1].Children[0].GetSettings<TextComponentSettings>().Text == "实时文本", "Text editing was not saved.");
-            Check(loaded.Layers[1].Children[0].Features[0].GetSettings<LayoutFeatureSettings>().Margin == new Thickness(75, 40, 0, 0), "Canvas editing was not saved.");
+            Check(loaded.Layers[1].Children[0].Features.Single(feature => feature.Settings is LayoutFeatureSettings)
+                .GetSettings<LayoutFeatureSettings>().Margin == new Thickness(75, 40, 0, 0), "Canvas editing was not saved.");
             editor.DeleteSelection();
             fixture.Service.FlushPending();
             Check(fixture.Service.Load(editor.Scene.SceneId).Layers[1].Children.Count == 0, "Deleting a component was not saved.");
@@ -750,13 +856,15 @@ internal static class SceneTests
             editor.Open(fixture.Service.ActiveSceneId);
             var container = editor.Scene!.Layers[0].Children[0].GetSettings<ContainerComponentSettings>();
             var component = container.Children[0];
-            var layout = component.Features[0].GetSettings<LayoutFeatureSettings>();
+            var layout = component.Features.Single(feature => feature.Settings is LayoutFeatureSettings).GetSettings<LayoutFeatureSettings>();
             layout.Margin = new Thickness(1.2, 3.4, 5.6, 7.8);
             layout.Width = 90.4;
             var before = ConfigureFileHelper.CopyObject(component);
             editor.Select(component);
             editor.MoveSelectionTo(1);
-            Check(ReferenceEquals(container.Children[1], component) && layout.Margin == before.Features[0].GetSettings<LayoutFeatureSettings>().Margin && layout.Width == 90.4, "Stack movement modified geometry rather than only the sibling order.");
+            Check(ReferenceEquals(container.Children[1], component)
+                && layout.Margin == before.Features.Single(feature => feature.Settings is LayoutFeatureSettings).GetSettings<LayoutFeatureSettings>().Margin
+                && layout.Width == 90.4, "Stack movement modified geometry rather than only the sibling order.");
         });
         run("Resizing writes integer sizes and keeps grid cell-relative margins", () =>
         {
@@ -930,7 +1038,7 @@ internal static class SceneTests
         }
 
         private readonly ServiceProvider _provider;
-        internal Fixture()
+        internal Fixture(Action<IServiceCollection>? configureServices = null)
         {
             AutoJsonPolymorphicRegistrationHelper.DiscoverAndRegisterForAssembly(typeof(SceneSettings).Assembly);
             var path = ApplicationData.Current.LocalFolder.Path;
@@ -943,6 +1051,7 @@ internal static class SceneTests
             OhMyLockScreen.Shared.Extensions.Scene.ComponentRegistryExtensions.AddComponent<ClockComponent>(services);
             OhMyLockScreen.Shared.Extensions.Scene.ComponentRegistryExtensions.AddComponent<DateComponent>(services);
             OhMyLockScreen.Shared.Extensions.Scene.ComponentRegistryExtensions.AddComponent<ContainerComponent>(services);
+            configureServices?.Invoke(services);
             _provider = services.BuildServiceProvider();
             Registry = _provider.GetRequiredService<ComponentRegistryService>();
         }

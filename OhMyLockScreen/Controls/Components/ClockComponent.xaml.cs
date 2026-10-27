@@ -2,14 +2,17 @@ using System.ComponentModel;
 using System.Globalization;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Shared.Attributes.Scene;
+using OhMyLockScreen.Shared.Abstractions.Controls;
 using Windows.UI.Xaml;
 
 namespace OhMyLockScreen.Controls.Components;
 
 [ComponentInfo(Id, "时钟", FluentIcons.Common.Icon.Clock, "显示本地时间。")]
-public sealed partial class ClockComponent : ClockComponentBase
+[ComponentDefaultFeatures(typeof(ClockDefaultFeaturesProvider))]
+public sealed partial class ClockComponent : ClockComponentBase, ITextStyleTarget
 {
     public const string Id = "omls.components.clock";
+    public FrameworkElement TextElement => TextContent;
     private static readonly CultureInfo TimeCulture = CultureInfo.GetCultureInfo("zh-CN");
     private readonly TimeProvider _timeProvider;
     private readonly DispatcherTimer _timer = new()

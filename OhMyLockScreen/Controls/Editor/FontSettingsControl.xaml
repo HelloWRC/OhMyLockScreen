@@ -1,0 +1,32 @@
+<local:FontSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Editor.FontSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor">
+    <StackPanel Style="{StaticResource EditorFormStyle}">
+        <ComboBox
+            Header="字体"
+            HorizontalAlignment="Stretch"
+            ItemsSource="{x:Bind FontFamilies}"
+            SelectedValuePath="Name"
+            SelectedValue="{x:Bind Settings.FontFamilyName, Mode=TwoWay}">
+            <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="local:FontFamilyChoice">
+                    <TextBlock
+                        Text="{x:Bind DisplayName}"
+                        FontFamily="{x:Bind Family}"
+                        TextTrimming="CharacterEllipsis"
+                        ToolTipService.ToolTip="{x:Bind DisplayName}"
+                        AutomationProperties.Name="{x:Bind DisplayName}" />
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+        <ComboBox
+            Header="字重"
+            HorizontalAlignment="Stretch"
+            ItemsSource="{x:Bind FontWeights}"
+            DisplayMemberPath="Name"
+            SelectedValuePath="Value"
+            SelectedValue="{x:Bind Settings.FontWeight, Mode=TwoWay}" />
+    </StackPanel>
+</local:FontSettingsControlBase>

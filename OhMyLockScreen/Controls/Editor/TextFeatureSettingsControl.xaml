@@ -1,0 +1,46 @@
+<local:TextFeatureSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Editor.TextFeatureSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls">
+    <StackPanel Style="{StaticResource EditorFormStyle}">
+        <muxc:NumberBox
+            Header="字号"
+            Minimum="1"
+            Maximum="512"
+            Style="{StaticResource EditorNumberStyle}"
+            Value="{Binding FontSize, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+        <muxc:NumberBox
+            Header="行高"
+            ToolTipService.ToolTip="逻辑像素，0 表示自动行高"
+            Style="{StaticResource EditorNumberStyle}"
+            Value="{Binding LineHeight, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+        <muxc:NumberBox
+            Header="字符间距"
+            Minimum="-1000"
+            ToolTipService.ToolTip="单位为千分之一 em，100 表示字号的 10%"
+            Style="{StaticResource EditorNumberStyle}"
+            Value="{Binding CharacterSpacing, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+        <ComboBox
+            Header="文本对齐"
+            HorizontalAlignment="Stretch"
+            ItemsSource="{x:Bind Alignments}"
+            DisplayMemberPath="Name"
+            SelectedValuePath="Value"
+            SelectedValue="{x:Bind Settings.TextAlignment, Mode=TwoWay}" />
+        <ComboBox
+            Header="字体样式"
+            HorizontalAlignment="Stretch"
+            ItemsSource="{x:Bind FontStyles}"
+            DisplayMemberPath="Name"
+            SelectedValuePath="Value"
+            SelectedValue="{x:Bind Settings.FontStyle, Mode=TwoWay}" />
+        <CheckBox
+            Content="下划线"
+            IsChecked="{x:Bind Settings.Underline, Mode=TwoWay}" />
+        <CheckBox
+            Content="删除线"
+            IsChecked="{x:Bind Settings.Strikethrough, Mode=TwoWay}" />
+    </StackPanel>
+</local:TextFeatureSettingsControlBase>

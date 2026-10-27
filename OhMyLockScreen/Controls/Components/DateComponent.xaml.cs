@@ -1,13 +1,16 @@
 using System.Globalization;
 using OhMyLockScreen.Shared.Attributes.Scene;
+using OhMyLockScreen.Shared.Abstractions.Controls;
 using Windows.UI.Xaml;
 
 namespace OhMyLockScreen.Controls.Components;
 
 [ComponentInfo(Id, "日期", FluentIcons.Common.Icon.Calendar, "显示本地日期。")]
-public sealed partial class DateComponent : DateComponentBase
+[ComponentDefaultFeatures(typeof(DateDefaultFeaturesProvider))]
+public sealed partial class DateComponent : DateComponentBase, ITextStyleTarget
 {
     public const string Id = "omls.components.date";
+    public FrameworkElement TextElement => TextContent;
     private static readonly CultureInfo DateCulture = CultureInfo.GetCultureInfo("zh-CN");
     private readonly TimeProvider _timeProvider;
     private readonly DispatcherTimer _timer = new()

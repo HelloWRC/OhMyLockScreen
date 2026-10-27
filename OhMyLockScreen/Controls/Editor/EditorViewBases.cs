@@ -9,3 +9,5 @@ public abstract class GridLayoutSettingsControlBase : FeatureSettingsControlBase
 public abstract class BackgroundSettingsControlBase : FeatureSettingsControlBase<BackgroundFeatureSettings>;
 public abstract class BorderSettingsControlBase : FeatureSettingsControlBase<BorderFeatureSettings>;
 public abstract class ForegroundSettingsControlBase : FeatureSettingsControlBase<ForegroundFeatureSettings>;
+public abstract class TextFeatureSettingsControlBase : FeatureSettingsControlBase<TextFeatureSettings>;
+public abstract class FontSettingsControlBase : FeatureSettingsControlBase<FontFeatureSettings>;

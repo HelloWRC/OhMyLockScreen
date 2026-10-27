@@ -4,13 +4,14 @@ using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using DynamicData.Binding;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Data;
 
 namespace OhMyLockScreen.Shared.Helpers;
 
 /// <summary>将可观测属性单向同步到依赖属性，并提供可释放的订阅。</summary>
 /// <remarks>
 /// 调用方应在目标所属的 UI 线程上建立、释放绑定和更新源属性；此类不负责线程调度。
-/// 绑定会立即同步当前值。释放返回的订阅会停止同步，将目标恢复到绑定前的值，且可重复释放。
+/// 绑定会立即同步当前值。释放订阅时恢复原绑定或本地值；原本无本地值时清除覆盖，且可重复释放。
 /// 调用方负责管理订阅的生命周期，例如将其加入 CompositeDisposable。
 /// </remarks>
 public static class DependencyPropertyBindingHelper
@@ -74,7 +75,25 @@ public static class DependencyPropertyBindingHelper
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(targetProperty);
 
-        var originalValue = target.GetValue(targetProperty);
+        var originalValue = target.ReadLocalValue(targetProperty);
+        var originalBinding = (target as FrameworkElement)?.GetBindingExpression(targetProperty)?.ParentBinding;
+
+        void Restore()
+        {
+            if (originalBinding != null)
+            {
+                BindingOperations.SetBinding(target, targetProperty, originalBinding);
+            }
+            else if (ReferenceEquals(originalValue, DependencyProperty.UnsetValue))
+            {
+                target.ClearValue(targetProperty);
+            }
+            else
+            {
+                target.SetValue(targetProperty, originalValue);
+            }
+        }
+
         IDisposable subscription;
         try
         {
@@ -82,14 +101,14 @@ public static class DependencyPropertyBindingHelper
         }
         catch
         {
-            target.SetValue(targetProperty, originalValue);
+            Restore();
             throw;
         }
 
         return Disposable.Create(() =>
         {
             subscription.Dispose();
-            target.SetValue(targetProperty, originalValue);
+            Restore();
         });
     }
 }

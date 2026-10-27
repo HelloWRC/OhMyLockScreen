@@ -1,5 +1,6 @@
 using OhMyLockScreen.Models.Features.Layout;
 using OhMyLockScreen.Models.Scene;
+using OhMyLockScreen.Controls.Components;
 using OhMyLockScreen.Shared.Abstractions.Models.Scene;
 using OhMyLockScreen.Shared.Models.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
@@ -28,24 +29,8 @@ internal static class DefaultSceneFactory
                         {
                             Children =
                             {
-                                new ComponentSettings
-                                {
-                                    Id = "omls.components.clock",
-                                    Settings = new ClockComponentSettings(),
-                                    Features =
-                                    {
-                                        Layout(HorizontalAlignment.Center)
-                                    }
-                                },
-                                new ComponentSettings
-                                {
-                                    Id = "omls.components.date",
-                                    Settings = new DateComponentSettings(),
-                                    Features =
-                                    {
-                                        Layout(HorizontalAlignment.Center)
-                                    }
-                                }
+                                TextComponent(ClockComponent.Id, new ClockComponentSettings(), new ClockDefaultFeaturesProvider()),
+                                TextComponent(DateComponent.Id, new DateComponentSettings(), new DateDefaultFeaturesProvider())
                             }
                         },
                         Features =
@@ -57,6 +42,19 @@ internal static class DefaultSceneFactory
             }
         }
     };
+
+    private static ComponentSettings TextComponent(string id, IComponentSettings settings, IComponentDefaultFeaturesProvider defaults)
+    {
+        var component = new ComponentSettings { Id = id, Settings = settings };
+        foreach (var feature in defaults.CreateDefaultFeatures())
+        {
+            component.Features.Add(feature);
+        }
+
+        component.Features.Add(Layout(HorizontalAlignment.Center));
+        return component;
+    }
+
     private static FeatureInfo Layout(HorizontalAlignment alignment, Thickness margin = default) => new()
     {
         Id = "omls.features.layout.layout",

@@ -22,10 +22,24 @@
     <Content Include="../../OhMyLockScreen/Assets/*.png" Link="Assets/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Models/Features/**/*.cs" Link="Models/Features/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BorderFeature.cs" Link="Services/BorderFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/TextFeature.cs" Link="Services/TextFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/FontFeature.cs" Link="Services/FontFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/FontCatalogService.cs" Link="Services/FontCatalogService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/FeatureHost/FeatureService.cs" Link="Services/FeatureService.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Scene/ComponentsService.cs" Link="Services/ComponentsService.cs" />
+    <Compile Include="../../OhMyLockScreen/Models/Scene/*.cs" Link="Models/Scene/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Controls/Components/*Component.xaml.cs" Link="Controls/Components/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Controls/Components/ComponentViewBases.cs" Link="Controls/Components/ComponentViewBases.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/Components/TextDefaultFeaturesProviders.cs" Link="Controls/Components/TextDefaultFeaturesProviders.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/Components/*Component.xaml" Link="Controls/Components/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/ViewModels/BorderSettingsViewModel.cs" Link="ViewModels/BorderSettingsViewModel.cs" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorViewBases.cs" Link="Controls/Editor/EditorViewBases.cs" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorConverters.cs" Link="Controls/Editor/EditorConverters.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorChoice.cs" Link="Controls/Editor/EditorChoice.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/TextFeatureSettingsControl.xaml.cs" Link="Controls/Editor/TextFeatureSettingsControl.xaml.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/Editor/TextFeatureSettingsControl.xaml" Link="Controls/Editor/TextFeatureSettingsControl.xaml" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/FontSettingsControl.xaml.cs" Link="Controls/Editor/FontSettingsControl.xaml.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/Editor/FontSettingsControl.xaml" Link="Controls/Editor/FontSettingsControl.xaml" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/BorderSettingsControl.xaml.cs" Link="Controls/Editor/BorderSettingsControl.xaml.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/BorderSettingsControl.xaml" Link="Controls/Editor/BorderSettingsControl.xaml" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/EditorResources.xaml" Link="Controls/Editor/EditorResources.xaml" />

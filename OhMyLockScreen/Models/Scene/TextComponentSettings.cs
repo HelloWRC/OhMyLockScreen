@@ -8,6 +8,4 @@ namespace OhMyLockScreen.Models.Scene;
 public partial class TextComponentSettings : ObservableObject, IComponentSettings
 {
     [ObservableProperty] private string _text = "Hello, OhMyLockScreen!";
-
-    [ObservableProperty] private double _fontSize = 32;
 }

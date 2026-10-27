@@ -55,13 +55,40 @@ namespace Windows.UI.Xaml
         public void SetValue(DependencyProperty property, object? value)
         {
             var previous = GetValue(property);
+            if (this is FrameworkElement element)
+            {
+                element.Bindings.Remove(property);
+            }
+
+            _values[property] = value;
             if (Equals(previous, value))
             {
                 return;
             }
 
-            _values[property] = value;
             property.Metadata.Callback?.Invoke(this, new DependencyPropertyChangedEventArgs(previous, value));
+        }
+
+        public object? ReadLocalValue(DependencyProperty property)
+        {
+            property.ValidateOwner(this);
+            return _values.TryGetValue(property, out var value) ? value : DependencyProperty.UnsetValue;
+        }
+
+        public void ClearValue(DependencyProperty property)
+        {
+            var previous = GetValue(property);
+            _values.Remove(property);
+            if (this is FrameworkElement element)
+            {
+                element.Bindings.Remove(property);
+            }
+
+            var current = GetValue(property);
+            if (!Equals(previous, current))
+            {
+                property.Metadata.Callback?.Invoke(this, new DependencyPropertyChangedEventArgs(previous, current));
+            }
         }
     }
 
@@ -197,6 +224,8 @@ namespace Windows.UI.Xaml
         public Dictionary<DependencyProperty, Data.Binding> Bindings { get; } = [];
 
         public void SetBinding(DependencyProperty property, Data.Binding binding) => Bindings[property] = binding;
+        public Data.BindingExpression? GetBindingExpression(DependencyProperty property) =>
+            Bindings.TryGetValue(property, out var binding) ? new Data.BindingExpression(binding) : null;
         public void Load() => Loaded?.Invoke(this, new RoutedEventArgs());
         public void Unload() => Unloaded?.Invoke(this, new RoutedEventArgs());
         public void RaiseLayoutUpdated() => LayoutUpdated?.Invoke(this, EventArgs.Empty);
@@ -205,6 +234,17 @@ namespace Windows.UI.Xaml
 
 namespace Windows.UI.Xaml.Data
 {
+    public sealed class BindingExpression(Binding binding)
+    {
+        public Binding ParentBinding { get; } = binding;
+    }
+
+    public static class BindingOperations
+    {
+        public static void SetBinding(DependencyObject target, DependencyProperty property, Binding binding) =>
+            ((FrameworkElement)target).SetBinding(property, binding);
+    }
+
     public interface IValueConverter
     {
         object Convert(object value, Type targetType, object parameter, string language);
@@ -250,7 +290,7 @@ namespace Windows.UI.Xaml.Controls
         }
     }
 
-    public class Control : FrameworkElement
+    public partial class Control : FrameworkElement
     {
         public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
             nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(Control), new PropertyMetadata(null));
@@ -288,7 +328,7 @@ namespace Windows.UI.Xaml.Controls
         }
     }
 
-    public class ContentPresenter : FrameworkElement
+    public partial class ContentPresenter : FrameworkElement
     {
         public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
             nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(ContentPresenter), new PropertyMetadata(null));

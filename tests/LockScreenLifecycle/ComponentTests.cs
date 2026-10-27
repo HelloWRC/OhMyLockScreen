@@ -31,6 +31,7 @@ internal static class ComponentTests
 {
     internal static void Run(Action<string, Action> run)
     {
+        ComponentDefaultFeaturesTests.Run(run);
         run("Component registration validates metadata and container contracts without partial registration", () =>
         {
             var services = new ServiceCollection();
@@ -374,25 +375,25 @@ internal static class ComponentTests
             Check(presenter.Content is TextComponent, "Reload ignored the latest settings.");
             presenter.Unload();
         });
-        run("Text example binds to observable text and font size settings", () =>
+        run("Text component binds content and exposes a text target without local typography", () =>
         {
             var factory = CreateHost().Services.GetRequiredService<IComponentsService>();
             var settings = new TextComponentSettings
             {
-                Text = "sample",
-                FontSize = 48
+                Text = "sample"
             };
             var component = (TextComponent)factory.CreateComponent(new ComponentSettings { Id = TextComponent.Id, Settings = settings })!;
             var text = (TextBlock)component.Content!;
             var textBinding = text.Bindings[TextBlock.TextProperty];
-            var sizeBinding = text.Bindings[TextBlock.FontSizeProperty];
             Check(ReferenceEquals(textBinding.Source, settings) && textBinding.Path!.Path == nameof(settings.Text) && textBinding.Mode == BindingMode.OneWay, "Text binding does not target component settings.");
-            Check(ReferenceEquals(sizeBinding.Source, settings) && sizeBinding.Path!.Path == nameof(settings.FontSize), "Font size binding does not target component settings.");
+            Check(ReferenceEquals(component.TextElement, text)
+                && ReferenceEquals(text.ReadLocalValue(TextBlock.FontSizeProperty), DependencyProperty.UnsetValue)
+                && !text.Bindings.ContainsKey(TextBlock.FontSizeProperty),
+                "The component retained a local font size or did not expose its text target.");
             var notifications = new List<string?>();
             settings.PropertyChanged += (_, args) => notifications.Add(args.PropertyName);
             settings.Text = "changed";
-            settings.FontSize = 72;
-            Check(notifications.SequenceEqual([nameof(settings.Text), nameof(settings.FontSize)]), "Text settings changes did not notify bindings.");
+            Check(notifications.SequenceEqual([nameof(settings.Text)]), "Text settings changes did not notify bindings.");
         });
         run("Clock settings and local time update across midnight and release their timer on unload", () =>
         {
@@ -496,14 +497,28 @@ internal static class ComponentTests
                 Id = "test.container"
             };
             var container = (TestContainerComponent)factory.CreateComponent(root)!;
-            container.Settings.Children.Add(new ComponentSettings { Id = "test.container", Settings = new TestContainerSettings { Children = [new ComponentSettings { Id = TextComponent.Id, Settings = new TextComponentSettings { Text = "nested", FontSize = 56 } }] } });
+            container.Settings.Children.Add(new ComponentSettings
+            {
+                Id = "test.container",
+                Settings = new TestContainerSettings
+                {
+                    Children =
+                    [
+                        new ComponentSettings
+                        {
+                            Id = TextComponent.Id,
+                            Settings = new TextComponentSettings { Text = "nested" }
+                        }
+                    ]
+                }
+            });
             var path = Path.Combine(ApplicationData.Current.LocalFolder.Path, "components.json");
             ConfigureFileHelper.SaveConfig(path, root, true);
             var restored = ConfigureFileHelper.LoadConfigUnWrapped<ComponentSettings>(path);
             var outer = restored.GetSettings<TestContainerSettings>();
             var inner = outer.Children[0].GetSettings<TestContainerSettings>();
             var text = inner.Children[0].GetSettings<TextComponentSettings>();
-            Check(text.Text == "nested" && text.FontSize == 56 && File.ReadAllText(path).Contains("\"$type\""), "Nested interface settings did not round trip.");
+            Check(text.Text == "nested" && File.ReadAllText(path).Contains("\"$type\""), "Nested interface settings did not round trip.");
             Check(!ReferenceEquals(container.Settings, outer), "Round trip shared configuration objects.");
             var restoredContainer = (TestContainerComponent)factory.CreateComponent(restored)!;
             Check(ReferenceEquals(outer, restoredContainer.Settings), "Container creation replaced its children.");

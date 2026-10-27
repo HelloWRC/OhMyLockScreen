@@ -5,6 +5,5 @@
     xmlns:local="using:OhMyLockScreen.Controls.Components">
     <TextBlock
         x:Name="TextContent"
-        Text="{x:Bind Settings.Text, Mode=OneWay}"
-        FontSize="{x:Bind Settings.FontSize, Mode=OneWay}" />
+        Text="{x:Bind Settings.Text, Mode=OneWay}" />
 </local:TextComponentBase>

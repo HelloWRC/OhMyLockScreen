@@ -3,7 +3,7 @@ namespace Windows.UI.Text
 {
     public static class FontWeights
     {
-        public static object Bold { get; } = new();
+        public static FontWeight Bold => new() { Weight = 700 };
     }
 }
 
@@ -17,6 +17,8 @@ namespace OhMyLockScreen.Controls.Editor
     public sealed class BackgroundSettingsControl : BackgroundSettingsControlBase;
     public sealed class BorderSettingsControl : BorderSettingsControlBase;
     public sealed class ForegroundSettingsControl : ForegroundSettingsControlBase;
+    public sealed class TextFeatureSettingsControl : TextFeatureSettingsControlBase;
+    public sealed class FontSettingsControl : FontSettingsControlBase;
     public sealed class LayoutSettingsControl : LayoutSettingsControlBase;
     public sealed class GridLayoutSettingsControl : GridLayoutSettingsControlBase;
 }
@@ -33,23 +35,24 @@ namespace OhMyLockScreen.Controls.Components
 
     public sealed partial class TextComponent
     {
+        private Windows.UI.Xaml.Controls.TextBlock TextContent { get; set; } = null!;
         private new TestCompiledBindings Bindings { get; set; } = null!;
 
         private void InitializeComponent()
         {
             // Stand-in for generated XAML bindings. The UWP build verifies the actual markup.
-            var text = new Windows.UI.Xaml.Controls.TextBlock();
+            var text = TextContent = new Windows.UI.Xaml.Controls.TextBlock();
             Content = text;
             Bindings = new TestCompiledBindings(() =>
             {
                 text.SetBinding(Windows.UI.Xaml.Controls.TextBlock.TextProperty, new Windows.UI.Xaml.Data.Binding { Source = Settings, Path = new Windows.UI.Xaml.PropertyPath(nameof(Settings.Text)), Mode = Windows.UI.Xaml.Data.BindingMode.OneWay });
-                text.SetBinding(Windows.UI.Xaml.Controls.TextBlock.FontSizeProperty, new Windows.UI.Xaml.Data.Binding { Source = Settings, Path = new Windows.UI.Xaml.PropertyPath(nameof(Settings.FontSize)), Mode = Windows.UI.Xaml.Data.BindingMode.OneWay });
             });
         }
     }
 
     public sealed partial class ClockComponent
     {
+        private Windows.UI.Xaml.Controls.TextBlock TextContent { get; } = new();
         private new TestCompiledBindings Bindings
         {
             get;
@@ -59,6 +62,7 @@ namespace OhMyLockScreen.Controls.Components
 
         private void InitializeComponent()
         {
+            Content = TextContent;
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
         }
@@ -66,11 +70,12 @@ namespace OhMyLockScreen.Controls.Components
 
     public sealed partial class DateComponent
     {
+        private Windows.UI.Xaml.Controls.TextBlock TextContent { get; set; } = null!;
         private new TestCompiledBindings Bindings { get; set; } = null!;
 
         private void InitializeComponent()
         {
-            var text = new Windows.UI.Xaml.Controls.TextBlock();
+            var text = TextContent = new Windows.UI.Xaml.Controls.TextBlock();
             Content = text;
             Bindings = new TestCompiledBindings(() => text.SetBinding(
                 Windows.UI.Xaml.Controls.TextBlock.TextProperty,

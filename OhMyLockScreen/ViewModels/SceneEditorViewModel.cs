@@ -404,16 +404,19 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             return null;
         }
 
-        var component = new ComponentSettings
+        var component = info.CreateSettings();
+        if (!component.Features.Any(feature => feature.Id == "omls.features.layout.layout"))
         {
-            Id = info.Id
-        };
-        if (info.ClientSettingsType != null)
-        {
-            component.GetSettingsOrCreate(info.ClientSettingsType);
+            component.Features.Add(new FeatureInfo
+            {
+                Id = "omls.features.layout.layout",
+                Settings = new LayoutFeatureSettings
+                {
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            });
         }
-
-        component.Features.Add(new FeatureInfo { Id = "omls.features.layout.layout", Settings = new LayoutFeatureSettings { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
         if (!SceneHierarchyEditing.CanAccept(parent.Model, component))
         {
             return null;

@@ -737,7 +737,7 @@ namespace Windows.UI.Xaml.Controls
         }
     }
 
-    public sealed class TextBlock : FrameworkElement
+    public sealed partial class TextBlock : FrameworkElement
     {
         public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
             nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(TextBlock), new PropertyMetadata(null));
@@ -746,11 +746,6 @@ namespace Windows.UI.Xaml.Controls
         {
             get => (Windows.UI.Xaml.Media.Brush?)GetValue(ForegroundProperty);
             set => SetValue(ForegroundProperty, value);
-        }
-
-        public object? FontWeight
-        {
-            get; set;
         }
 
         public static readonly DependencyProperty TextProperty = DependencyProperty.Register(nameof(Text), typeof(string), typeof(TextBlock), new PropertyMetadata(string.Empty));
@@ -765,7 +760,7 @@ namespace Windows.UI.Xaml.Controls
         }
     }
 
-    public sealed class RichTextBlock : FrameworkElement
+    public sealed partial class RichTextBlock : FrameworkElement
     {
         public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
             nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(RichTextBlock), new PropertyMetadata(null));

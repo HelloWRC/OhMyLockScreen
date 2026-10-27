@@ -63,8 +63,21 @@ public static class ComponentRegistryExtensions
             throw new ArgumentException($"组件 {componentType.FullName} 的容器标记与容器设置接口不一致。");
         }
 
+        var defaultFeaturesProviderType = componentType.GetCustomAttribute<ComponentDefaultFeaturesAttribute>()?.ProviderType;
+        if (defaultFeaturesProviderType != null
+            && (!defaultFeaturesProviderType.IsClass
+                || defaultFeaturesProviderType.IsAbstract
+                || defaultFeaturesProviderType.ContainsGenericParameters
+                || !typeof(IComponentDefaultFeaturesProvider).IsAssignableFrom(defaultFeaturesProviderType)
+                || defaultFeaturesProviderType.GetConstructor(Type.EmptyTypes) == null))
+        {
+            throw new ArgumentException($"组件 {componentType.FullName} 的默认特性提供器必须是实现 IComponentDefaultFeaturesProvider 且具有公开无参构造函数的具体类型。");
+        }
+
         services.TryAddSingleton<ComponentRegistryService>();
-        services.AddSingleton(new ComponentRegisterInfo(info.Id, info.Name, info.Description, componentType, clientSettingsType, settingsType, isContainer, info.IconGlyph, info.Icon));
+        services.AddSingleton(new ComponentRegisterInfo(
+            info.Id, info.Name, info.Description, componentType, clientSettingsType, settingsType, isContainer,
+            info.IconGlyph, info.Icon, defaultFeaturesProviderType));
         services.AddTransient(componentType);
         if (settingsType != null)
         {

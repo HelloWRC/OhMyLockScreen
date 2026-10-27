@@ -6,7 +6,6 @@
     Loaded="OnLoaded"
     Unloaded="OnUnloaded">
     <TextBlock
-        Text="{x:Bind DisplayText, Mode=OneWay}"
-        FontWeight="Bold"
-        FontSize="{x:Bind Settings.FontSize, Mode=OneWay}" />
+        x:Name="TextContent"
+        Text="{x:Bind DisplayText, Mode=OneWay}" />
 </local:ClockComponentBase>

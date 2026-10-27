@@ -38,6 +38,7 @@ public sealed partial class App
         services.AddSingleton(provider => new SettingsService(provider.GetRequiredService<ILogger<SettingsService>>(), Path.Combine(ApplicationData.Current.LocalFolder.Path, "Settings.json")));
         services.AddSingleton<ISceneService>(provider => new SceneService(provider.GetRequiredService<SettingsService>(), provider.GetRequiredService<ILogger<SceneService>>(), ApplicationData.Current.LocalFolder.Path));
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<FontCatalogService>();
         services.AddTransient<SceneEditorViewModel>();
         services.AddSingleton<ComponentRegistryService>();
         services.AddSingleton<FeatureRegistryService>();
@@ -54,5 +55,7 @@ public sealed partial class App
         services.AddFeature<BackgroundFeature, BackgroundSettingsControl>();
         services.AddFeature<BorderFeature, BorderSettingsControl>();
         services.AddFeature<ForegroundFeature, ForegroundSettingsControl>();
+        services.AddFeature<TextFeature, TextFeatureSettingsControl>();
+        services.AddFeature<FontFeature, FontSettingsControl>();
     }
 }

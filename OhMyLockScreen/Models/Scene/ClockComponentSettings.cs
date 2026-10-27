@@ -11,6 +11,4 @@ public partial class ClockComponentSettings : ObservableObject, IComponentSettin
     private bool _showSeconds;
     [ObservableProperty]
     private bool _flashSeparator;
-    [ObservableProperty]
-    private double _fontSize = 64;
 }
