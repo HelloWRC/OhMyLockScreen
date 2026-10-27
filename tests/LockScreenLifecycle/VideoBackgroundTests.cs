@@ -16,11 +16,80 @@ using OhMyLockScreen.Shared.Services.FeatureHost;
 using Windows.Storage;
 using Windows.Foundation;
 using Windows.UI.Xaml;
+using VideoView = OhMyLockScreen.Shared.Controls.Scene.BackgroundVideoView;
 
 internal static class VideoBackgroundTests
 {
     internal static void Run(Action<string, Action> run)
     {
+        run("Repeated video toggles and scene switches release players before detaching and disposing GPU resources", () =>
+        {
+            using var fixture = new Fixture();
+            var secondScene = fixture.CreateVideoScene();
+            for (var cycle = 0; cycle < 30; cycle++)
+            {
+                fixture.Presenter.Scene = fixture.Scene;
+                fixture.Scene.Background.Mode = BackgroundMode.Video;
+                fixture.View.Initialize("toggle");
+                var view = fixture.View;
+                var player = view.MediaPlayer!;
+                var chain = view.GetSwapChain()!;
+                chain.BeforeDispose = () => Check(player.IsDisposed && player.LibVlc.IsDisposed && player.Subscribers == 0,
+                    "GPU resources were released before VLC stopped using them.");
+                player.Finish();
+                fixture.Scene.Background.Mode = BackgroundMode.None;
+                view.Load();
+                view.Resize(2560, 1440);
+                Check(chain.IsDisposed && view.GetSwapChain() == null, "Disabling video retained GPU resources.");
+
+                fixture.Scene.Background.Mode = BackgroundMode.Video;
+                fixture.View.Initialize("scene-one");
+                var previous = fixture.View.GetSwapChain()!;
+                fixture.Presenter.Scene = secondScene;
+                fixture.View.Initialize("scene-two");
+                fixture.Presenter.Dispatcher.Drain();
+                Check(previous.IsDisposed, "Switching scenes retained the old swapchain.");
+                Check(VideoSwapChain.Created.Count(resource => !resource.IsDisposed) == 1,
+                    "Repeated toggles and switches accumulated GPU resources.");
+            }
+
+            fixture.Presenter.Unload();
+            Check(VideoSwapChain.Created.All(resource => resource.IsDisposed && !resource.IsAttached),
+                "Unloading retained a video surface.");
+        });
+
+        run("A video surface unloading first stops VLC before destroying its swapchain and can reload", () =>
+        {
+            using var fixture = new Fixture();
+            var view = fixture.View;
+            view.Initialize("child-unload");
+            var player = view.MediaPlayer!;
+            var chain = view.GetSwapChain()!;
+            chain.BeforeDispose = () => Check(player.IsDisposed && player.LibVlc.IsDisposed,
+                "Child Unloaded destroyed pointers still used by VLC.");
+            view.Unload();
+            fixture.Application.Resume();
+            fixture.Presenter.Dispatcher.Drain();
+            Check(chain.IsDisposed && view.MediaPlayer == null, "Resume reused a destroyed swapchain.");
+            view.Load();
+            Check(view.MediaPlayer is { IsPlaying: true, IsDisposed: false }
+                && !ReferenceEquals(chain, view.GetSwapChain()), "Reload did not create a new rendering lifetime.");
+        });
+
+        run("Video surface initialization failure removes the surface and reports once", () =>
+        {
+            using var fixture = new Fixture();
+            var failures = 0;
+            fixture.Presenter.BackgroundFailed += (_, _) => failures++;
+            var view = fixture.View;
+            VideoSwapChain.FailOnCreate = true;
+            view.Initialize("failed-device");
+            view.Load();
+            Check(failures == 1 && view.GetSwapChain() == null
+                && fixture.Presenter.BackgroundLayerElement.Children.Count == 0,
+                "A failed D3D initialization retained a surface or kept its event handlers.");
+        });
+
         run("Editor viewport changes clip a fixed video surface without changing its crop or restarting playback", () =>
         {
             using var fixture = new Fixture();
@@ -59,7 +128,7 @@ internal static class VideoBackgroundTests
             var presenter = fixture.Presenter;
             var view = fixture.View;
             Check(view.MediaPlayer == null, "Playback started before the swapchain was initialized.");
-            Check(!view.IsHitTestVisible && !view.IsTabStop, "The background intercepted input.");
+            Check(!view.IsHitTestVisible, "The background intercepted input.");
             view.Initialize("--winrt-swapchain=first", "--winrt-d3dcontext=first");
             var player = view.MediaPlayer!;
             Check(player.LibVlc.Options.SequenceEqual(["--winrt-swapchain=first", "--winrt-d3dcontext=first"]),
@@ -423,6 +492,17 @@ internal static class VideoBackgroundTests
             var path = Path.Combine(assets, name);
             File.WriteAllText(path, "simulated video");
             return path;
+        }
+
+        internal SceneSettings CreateVideoScene()
+        {
+            var scene = _scenes.Create("Second video scene");
+            var assets = Path.Combine(_scenes.GetSceneDirectory(scene.SceneId), "Assets");
+            Directory.CreateDirectory(assets);
+            File.WriteAllText(Path.Combine(assets, "second.mp4"), "simulated video");
+            scene.Background.Mode = BackgroundMode.Video;
+            scene.Background.Source = "Assets/second.mp4";
+            return scene;
         }
 
         public void Dispose()

@@ -18,7 +18,7 @@ public sealed partial class ScenePresenter
     private SceneSettings? _subscribedScene;
     private BackgroundSettings? _subscribedBackground;
     private Application? _backgroundApplication;
-    private VideoView? _videoView;
+    private BackgroundVideoView? _videoView;
     private LibVLC? _libVlc;
     private MediaPlayer? _backgroundPlayer;
     private IDisposable? _backgroundEvents;
@@ -146,8 +146,10 @@ public sealed partial class ScenePresenter
 
             ReleaseBackground();
             _backgroundPath = path;
-            _videoView = new VideoView { IsHitTestVisible = false, IsTabStop = false };
+            _videoView = new BackgroundVideoView { IsHitTestVisible = false };
             _videoView.Initialized += OnBackgroundInitialized;
+            _videoView.Releasing += OnBackgroundReleasing;
+            _videoView.Failed += OnBackgroundInitializationFailed;
             BackgroundLayer.Visibility = Visibility.Visible;
             BackgroundLayer.Children.Add(_videoView);
         }
@@ -167,6 +169,23 @@ public sealed partial class ScenePresenter
         ReleaseBackgroundPlayer();
         _swapChainOptions = args.SwapChainOptions;
         StartBackgroundPlayer();
+    }
+
+    private void OnBackgroundReleasing(object? sender, EventArgs args)
+    {
+        if (ReferenceEquals(sender, _videoView))
+        {
+            _swapChainOptions = null;
+            ReleaseBackgroundPlayer();
+        }
+    }
+
+    private void OnBackgroundInitializationFailed(object? sender, string message)
+    {
+        if (ReferenceEquals(sender, _videoView))
+        {
+            FailBackground(message);
+        }
     }
 
     private void StartBackgroundPlayer()
@@ -332,6 +351,8 @@ public sealed partial class ScenePresenter
         {
             _backgroundPlayer?.SetPause(true);
         }
+
+        _videoView?.Trim();
     }
 
     private void OnBackgroundResuming(object? sender, object args)
@@ -393,36 +414,57 @@ public sealed partial class ScenePresenter
             _videoView.MediaPlayer = null;
         }
 
-        if (player != null)
-        {
-            try
-            {
-                player.Stop();
-            }
-            finally
-            {
-                player.Dispose();
-            }
-        }
-
-        _libVlc?.Dispose();
+        var libVlc = _libVlc;
         _libVlc = null;
         _resumeBackground = false;
         _backgroundRestartPending = false;
+        try
+        {
+            if (player != null)
+            {
+                try
+                {
+                    player.Stop();
+                }
+                finally
+                {
+                    player.Dispose();
+                }
+            }
+        }
+        finally
+        {
+            libVlc?.Dispose();
+        }
     }
 
     private void ReleaseBackground()
     {
-        ReleaseBackgroundPlayer();
-        if (_videoView != null)
+        var view = _videoView;
+        try
         {
-            _videoView.Initialized -= OnBackgroundInitialized;
-            BackgroundLayer.Children.Remove(_videoView);
-            _videoView = null;
+            ReleaseBackgroundPlayer();
         }
-
-        _backgroundPath = null;
-        _swapChainOptions = null;
-        BackgroundLayer.Visibility = Visibility.Collapsed;
+        finally
+        {
+            _videoView = null;
+            _backgroundPath = null;
+            _swapChainOptions = null;
+            BackgroundLayer.Visibility = Visibility.Collapsed;
+            if (view != null)
+            {
+                view.Initialized -= OnBackgroundInitialized;
+                view.Releasing -= OnBackgroundReleasing;
+                view.Failed -= OnBackgroundInitializationFailed;
+                try
+                {
+                    view.Dispose();
+                }
+                finally
+                {
+                    BackgroundLayer.Children.Remove(view);
+                }
+            }
+        }
     }
 }

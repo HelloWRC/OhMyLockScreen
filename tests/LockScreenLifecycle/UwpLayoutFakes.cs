@@ -103,6 +103,7 @@ namespace Windows.UI.Xaml.Controls
 
     public class Panel : FrameworkElement
     {
+        public bool IsHitTestVisible { get; set; }
         public List<UIElement> Children { get; } = [];
     }
     public class Canvas : Panel

@@ -22,6 +22,8 @@ internal sealed class TestEnvironment : IDisposable
         Storyboard.LastCreated = null;
         Storyboard.FailOnBegin = false;
         LibVLCSharp.Shared.MediaPlayer.FailOnPlay = false;
+        OhMyLockScreen.Shared.Controls.Scene.VideoSwapChain.Created.Clear();
+        OhMyLockScreen.Shared.Controls.Scene.VideoSwapChain.FailOnCreate = false;
         DispatcherTimer.Created.Clear();
         ConfigureFileHelper.Errors.Clear();
         ConfigureFileHelper.IsBackupEnabled = true;

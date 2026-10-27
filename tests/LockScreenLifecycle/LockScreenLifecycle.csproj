@@ -21,6 +21,7 @@
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneSaveToastTracker.cs" Link="Helpers/UI/SceneSaveToastTracker.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/Scene/VideoSwapChain.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/ToastCard.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BrushEditControl.xaml.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BrushGradientAdorner.cs" />

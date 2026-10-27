@@ -1,5 +1,10 @@
 namespace LibVLCSharp.Shared
 {
+    public interface IVideoView
+    {
+        MediaPlayer? MediaPlayer { get; set; }
+    }
+
     public enum FromType
     {
         FromPath
@@ -140,12 +145,4 @@ namespace LibVLCSharp.Platforms.Windows
         public string[] SwapChainOptions { get; } = options;
     }
 
-    public sealed class VideoView : global::Windows.UI.Xaml.Controls.Control
-    {
-        public bool IsHitTestVisible { get; set; }
-        public bool IsTabStop { get; set; }
-        public LibVLCSharp.Shared.MediaPlayer? MediaPlayer { get; set; }
-        public event EventHandler<InitializedEventArgs>? Initialized;
-        public void Initialize(params string[] options) => Initialized?.Invoke(this, new InitializedEventArgs(options));
-    }
 }
