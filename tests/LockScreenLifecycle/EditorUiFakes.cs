@@ -9,7 +9,7 @@ namespace Windows.UI.Text
 
 namespace OhMyLockScreen
 {
-    public sealed class SceneEditorPage : Windows.UI.Xaml.Controls.Page;
+    public sealed partial class SceneEditorPage : Windows.UI.Xaml.Controls.Page;
 }
 
 namespace OhMyLockScreen.Controls.Editor

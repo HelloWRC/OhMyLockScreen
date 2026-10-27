@@ -17,6 +17,8 @@ internal sealed class TestEnvironment : IDisposable
         IAppHost.Host = null;
         ApplicationData.Current.LocalFolder.Path = directory.FullName;
         Window.Current = new Window();
+        Windows.System.UserProfile.LockScreen.OpenImage =
+            () => throw new InvalidOperationException("No simulated lock screen image was configured.");
         LockScreenHosting.IsHosted = () => true;
         CoreApplication.ExitCalls = 0;
         Storyboard.LastCreated = null;

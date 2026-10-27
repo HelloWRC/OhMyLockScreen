@@ -15,10 +15,15 @@
         x:Name="SceneRoot"
         HorizontalAlignment="Stretch"
         VerticalAlignment="Stretch"
-        Background="{x:Bind Background, Mode=OneWay, TargetNullValue=Transparent}">
+        Background="Transparent">
         <Grid
             x:Name="BackgroundViewport"
             IsHitTestVisible="False">
+            <Image
+                x:Name="SystemBackgroundImageElement"
+                Stretch="UniformToFill"
+                IsHitTestVisible="False" />
+            <Grid Background="{x:Bind Background, Mode=OneWay, TargetNullValue=Transparent}" />
             <Grid
                 x:Name="BackgroundLayer"
                 IsHitTestVisible="False"

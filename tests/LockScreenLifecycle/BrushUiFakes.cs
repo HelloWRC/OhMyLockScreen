@@ -363,6 +363,14 @@ namespace Windows.UI.Xaml.Media.Imaging
 
         public BitmapImage(Uri uri) => UriSource = uri;
 
+        public Windows.Storage.Streams.IRandomAccessStream? SourceStream { get; private set; }
+
+        public Task SetSourceAsync(Windows.Storage.Streams.IRandomAccessStream stream)
+        {
+            SourceStream = stream;
+            return stream.DecodeAsync();
+        }
+
         public Uri? UriSource
         {
             get; set;

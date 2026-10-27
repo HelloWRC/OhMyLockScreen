@@ -60,6 +60,13 @@ if (args.Contains("--video-only"))
     return;
 }
 
+if (args.Contains("--system-background-only"))
+{
+    await SystemBackgroundTests.RunAsync(Run, RunAsync);
+    Console.WriteLine($"All {passed} system background checks passed using simulated UWP images and windows.");
+    return;
+}
+
 if (args.Contains("--binding-only"))
 {
     DependencyPropertyBindingTests.Run(Run);
@@ -118,4 +125,5 @@ EditorConverterTests.Run(Run);
 await SceneTests.RunAsync(Run, RunAsync);
 await DismissalTests.RunAsync(Run, RunAsync);
 VideoBackgroundTests.Run(Run);
+await SystemBackgroundTests.RunAsync(Run, RunAsync);
 Console.WriteLine($"All {passed} checks passed using temporary settings and simulated UWP views and animations.");

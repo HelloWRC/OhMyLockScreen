@@ -109,6 +109,7 @@ public sealed partial class SceneEditorPage : Page
 
         _loaded = true;
         _window = Window.Current;
+        AttachSystemBackground();
         ConfigureTitleBar();
         ViewModel.SelectionChanged += OnSelectionChanged;
         ViewModel.StructureChanged += OnStructureChanged;
@@ -153,6 +154,7 @@ public sealed partial class SceneEditorPage : Page
         ExitPreview();
         ClearPageToasts();
         _loaded = false;
+        DetachSystemBackground();
         RefreshFeatureEditorTargets();
         ViewModel.SelectionChanged -= OnSelectionChanged;
         ViewModel.StructureChanged -= OnStructureChanged;
