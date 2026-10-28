@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene"
     mc:Ignorable="d"
+    IsTabStop="True"
     Background="Transparent"
     Foreground="White">
     <scene:ScenePresenter

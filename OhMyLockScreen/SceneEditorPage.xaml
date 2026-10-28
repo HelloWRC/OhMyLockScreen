@@ -272,6 +272,7 @@
                 Drop="OnCanvasDrop">
                 <scene:ScenePresenter
                     x:Name="EditorPresenter"
+                    IsEditing="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
                     Scene="{x:Bind ViewModel.Scene, Mode=OneWay}" />
                 <Canvas
                     IsHitTestVisible="False">

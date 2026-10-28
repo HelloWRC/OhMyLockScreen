@@ -5,6 +5,7 @@
     xmlns:local="using:OhMyLockScreen.Controls.Components"
     xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene">
     <scene:LayoutControl
+        IsEditing="{x:Bind IsEditing, Mode=OneWay}"
         Settings="{x:Bind Settings, Mode=OneWay}"
         ItemsSource="{x:Bind Settings.Children, Mode=OneWay}" />
 </local:ContainerComponentBase>

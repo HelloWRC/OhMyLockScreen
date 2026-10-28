@@ -20,6 +20,8 @@ using OhMyLockScreen.Services.Features.Layout;
 using OhMyLockScreen.Services.Features.Appearance;
 using OhMyLockScreen.Services.Scene;
 using OhMyLockScreen.Shared.Extensions.FeatureHost;
+using OhMyLockScreen.Services.Media;
+using OhMyLockScreen.Shared.Abstractions.Services.Media;
 
 namespace OhMyLockScreen;
 
@@ -38,6 +40,10 @@ public sealed partial class App
         services.AddSingleton(provider => new SettingsService(provider.GetRequiredService<ILogger<SettingsService>>(), Path.Combine(ApplicationData.Current.LocalFolder.Path, "Settings.json")));
         services.AddSingleton<ISceneService>(provider => new SceneService(provider.GetRequiredService<SettingsService>(), provider.GetRequiredService<ILogger<SceneService>>(), ApplicationData.Current.LocalFolder.Path));
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IMediaSessionSource, WindowsMediaSessionSource>();
+        services.AddSingleton<MediaStateService>();
+        services.AddSingleton<IMediaStateService>(provider => provider.GetRequiredService<MediaStateService>());
+        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<MediaStateService>());
         services.AddSingleton<FontCatalogService>();
         services.AddTransient<SceneEditorViewModel>();
         services.AddSingleton<ComponentRegistryService>();
@@ -49,6 +55,11 @@ public sealed partial class App
         services.AddComponent<ClockComponent, ClockSettingsControl>();
         services.AddComponent<DateComponent>();
         services.AddComponent<ContainerComponent, ContainerSettingsControl>();
+        services.AddComponent<MediaComponent, MediaSettingsControl>();
+        services.AddComponent<MediaTextComponent, MediaTextSettingsControl>();
+        services.AddComponent<MediaControllerComponent, MediaControllerSettingsControl>();
+        services.AddComponent<MediaCoverComponent, MediaCoverSettingsControl>();
+        services.AddComponent<MediaProgressComponent, MediaProgressSettingsControl>();
         // Features
         services.AddFeature<LayoutFeature, LayoutSettingsControl>();
         services.AddFeature<GridLayoutFeature, GridLayoutSettingsControl>();

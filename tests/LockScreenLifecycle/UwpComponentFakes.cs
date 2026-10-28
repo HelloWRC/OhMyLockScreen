@@ -122,7 +122,7 @@ namespace Windows.UI.Xaml
         public string Path { get; } = path;
     }
 
-    public class UIElement : DependencyObject
+    public partial class UIElement : DependencyObject
     {
         public Media.RectangleGeometry? Clip { get; set; }
 
@@ -262,6 +262,9 @@ namespace Windows.UI.Xaml
 
 namespace Windows.UI.Xaml.Data
 {
+    [AttributeUsage(AttributeTargets.Class)]
+    public sealed class BindableAttribute : Attribute;
+
     public sealed class BindingExpression(Binding binding)
     {
         public Binding ParentBinding { get; } = binding;
@@ -358,6 +361,8 @@ namespace Windows.UI.Xaml.Controls
 
     public partial class ContentPresenter : FrameworkElement
     {
+        public static readonly DependencyProperty ContentProperty = DependencyProperty.Register(
+            nameof(Content), typeof(object), typeof(ContentPresenter), new PropertyMetadata(null));
         public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
             nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(ContentPresenter), new PropertyMetadata(null));
 
@@ -369,7 +374,8 @@ namespace Windows.UI.Xaml.Controls
 
         public object? Content
         {
-            get; set;
+            get => GetValue(ContentProperty);
+            set => SetValue(ContentProperty, value);
         }
     }
 

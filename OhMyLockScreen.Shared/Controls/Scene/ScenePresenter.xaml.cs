@@ -12,6 +12,15 @@ namespace OhMyLockScreen.Shared.Controls.Scene;
 
 public sealed partial class ScenePresenter : UserControl
 {
+    public static readonly DependencyProperty IsEditingProperty = DependencyProperty.Register(
+        nameof(IsEditing), typeof(bool), typeof(ScenePresenter), new PropertyMetadata(false));
+
+    public bool IsEditing
+    {
+        get => GetValue(IsEditingProperty) is true;
+        set => SetValue(IsEditingProperty, value);
+    }
+
     private const double UnlockDurationMilliseconds = 333;
 
     public static readonly DependencyProperty SceneProperty = DependencyProperty.Register(

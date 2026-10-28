@@ -176,18 +176,27 @@ internal static class InfrastructureTests
             Throws<UnauthorizedAccessException>(() => service.SaveSettings());
         });
 
-        run("Production host registers settings at the UWP local folder", () =>
+        await runAsync("Production host registers settings at the UWP local folder", async () =>
         {
             Throws<InvalidOperationException>(() => IAppHost.GetRequiredService<SettingsService>());
             Check(IAppHost.TryGetService<SettingsService>() == null, "Optional access before startup must return null.");
             var app = new App();
-            app.Launch(new LaunchActivatedEventArgs());
-            Check(Window.Current.Content is WindowToastHost && File.Exists(SettingsPath), "Production startup did not load local settings.");
+            var view = new ViewContext();
+            view.Invoke(() => app.Launch(new LaunchActivatedEventArgs()));
+            var stopwatch = Stopwatch.StartNew();
+            while (view.Window.Content == null)
+            {
+                Check(stopwatch.Elapsed < TimeSpan.FromSeconds(5), "Production startup did not return to its view.");
+                view.Drain();
+                await Task.Delay(5);
+            }
+
+            Check(view.Window.Content is WindowToastHost && File.Exists(SettingsPath), "Production startup did not load local settings.");
             Check(IAppHost.GetRequiredService<IHostLifetime>() is UwpHostLifetime, "Host used a console lifetime.");
             var service = IAppHost.GetRequiredService<SettingsService>();
             service.Settings.TestValue = 21;
             Check(ReadTestValue() == 21, "Registered settings were not persisted.");
-            app.ExitAsync().GetAwaiter().GetResult();
+            await app.ExitAsync();
             Check(IAppHost.Host == null && CoreApplication.ExitCalls == 1, "Exit did not clear the host.");
         });
 
@@ -244,6 +253,90 @@ internal static class InfrastructureTests
             await app.ExitAsync();
         });
 
+        await runAsync("Activation without a synchronization context dispatches each window and preserves its latest role", async () =>
+        {
+            var probe = new HostedProbe { StartGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            var builds = 0;
+            var app = new App(() => { builds++; return BuildHost(probe); });
+            LockScreenHosting.IsHosted = () => false;
+            var first = new ViewContext(useSynchronizationContext: false);
+            var second = new ViewContext(useSynchronizationContext: false);
+            first.Window.EnforceThreadAccess = true;
+            second.Window.EnforceThreadAccess = true;
+            first.Invoke(() => app.Launch(new LaunchActivatedEventArgs()));
+            first.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen)));
+            second.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.LockScreenComponent)));
+            probe.StartGate.SetResult();
+            await WaitForDispatchAsync(first.Window.Dispatcher);
+            await WaitForDispatchAsync(second.Window.Dispatcher);
+            first.Invoke(() => Check(first.Window.Content == null, "A continuation accessed the first window before dispatch."));
+            second.Invoke(() => Check(second.Window.Content == null, "A continuation accessed the second window before dispatch."));
+
+            // A newer activation can arrive while older continuations are queued.
+            first.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.Other)));
+            first.Drain();
+            first.Invoke(() => Check(first.Window.Content is WindowToastHost { Frame.Content: SceneEditorPage },
+                "A stale queued activation replaced the latest page role."));
+            second.Invoke(() => Check(second.Window.Content == null, "The first view drained another view's activation."));
+            second.Drain();
+            second.Invoke(() => Check(second.Window.Content is WindowToastHost { Frame.Content: MainPage },
+                "The lock-screen view did not receive its own page."));
+            Check(first.Window.WrongThreadContentAccesses == 0 && second.Window.WrongThreadContentAccesses == 0,
+                "Window.Content was accessed outside its owning UI view.");
+            Check(builds == 1 && probe.Starts == 1, "Views stopped sharing one initialized host.");
+            await app.ExitAsync();
+        });
+
+        await runAsync("Closing a view while activation is queued skips its page without blocking another view", async () =>
+        {
+            var probe = new HostedProbe { StartGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            var app = new App(() => BuildHost(probe));
+            var closed = new ViewContext(useSynchronizationContext: false);
+            var active = new ViewContext(useSynchronizationContext: false);
+            closed.Window.EnforceThreadAccess = true;
+            active.Window.EnforceThreadAccess = true;
+            closed.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen)));
+            active.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen)));
+            probe.StartGate.SetResult();
+            await WaitForDispatchAsync(closed.Window.Dispatcher);
+            await WaitForDispatchAsync(active.Window.Dispatcher);
+            closed.Invoke(closed.Window.Close);
+            closed.Drain();
+            active.Drain();
+            closed.Invoke(() => Check(closed.Window.Content == null, "A queued callback created a page after window closure."));
+            active.Invoke(() => Check(active.Window.Content is WindowToastHost { Frame.Content: MainPage },
+                "Closing another view suppressed the active lock-screen window."));
+            await app.ExitAsync();
+        });
+
+        await runAsync("Exit after activation dispatch suppresses queued page creation", async () =>
+        {
+            var probe = new HostedProbe { StartGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            var app = new App(() => BuildHost(probe));
+            var view = new ViewContext(useSynchronizationContext: false);
+            view.Window.EnforceThreadAccess = true;
+            view.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen)));
+            probe.StartGate.SetResult();
+            await WaitForDispatchAsync(view.Window.Dispatcher);
+            await app.ExitAsync();
+            view.Drain();
+            view.Invoke(() => Check(view.Window.Content == null, "A queued activation displayed a page after application exit."));
+            Check(probe.Disposed && CoreApplication.ExitCalls == 1, "Queued activation prevented host cleanup.");
+        });
+
+        run("Page display failures are logged and do not escape async activation", () =>
+        {
+            var logger = new RecordingLogger<App>();
+            var app = new App(() => BuildHost(new HostedProbe(), appLogger: logger));
+            var window = Window.Current;
+            window.ContentAccessException = new System.Runtime.InteropServices.COMException("Simulated window failure.");
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
+            Check(logger.Errors == 1, "Page display failure escaped or was not logged.");
+            window.ContentAccessException = null;
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
+            Check(window.Content is WindowToastHost { Frame.Content: MainPage }, "Activation did not recover after a display failure.");
+        });
+
         await runAsync("Exit during startup waits for cleanup without showing a page", async () =>
         {
             var probe = new HostedProbe { StartGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
@@ -266,13 +359,14 @@ internal static class InfrastructureTests
             var page = (MainPage)((WindowToastHost)Window.Current.Content!).Frame.Content!;
             page.RootScenePresenter.ActualHeight = 720;
             page.Load();
-            Window.Current.CoreWindow.PressPointer(PointerDeviceType.Mouse);
+            page.PressPointer(PointerDeviceType.Mouse);
             Check(probe.Stops == 0 && CoreApplication.ExitCalls == 0, "Shutdown started before the animation finished.");
             Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(333));
             var firstExit = app.ExitAsync();
             var secondExit = app.ExitAsync();
             Check(ReferenceEquals(firstExit, secondExit) && probe.Stops == 1 && !firstExit.IsCompleted, "Shutdown was not coalesced.");
-            Check(Window.Current.CoreWindow.KeySubscribers == 0 &&
+            Check(page.KeySubscribers == 0 && page.PointerSubscribers == 0 &&
+                Window.Current.CoreWindow.KeySubscribers == 0 &&
                 Window.Current.CoreWindow.PointerSubscribers == 0 &&
                 Window.Current.CoreWindow.Dispatcher.AcceleratorSubscribers == 0,
                 "Page tracking continued while shutdown was pending.");
@@ -331,7 +425,17 @@ internal static class InfrastructureTests
 
     private static int ReadTestValue() => ConfigureFileHelper.LoadConfigUnWrapped<Settings>(SettingsPath, false).TestValue;
 
-    private static IHost BuildHost(HostedProbe probe, string? path = null, ILogger<SettingsService>? logger = null)
+    private static async Task WaitForDispatchAsync(Windows.UI.Core.CoreDispatcher dispatcher)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (dispatcher.PendingCallbacks == 0)
+        {
+            await Task.Delay(5, timeout.Token);
+        }
+    }
+
+    private static IHost BuildHost(HostedProbe probe, string? path = null, ILogger<SettingsService>? logger = null,
+        ILogger<App>? appLogger = null)
     {
         return new HostBuilder()
             .ConfigureServices(services =>
@@ -339,6 +443,10 @@ internal static class InfrastructureTests
                 services.AddSingleton<IHostLifetime, UwpHostLifetime>();
                 services.AddSingleton(provider => new SettingsService(logger ?? provider.GetRequiredService<ILogger<SettingsService>>(), path ?? SettingsPath));
                 services.AddSingleton<IHostedService>(_ => probe);
+                if (appLogger != null)
+                {
+                    services.AddSingleton(appLogger);
+                }
             })
             .Build();
     }
@@ -386,7 +494,7 @@ internal static class InfrastructureTests
         public void Dispose() => Disposed = true;
     }
 
-    private sealed class ViewContext : SynchronizationContext
+    internal sealed class ViewContext(bool useSynchronizationContext = true) : SynchronizationContext
     {
         private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> callbacks = new();
         internal Window Window { get; } = new();
@@ -400,7 +508,7 @@ internal static class InfrastructureTests
         {
             var previous = Current;
             var previousWindow = Window.Current;
-            SetSynchronizationContext(this);
+            SetSynchronizationContext(useSynchronizationContext ? this : null);
             Window.Current = Window;
             try { action(); }
             finally
@@ -415,6 +523,7 @@ internal static class InfrastructureTests
             Invoke(() =>
             {
                 while (callbacks.TryDequeue(out var work)) work.Callback(work.State);
+                Window.Dispatcher.Drain();
             });
         }
     }

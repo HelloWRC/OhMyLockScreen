@@ -8,6 +8,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Core;
 using OhMyLockScreen.Shared.Controls.UI;
 
 namespace OhMyLockScreen;
@@ -23,6 +24,8 @@ public sealed partial class App : Application
         {
             get; set;
         }
+
+        internal bool IsClosed { get; set; }
     }
 
     /// <summary>
@@ -62,12 +65,18 @@ public sealed partial class App : Application
     private async void ShowMainPage(ActivationKind? activationKind = null)
     {
         var window = Window.Current;
+        var dispatcher = window.Dispatcher;
         // Keep the latest OnActivated value per view, including during host startup.
-        var activation = _viewActivations.GetValue(window, _ => new ViewActivation());
+        var activation = _viewActivations.GetValue(window, currentWindow =>
+        {
+            var state = new ViewActivation();
+            currentWindow.Closed += (_, _) => state.IsClosed = true;
+            return state;
+        });
         activation.Kind = activationKind;
         try
         {
-            await _initializeHost.Value;
+            await _initializeHost.Value.ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -75,9 +84,44 @@ public sealed partial class App : Application
             return;
         }
 
-        if (!_isExiting)
+        if (_isExiting)
         {
-            ShowMainPage(window, activation.Kind);
+            return;
+        }
+
+        try
+        {
+            // Lock-screen activation may have no SynchronizationContext to restore after await.
+            // Use the captured window's dispatcher, since another view can share this host.
+            if (dispatcher.HasThreadAccess)
+            {
+                ShowOnView();
+            }
+            else
+            {
+                await dispatcher.RunAsync(CoreDispatcherPriority.Normal, ShowOnView);
+            }
+        }
+        catch (Exception exception)
+        {
+            LogLifecycleError(exception, "无法调度应用窗口显示");
+        }
+
+        void ShowOnView()
+        {
+            if (_isExiting || activation.IsClosed)
+            {
+                return;
+            }
+
+            try
+            {
+                ShowMainPage(window, activation.Kind);
+            }
+            catch (Exception exception)
+            {
+                LogLifecycleError(exception, "显示应用页面失败");
+            }
         }
     }
 

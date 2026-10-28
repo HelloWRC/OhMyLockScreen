@@ -15,6 +15,27 @@ namespace OhMyLockScreen.Shared.Controls.Scene;
 /// <summary>根据布局设置选择原生 ItemsPanel，通过 ComponentPresenter 项目容器呈现组件。</summary>
 public sealed partial class LayoutControl : ItemsControl
 {
+    public static readonly DependencyProperty IsEditingProperty = DependencyProperty.Register(
+        nameof(IsEditing), typeof(bool), typeof(LayoutControl),
+        new PropertyMetadata(false, (sender, _) => ((LayoutControl)sender).UpdateEditingContext()));
+
+    public bool IsEditing
+    {
+        get => GetValue(IsEditingProperty) is true;
+        set => SetValue(IsEditingProperty, value);
+    }
+
+    private void UpdateEditingContext()
+    {
+        if (ItemsPanelRoot is { } panel)
+        {
+            foreach (var presenter in panel.Children.OfType<ComponentPresenter>())
+            {
+                presenter.IsEditing = IsEditing;
+            }
+        }
+    }
+
     public static readonly DependencyProperty SettingsProperty = DependencyProperty.Register(
         nameof(Settings), typeof(ILayoutSettings), typeof(LayoutControl),
         new PropertyMetadata(null, OnSettingsChanged));
@@ -55,6 +76,7 @@ public sealed partial class LayoutControl : ItemsControl
 
         // The presenter owns Content; the default preparation would assign the settings object to it.
         var presenter = (ComponentPresenter)element;
+        presenter.IsEditing = IsEditing;
         presenter.DataContext = item;
         presenter.Settings = item as ComponentSettings;
     }
@@ -121,6 +143,7 @@ public sealed partial class LayoutControl : ItemsControl
 
         foreach (var presenter in panel.Children.OfType<ComponentPresenter>())
         {
+            presenter.IsEditing = IsEditing;
             presenter.ActivateFromLayout();
         }
     }

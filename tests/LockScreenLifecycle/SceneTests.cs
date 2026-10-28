@@ -1405,12 +1405,20 @@ internal static class SceneTests
         await runAsync("Manual launches open the editor; hosted launches and lock activations open the lock view", async () =>
         {
             var app = new App();
-            var window = Window.Current;
+            var view = new InfrastructureTests.ViewContext();
+            var window = view.Window;
             LockScreenHosting.IsHosted = () => false;
-            app.Launch(new LaunchActivatedEventArgs());
+            view.Invoke(() => app.Launch(new LaunchActivatedEventArgs()));
             var initialize = (Lazy<Task>)typeof(App).GetField("_initializeHost", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(app)!;
+            var startupDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (!initialize.Value.IsCompleted)
+            {
+                Check(DateTime.UtcNow < startupDeadline, "Production media startup did not finish.");
+                view.Drain();
+                await Task.Delay(5);
+            }
             await initialize.Value;
-            await Task.Delay(20);
+            view.Drain();
             Window.Current = window;
             Check(window.Content is WindowToastHost { Frame.Content: SceneEditorPage }, "Manual launch did not open the editor.");
             var toastHost = (WindowToastHost)window.Content!;

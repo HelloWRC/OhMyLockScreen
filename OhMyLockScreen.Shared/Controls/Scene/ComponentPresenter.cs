@@ -53,6 +53,7 @@ public sealed partial class ComponentPresenter : ContentPresenter, IBorderable
     public ComponentPresenter()
     {
         InitializeComponent();
+        RegisterPropertyChangedCallback(ContentProperty, (_, _) => UpdateContentVisibility());
         RegisterPropertyChangedCallback(ForegroundProperty, OnForegroundChanged);
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -95,6 +96,7 @@ public sealed partial class ComponentPresenter : ContentPresenter, IBorderable
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
         _isLoaded = false;
+        ClearContentVisibility();
         LayoutUpdated -= OnForegroundLayoutUpdated;
         Border = null;
         UpdateSubscription(null);
@@ -216,6 +218,7 @@ public sealed partial class ComponentPresenter : ContentPresenter, IBorderable
         }
 
         AttachFeatures();
+        UpdateContentVisibility();
         RefreshContentForeground(force: true);
     }
 }

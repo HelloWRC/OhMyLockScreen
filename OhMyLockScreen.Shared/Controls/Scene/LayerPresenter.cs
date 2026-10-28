@@ -8,6 +8,15 @@ namespace OhMyLockScreen.Shared.Controls.Scene;
 /// <summary>通过 ItemsControl 模板呈现图层中的组件。</summary>
 public sealed class LayerPresenter : Control
 {
+    public static readonly DependencyProperty IsEditingProperty = DependencyProperty.Register(
+        nameof(IsEditing), typeof(bool), typeof(LayerPresenter), new PropertyMetadata(false));
+
+    public bool IsEditing
+    {
+        get => GetValue(IsEditingProperty) is true;
+        set => SetValue(IsEditingProperty, value);
+    }
+
     public static readonly DependencyProperty LayerProperty = DependencyProperty.Register(
         nameof(Layer), typeof(LayerSettings), typeof(LayerPresenter), new PropertyMetadata(null, OnLayerChanged));
 

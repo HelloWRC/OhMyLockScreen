@@ -112,7 +112,8 @@ namespace Windows.UI.Core
 
     public enum CoreDispatcherPriority
     {
-        Normal
+        Normal,
+        Low
     }
 
     public enum CoreAcceleratorKeyEventType
@@ -153,7 +154,8 @@ namespace Windows.UI.Core
 
     public sealed class CoreDispatcher(Windows.UI.Xaml.Window? owner = null)
     {
-        private readonly Queue<(Action Callback, TaskCompletionSource Completion)> _callbacks = [];
+        private readonly global::System.Collections.Concurrent.ConcurrentQueue<(Action Callback, TaskCompletionSource Completion)> _callbacks = new();
+        public int PendingCallbacks => _callbacks.Count;
         public bool HasThreadAccess => owner == null || ReferenceEquals(owner, Windows.UI.Xaml.Window.Current);
 
         public Task RunAsync(CoreDispatcherPriority priority, Action callback)
@@ -224,7 +226,16 @@ namespace Windows.System
         Up,
         Down,
         Left,
-        Right
+        Right,
+        Tab,
+        LeftShift,
+        RightShift,
+        LeftControl,
+        RightControl,
+        LeftMenu,
+        RightMenu,
+        LeftWindows,
+        RightWindows
     }
 }
 
@@ -540,12 +551,42 @@ namespace Windows.UI.Xaml
         {
             get => current ??= new(); set => current = value;
         }
+        private object? _content;
+        private int _wrongThreadContentAccesses;
+        public bool EnforceThreadAccess { get; set; }
+        public Exception? ContentAccessException { get; set; }
+        public int WrongThreadContentAccesses => Volatile.Read(ref _wrongThreadContentAccesses);
         public object? Content
         {
-            get; set;
+            get
+            {
+                VerifyContentAccess();
+                return _content;
+            }
+            set
+            {
+                VerifyContentAccess();
+                _content = value;
+            }
         }
         public CoreWindow CoreWindow { get; } = new();
-        public CoreDispatcher Dispatcher { get; } = new();
+        public CoreDispatcher Dispatcher { get; }
+
+        public Window() => Dispatcher = new CoreDispatcher(this);
+
+        private void VerifyContentAccess()
+        {
+            if (EnforceThreadAccess && !Dispatcher.HasThreadAccess)
+            {
+                Interlocked.Increment(ref _wrongThreadContentAccesses);
+                throw new global::System.Runtime.InteropServices.COMException("Window.Content was accessed from another view.", unchecked((int)0x8001010E));
+            }
+
+            if (ContentAccessException != null)
+            {
+                throw ContentAccessException;
+            }
+        }
         public event UwpEventHandler<CoreWindowEventArgs>? Closed;
         public int ClosedSubscribers => Closed?.GetInvocationList().Length ?? 0;
         public void Close() => Closed?.Invoke(this, new());

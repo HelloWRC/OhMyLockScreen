@@ -45,6 +45,12 @@ public sealed partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (args.Arguments.Contains("media", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchMediaPreview();
+            return;
+        }
+
         // This package has separate app data and no lock-screen extension or settings services.
         IAppHost.Host = new HostBuilder().ConfigureServices(services =>
         {

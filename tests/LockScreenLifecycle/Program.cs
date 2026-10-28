@@ -16,6 +16,14 @@ async Task RunAsync(string name, Func<Task> test)
     Console.WriteLine($"PASS: {name}");
 }
 
+if (args.Contains("--media-only"))
+{
+    MediaTests.Run(Run);
+    await MediaTests.RunAsync(RunAsync);
+    Console.WriteLine($"All {passed} media checks passed using isolated settings and simulated sessions.");
+    return;
+}
+
 if (args.Contains("--brush-only"))
 {
     BrushSerializationTests.Run(Run);
@@ -109,6 +117,8 @@ if (args.Contains("--layout-only"))
 }
 
 await InfrastructureTests.RunAsync(Run, RunAsync);
+MediaTests.Run(Run);
+await MediaTests.RunAsync(RunAsync);
 BrushSerializationTests.Run(Run);
 BrushEditorTests.Run(Run);
 await BrushEditorTests.RunImportAsync(RunAsync);

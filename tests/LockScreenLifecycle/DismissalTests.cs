@@ -104,11 +104,11 @@ internal static class DismissalTests
                 page.RootScenePresenter.ActualHeight = 720;
                 page.Load();
 
-                Window.Current.CoreWindow.PressPointer(deviceType);
+                page.PressPointer(deviceType);
                 var storyboard = Storyboard.LastCreated!;
                 Check(storyboard.IsRunning && storyboard.BeginCalls == 1 && CoreApplication.ExitCalls == 0,
                     "Pointer input exited before the scene animation.");
-                Check(Window.Current.CoreWindow.PointerSubscribers == 0 && Window.Current.CoreWindow.KeySubscribers == 0,
+                Check(page.PointerSubscribers == 0 && page.KeySubscribers == 0,
                     "Starting the unlock animation left lock-screen input attached.");
 
                 storyboard.Advance(TimeSpan.FromMilliseconds(332));
@@ -122,14 +122,15 @@ internal static class DismissalTests
             });
         }
 
-        foreach (var key in new[] { VirtualKey.A, VirtualKey.Space, VirtualKey.Enter, VirtualKey.Escape, VirtualKey.Shift, VirtualKey.Control })
+        foreach (var key in new[] { VirtualKey.A, VirtualKey.Space, VirtualKey.Enter, VirtualKey.Escape })
         {
             await runAsync($"{key} starts the scene unlock animation", async () =>
             {
                 var page = new MainPage();
                 page.Load();
-                var capturedKeyHandler = Window.Current.CoreWindow.CaptureKeyDown(VirtualKey.A);
-                Window.Current.CoreWindow.PressKey(key);
+                var capturedKeyHandler = page.CaptureKeyDown(VirtualKey.A);
+                page.PressKey(key);
+                Window.Current.CoreWindow.Dispatcher.Drain();
                 var storyboard = Storyboard.LastCreated!;
                 Check(storyboard.IsRunning, "Key input did not start the scene animation.");
 
@@ -141,19 +142,96 @@ internal static class DismissalTests
             });
         }
 
+        run("Keys consumed later in the route or by app accelerators preserve the lock view", () =>
+        {
+            var page = new MainPage();
+            page.Load();
+            var args = page.PressKey(VirtualKey.A);
+            Check(Storyboard.LastCreated == null, "The page dismissed before input routing finished.");
+            args.Handled = true;
+            Window.Current.CoreWindow.Dispatcher.Drain();
+            Check(Storyboard.LastCreated == null && CoreApplication.ExitCalls == 0,
+                "The fallback ignored a key consumed by a later handler.");
+            page.Unload();
+        });
+
+        run("Queued keyboard fallback cannot dismiss an unloaded and reloaded page", () =>
+        {
+            var page = new MainPage();
+            page.Load();
+            page.PressKey(VirtualKey.A);
+            page.Unload();
+            page.Load();
+            Window.Current.CoreWindow.Dispatcher.Drain();
+            Check(Storyboard.LastCreated == null && CoreApplication.ExitCalls == 0,
+                "An old input callback dismissed a new page lifetime.");
+            page.Unload();
+        });
+
+        foreach (var key in new[]
+        {
+            VirtualKey.Tab,
+            VirtualKey.Shift, VirtualKey.LeftShift, VirtualKey.RightShift,
+            VirtualKey.Control, VirtualKey.LeftControl, VirtualKey.RightControl,
+            VirtualKey.Menu, VirtualKey.LeftMenu, VirtualKey.RightMenu,
+            VirtualKey.LeftWindows, VirtualKey.RightWindows
+        })
+        {
+            run($"{key} leaves focus navigation and component shortcuts available", () =>
+            {
+                var page = new MainPage();
+                page.Load();
+                var args = page.PressKey(key);
+                Check(!args.Handled && Storyboard.LastCreated == null && CoreApplication.ExitCalls == 0,
+                    "Focus navigation or a modifier key was intercepted before a component shortcut.");
+                page.Unload();
+            });
+        }
+
         foreach (var eventType in new[]
         {
             CoreAcceleratorKeyEventType.KeyDown,
             CoreAcceleratorKeyEventType.SystemKeyDown
         })
         {
-            await runAsync($"{eventType} starts the scene unlock animation", async () =>
+            run($"Raw {eventType} cannot bypass component keyboard handling", () =>
             {
                 var page = new MainPage();
                 page.Load();
                 Window.Current.CoreWindow.Dispatcher.PressAccelerator(eventType, VirtualKey.Menu);
-                Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(333));
-                await WaitUntilAsync(() => CoreApplication.ExitCalls == 1);
+                Window.Current.CoreWindow.PressKey(VirtualKey.Space);
+                Check(Storyboard.LastCreated == null && CoreApplication.ExitCalls == 0,
+                    "A global keyboard event bypassed routed component handling.");
+                page.Unload();
+            });
+        }
+
+        foreach (var deviceType in new[] { PointerDeviceType.Mouse, PointerDeviceType.Touch, PointerDeviceType.Pen })
+        {
+            run($"Handled {deviceType} component input preserves the lock view", () =>
+            {
+                var page = new MainPage();
+                page.Load();
+                page.PressPointer(deviceType, handled: true);
+                Window.Current.CoreWindow.PressPointer(deviceType);
+                Check(Storyboard.LastCreated == null && CoreApplication.ExitCalls == 0,
+                    "A component pointer interaction started dismissal.");
+                Check(page.PointerSubscribers == 1 && page.KeySubscribers == 1,
+                    "A component interaction detached the fallback handlers.");
+                page.Unload();
+            });
+        }
+
+        foreach (var key in new[] { VirtualKey.Space, VirtualKey.Enter, VirtualKey.Left, VirtualKey.Right })
+        {
+            run($"Handled {key} input in a component preserves the lock view", () =>
+            {
+                var page = new MainPage();
+                page.Load();
+                page.PressKey(key, handled: true);
+                Window.Current.CoreWindow.Dispatcher.PressAccelerator(CoreAcceleratorKeyEventType.KeyDown, key);
+                Check(Storyboard.LastCreated == null && CoreApplication.ExitCalls == 0,
+                    "Handled component keyboard input started dismissal.");
                 page.Unload();
             });
         }
@@ -176,9 +254,10 @@ internal static class DismissalTests
             var firstPage = new MainPage();
             firstPage.Load();
             firstPage.Load();
-            Check(firstWindow.CoreWindow.KeySubscribers == 1 &&
-                firstWindow.CoreWindow.PointerSubscribers == 1 &&
-                firstWindow.CoreWindow.Dispatcher.AcceleratorSubscribers == 1,
+            Check(firstPage.KeySubscribers == 1 && firstPage.PointerSubscribers == 1 &&
+                firstWindow.CoreWindow.KeySubscribers == 0 &&
+                firstWindow.CoreWindow.PointerSubscribers == 0 &&
+                firstWindow.CoreWindow.Dispatcher.AcceleratorSubscribers == 0,
                 "Repeated page loading duplicated input handlers.");
 
             var secondWindow = new Window();
@@ -186,21 +265,20 @@ internal static class DismissalTests
             var secondPage = new MainPage();
             secondPage.Load();
             secondPage.Unload();
-            Check(secondWindow.CoreWindow.KeySubscribers == 0 &&
+            Check(secondPage.KeySubscribers == 0 && secondPage.PointerSubscribers == 0 &&
+                secondWindow.CoreWindow.KeySubscribers == 0 &&
                 secondWindow.CoreWindow.PointerSubscribers == 0 &&
                 secondWindow.CoreWindow.Dispatcher.AcceleratorSubscribers == 0 &&
-                firstWindow.CoreWindow.KeySubscribers == 1,
+                firstPage.KeySubscribers == 1,
                 "Unloading one page leaked handlers or detached another view.");
 
             Window.Current = firstWindow;
             firstPage.Unload();
-            firstWindow.CoreWindow.PressKey(VirtualKey.A);
+            firstPage.PressKey(VirtualKey.A);
             Check(Storyboard.LastCreated == null && CoreApplication.ExitCalls == 0,
                 "An unloaded page still handled input.");
             firstPage.Load();
-            Check(firstWindow.CoreWindow.KeySubscribers == 1 &&
-                firstWindow.CoreWindow.PointerSubscribers == 1 &&
-                firstWindow.CoreWindow.Dispatcher.AcceleratorSubscribers == 1,
+            Check(firstPage.KeySubscribers == 1 && firstPage.PointerSubscribers == 1,
                 "Reloading a page did not restore exactly one input subscription.");
             firstPage.Unload();
         });
@@ -210,7 +288,8 @@ internal static class DismissalTests
             Storyboard.FailOnBegin = true;
             var page = new MainPage();
             page.Load();
-            Window.Current.CoreWindow.PressKey(VirtualKey.A);
+            page.PressKey(VirtualKey.A);
+            Window.Current.CoreWindow.Dispatcher.Drain();
 
             await WaitUntilAsync(() => CoreApplication.ExitCalls == 1);
             Check(Storyboard.LastCreated!.CompletedSubscribers == 0,
@@ -223,7 +302,8 @@ internal static class DismissalTests
         {
             var page = new MainPage();
             page.Load();
-            Window.Current.CoreWindow.PressKey(VirtualKey.A);
+            page.PressKey(VirtualKey.A);
+            Window.Current.CoreWindow.Dispatcher.Drain();
             var storyboard = Storyboard.LastCreated!;
             storyboard.Advance(TimeSpan.FromMilliseconds(80));
 

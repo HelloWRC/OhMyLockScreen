@@ -5,9 +5,11 @@ using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.Core;
+using Windows.System;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Input;
 
 namespace OhMyLockScreen;
 
@@ -15,10 +17,11 @@ namespace OhMyLockScreen;
 public sealed partial class MainPage : Page
 {
     private readonly ISceneService? _scenes;
-    private Window? viewWindow;
+    private CoreDispatcher? viewDispatcher;
     private bool isPageLoaded;
     private bool isDismissing;
     private bool hasExited;
+    private int inputGeneration;
     public MainPage()
     {
         InitializeComponent();
@@ -35,7 +38,7 @@ public sealed partial class MainPage : Page
         }
 
         isPageLoaded = true;
-        viewWindow = Window.Current;
+        viewDispatcher = Window.Current.CoreWindow.Dispatcher;
         if (_scenes != null)
         {
             RefreshActiveScene();
@@ -43,10 +46,9 @@ public sealed partial class MainPage : Page
             _scenes.ActiveSceneChanged += OnSceneSaved;
         }
 
-        viewWindow.CoreWindow.PointerPressed += OnPointerPressed;
-        viewWindow.CoreWindow.KeyDown += OnKeyDown;
-        // Alt and other system keys may be delivered as accelerator events.
-        viewWindow.CoreWindow.Dispatcher.AcceleratorKeyActivated += OnAcceleratorKeyActivated;
+        // Ordinary bubbling subscriptions let component class handlers consume input first.
+        PointerPressed += OnPointerPressed;
+        KeyDown += OnKeyDown;
     }
 
     private async void OnUnloaded(object sender, RoutedEventArgs e)
@@ -62,19 +64,17 @@ public sealed partial class MainPage : Page
 
     private void DetachViewEvents()
     {
+        ++inputGeneration;
         if (_scenes != null)
         {
             _scenes.SceneSaved -= OnSceneSaved;
             _scenes.ActiveSceneChanged -= OnSceneSaved;
         }
 
-        if (viewWindow != null)
-        {
-            viewWindow.CoreWindow.PointerPressed -= OnPointerPressed;
-            viewWindow.CoreWindow.KeyDown -= OnKeyDown;
-            viewWindow.CoreWindow.Dispatcher.AcceleratorKeyActivated -= OnAcceleratorKeyActivated;
-            viewWindow = null;
-        }
+        PointerPressed -= OnPointerPressed;
+        KeyDown -= OnKeyDown;
+
+        viewDispatcher = null;
     }
 
     internal void RefreshActiveScene()
@@ -108,14 +108,15 @@ public sealed partial class MainPage : Page
 
     private async void OnSceneSaved(object? sender, SceneChangedEventArgs args)
     {
-        if (_scenes == null || args.SceneId != _scenes.ActiveSceneId || viewWindow == null)
+        var dispatcher = viewDispatcher;
+        if (_scenes == null || args.SceneId != _scenes.ActiveSceneId || dispatcher == null)
         {
             return;
         }
 
         try
         {
-            await viewWindow.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+            await dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
             {
                 if (isPageLoaded && !isDismissing)
                 {
@@ -129,25 +130,57 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private void OnPointerPressed(CoreWindow sender, PointerEventArgs e)
+    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        e.Handled = true;
-        RequestDismissal();
-    }
-
-    private void OnKeyDown(CoreWindow sender, KeyEventArgs e)
-    {
-        e.Handled = true;
-        RequestDismissal();
-    }
-
-    private void OnAcceleratorKeyActivated(CoreDispatcher sender, AcceleratorKeyEventArgs e)
-    {
-        if (e.EventType is CoreAcceleratorKeyEventType.KeyDown or CoreAcceleratorKeyEventType.SystemKeyDown)
+        if (e.Handled)
         {
-            e.Handled = true;
-            RequestDismissal();
+            return;
         }
+
+        e.Handled = true;
+        RequestDismissal();
+    }
+
+    private async void QueueUnhandledKey(KeyRoutedEventArgs args)
+    {
+        var dispatcher = viewDispatcher;
+        var generation = inputGeneration;
+        if (dispatcher == null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Let the remaining route and application accelerators consume the key first.
+            await dispatcher.RunAsync(CoreDispatcherPriority.Low, () =>
+            {
+                if (isPageLoaded && !isDismissing && generation == inputGeneration && !args.Handled)
+                {
+                    args.Handled = true;
+                    RequestDismissal();
+                }
+            });
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"无法调度锁屏按键处理：{exception}");
+        }
+    }
+
+    private void OnKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        // Focus traversal and modifier chords finish after this event reaches the page.
+        if (e.Handled || e.Key is VirtualKey.Tab
+            or VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift
+            or VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl
+            or VirtualKey.Menu or VirtualKey.LeftMenu or VirtualKey.RightMenu
+            or VirtualKey.LeftWindows or VirtualKey.RightWindows)
+        {
+            return;
+        }
+
+        QueueUnhandledKey(e);
     }
 
     private void RequestDismissal()

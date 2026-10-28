@@ -13,9 +13,12 @@
 
 - 本项目是 Windows UWP 自定义锁屏应用，负责锁屏页面与系统解锁请求；账户凭据验证由 Windows 完成。
 - 应用使用 Microsoft.Extensions.Hosting 和 UWP 生命周期。服务统一在 App.Services.cs 中注册，业务服务优先使用构造函数注入；重复激活和多视图共用应用主机。
+- 激活时先捕获目标窗口的 Dispatcher；异步初始化后显式返回该窗口的 UI 线程显示页面，不依赖 SynchronizationContext，窗口关闭或应用退出后跳过显示。
+- 锁屏退出仅由页面收到的未处理 PointerPressed/KeyDown 冒泡事件触发；按键等待路由和应用快捷键处理完毕后再兜底，不使用 CoreWindow 或全局加速键抢占组件输入。Tab 和修饰键保留给焦点导航与组合键；卸载后丢弃排队的输入。
 - 设置通过 SettingsService 管理，使用 ConfigureFileHelper 读写应用 LocalFolder 下的 Settings.json。设置属性使用 CommunityToolkit.Mvvm 的变更通知机制触发自动保存。
 - 当计划使用 OnPropertyChanged/OnPropertyChanging 实现属性变化监听的实现比较繁复复杂，可能会产生较多模板代码时，考虑用 ReactiveUI 和 DynamicData 的方法简化代码。
 - 构建需要 .NET 10 SDK、UWP/XAML 构建工具、对应 Windows SDK 和 VC++ 14 UWP 运行库 SDK，沿用项目现有签名配置。
+- 开发锁屏实际运行已注册包的 AppX 布局；命令行 Build 不会同步该布局，实机复测前需部署或按构建 recipe 同步，并核对运行目录中的程序集版本。
 - 动态背景使用 LibVLCSharp.UWP 和 LibVLC.UWP 3.0.23-2608082208（GPL 维护构建），各 ScenePresenter 独立管理播放器与交换链，卸载时释放；应用仅构建和发布 x86、x64。旧 VideoLAN.LibVLC.UWP 3.3.2 内的 VLC 3.0.16 存在 WinRT D3D11 设备重复 AddRef 泄漏，不再使用。
 - 视频呈现使用自有 BackgroundVideoView/VideoSwapChain 管理生命周期，避免 LibVLCSharp VideoView 的全局匿名事件引用；释放时先停止并销毁播放器，再解绑面板与交换链，执行 D3D ClearState/Flush 后释放上下文和设备，子视图单独卸载也遵循此顺序。
 - 视频交换链的宽高私有数据 GUID 必须匹配 VLC WinRT 输出协议；原生检查使用独立协议常量，实际播放检查在隔离 UWP 预览包中验证解码帧与输出像素。
@@ -46,6 +49,11 @@
 - WinUI 2 TreeView 不处理集合的 Move 通知；组件树排序使用移除再插入并保留节点实例，协调期间忽略临时选择回调，完成后重新同步选中项。
 - 组件树键盘排序在 PreviewKeyDown 中通过场景模型提交；延迟拖放需验证场景及源、目标模型仍有效，跨容器移动按模型保留子树展开状态与选择。
 - 组件树行的上下边缘用于同级插入，仅中间区域允许放入容器。
+- 媒体通过共享 IMediaStateService 读取系统当前 SMTC 会话，需声明 uap7:globalMediaControl；共享快照仅包含数据，UI 图像和画刷由各视图创建。封面主题色在后台提取原始值，由控件暗化。
+- 媒体控件的异步加载与命令完成不依赖 SynchronizationContext；等待前捕获数据和 CanvasDevice，资源提交、依赖属性访问及重绘显式返回所属 Dispatcher。卸载后忽略过期的加载与交互结果。
+- IsEditing 从场景显式传递到嵌套组件，不持久化；编辑时 Presenter 不同步组件 Visibility，无媒体会话使用隔离占位数据；全屏预览恢复真实行为。媒体默认仅在无会话时隐藏，暂停仍显示。
+- 组合媒体复用文本、单功能控制按钮、封面及进度条控件；四个独立部件不预加装饰特性，封面保留自适应主题色边缘效果。
+- 两种沉浸媒体形态的封面随组件实际高度铺满；140/200 仅作为未约束高度时的默认测量尺寸，不固定内部容器高度。
 
 ## 验证原则
 

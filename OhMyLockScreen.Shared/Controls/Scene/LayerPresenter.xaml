@@ -9,6 +9,7 @@
                     <Border
                         Background="{TemplateBinding Background}">
                         <scene:LayoutControl
+                            IsEditing="{TemplateBinding IsEditing}"
                             Settings="{Binding Layer, Mode=OneWay, RelativeSource={RelativeSource Mode=TemplatedParent}}"
                             ItemsSource="{Binding Layer.Children, RelativeSource={RelativeSource Mode=TemplatedParent}}" />
                     </Border>

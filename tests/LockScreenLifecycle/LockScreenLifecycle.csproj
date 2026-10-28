@@ -23,6 +23,11 @@
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneSaveToastTracker.cs" Link="Helpers/UI/SceneSaveToastTracker.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/Media/**/*.cs" />
+    <Compile Remove="../../OhMyLockScreen/Controls/Components/MediaComponent.cs" />
+    <Compile Remove="../../OhMyLockScreen/Controls/Components/MediaParts.cs" />
+    <Compile Remove="../../OhMyLockScreen/Controls/Components/MediaSettingsControls.cs" />
+    <Compile Remove="../../OhMyLockScreen/Services/Media/WindowsMediaSessionSource.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/Scene/VideoSwapChain.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/ToastCard.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BrushEditControl.xaml.cs" />
