@@ -392,12 +392,12 @@ public sealed partial class SceneEditorPage : Page
         }
 
         var target = ResolveTreeDropTarget(args);
+        _treeDropTarget = target;
         if (target == null)
         {
             return;
         }
 
-        _treeDropTarget = target;
         if (_draggedTreeItem != null)
         {
             return;
@@ -430,23 +430,17 @@ public sealed partial class SceneEditorPage : Page
             return;
         }
 
-        if (!TryGetDraggedModel(out var model))
+        var target = ResolveTreeDropTarget(args);
+        _treeDropTarget = target;
+        if (target == null)
         {
             return;
         }
 
-        var point = args.GetPosition(SceneTree);
-        if (FindTreeTargetAtPoint(point) is not { } hit
-            || ResolveTreeDropTarget(hit.Target, model, GetTreeDropRegion(hit.Target, hit.Row, point)) is not { } drop)
-        {
-            return;
-        }
-
-        _treeDropTarget = drop;
         if (_draggedLibraryItem != null)
         {
             args.AcceptedOperation = DataPackageOperation.Copy;
-            args.DragUIOverride.Caption = $"放入 {drop.Parent.Title}";
+            args.DragUIOverride.Caption = $"放入 {target.Value.Parent.Title}";
         }
     }
 
@@ -569,62 +563,6 @@ public sealed partial class SceneEditorPage : Page
 
         var ratio = (point.Y - row.TransformToVisual(SceneTree).TransformPoint(new Point(0, 0)).Y) / row.ActualHeight;
         return ratio < 0.2 ? TreeDropRegion.Before : ratio > 0.8 ? TreeDropRegion.After : TreeDropRegion.Inside;
-    }
-
-    private (SceneTreeItem Parent, int Index)? ResolveTreeDropTarget(
-        SceneTreeItem target,
-        object model,
-        TreeDropRegion region)
-    {
-        SceneTreeItem? parent = null;
-        var index = 0;
-        if (target.Model is SceneSettings)
-        {
-            parent = target;
-            index = SceneHierarchyEditing.GetChildren(parent.Model)?.Count ?? 0;
-        }
-        else if (SceneHierarchyEditing.CanAccept(target.Model, model))
-        {
-            parent = target;
-            index = SceneHierarchyEditing.GetChildren(parent.Model)?.Count ?? 0;
-        }
-        else if (target.Parent != null)
-        {
-            parent = target.Parent;
-            var targetIndex = SceneHierarchyEditing.GetChildren(parent.Model)?.IndexOf(target.Model) ?? -1;
-            if (targetIndex < 0)
-            {
-                return null;
-            }
-
-            index = targetIndex + (region == TreeDropRegion.Before ? 0 : 1);
-        }
-
-        if (parent == null
-            || !SceneHierarchyEditing.CanAccept(parent.Model, model)
-            || SceneHierarchyEditing.GetChildren(parent.Model) is not { } children)
-        {
-            return null;
-        }
-
-        if (_draggedTreeItem is { } source && ReferenceEquals(source.Parent, parent))
-        {
-            var sourceIndex = children.IndexOf(source.Model);
-            if (sourceIndex < 0)
-            {
-                return null;
-            }
-
-            if (sourceIndex < index)
-            {
-                index--;
-            }
-
-            index = Math.Clamp(index, 0, children.Count - 1);
-            return sourceIndex == index ? null : (parent, index);
-        }
-
-        return (parent, Math.Clamp(index, 0, children.Count));
     }
 
     private (SceneTreeItem Target, FrameworkElement Row)? FindTreeTargetAtPoint(Point point)
@@ -1941,23 +1879,6 @@ public sealed partial class SceneEditorPage : Page
         InvalidateSelectionGeometry();
     }
 
-    private void QueueEditorAction(Action action)
-    {
-        var window = _window;
-        if (window == null)
-        {
-            return;
-        }
-
-        _ = window.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-        {
-            if (_loaded && ReferenceEquals(_window, window))
-            {
-                TryAction(action);
-            }
-        });
-    }
-
     private void TryAction(Action action)
     {
         try
@@ -2009,12 +1930,5 @@ public sealed partial class SceneEditorPage : Page
         TopRight,
         BottomLeft,
         BottomRight
-    }
-
-    private enum TreeDropRegion
-    {
-        Before,
-        Inside,
-        After
     }
 }

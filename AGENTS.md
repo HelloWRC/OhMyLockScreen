@@ -34,6 +34,7 @@
 - 特性设置控件统一继承 FeatureSettingsControlBase（强类型设置使用其泛型版本）；编辑器通过 TargetElement 统一传递并清理编辑目标，沿用上述目标解析规则。
 - 布局设置控件的 TargetElement 使用布局特性所在的 Presenter；仅在编辑控件加载期间，将自动方向的实际宽高按逻辑像素取整回写设置，初次加载与目标变更时同步，不改变自动开关。
 - ComponentPresenter 通过默认 ContentTemplate 提供装饰 Border，并通过 IBorderable 通知其加载、替换与卸载；背景特性直接修饰 Border，不依赖 UserControl.Background 自动绘制或模板的隐式 DataContext。
+- ComponentPresenter 内容层按有效前景同步画刷；亚克力和径向渐变使用独立实例，随内容重建或卸载更新，避免子项重排断开共享合成画刷。
 - 组件可通过 ComponentDefaultFeaturesAttribute 指定具有公开无参构造函数的 IComponentDefaultFeaturesProvider；ComponentRegisterInfo.CreateSettings 仅在新建配置时生成独立的默认特性及设置，加载或重建视图时不补齐。编辑器仅在未声明布局特性时添加居中布局。
 - `XamlCompositionBrushBase` 不支持设置继承的变换属性；其默认单位变换在序列化时规范化为 null，读取时兼容旧的单位矩阵。
 - 编辑器面板动画由页面统一管理可见性与时间进度；入场与出场均使用 cubic-bezier(0,0,0,1)，组件侧栏与画布留白同步变化，不再直接绑定面板 Visibility 或画布 Margin 到最终页签状态。
@@ -42,6 +43,9 @@
 - 编辑器在画布与组件树接收文件拖放；图片按解码像素宽高创建固定逻辑尺寸的布局容器，使用持久化图片背景画刷。同批图片固定父容器，仅首个视频作为场景背景；导入提交需检查场景、页面和预览状态是否仍有效。
 - 组件库、组件树及图片拖入画布的 Grid/Canvas 时，先通过布局特性将左上角定位到落点；Grid 首次布局后按实际尺寸复用移动时的自动对齐规则并换算 Margin，保留落点、行列、跨度及尺寸开关。同批图片复用导入前记录的父容器内落点，流式布局仅调整插入顺序。
 - 布局对齐选项仅在编辑控件加载后接收选择写回；初始化及从设置刷新选项期间不写回，避免缓存选择覆盖拖放位置。
+- WinUI 2 TreeView 不处理集合的 Move 通知；组件树排序使用移除再插入并保留节点实例，协调期间忽略临时选择回调，完成后重新同步选中项。
+- 组件树键盘排序在 PreviewKeyDown 中通过场景模型提交；延迟拖放需验证场景及源、目标模型仍有效，跨容器移动按模型保留子树展开状态与选择。
+- 组件树行的上下边缘用于同级插入，仅中间区域允许放入容器。
 
 ## 验证原则
 

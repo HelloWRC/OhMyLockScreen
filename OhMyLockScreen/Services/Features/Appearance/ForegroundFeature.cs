@@ -33,7 +33,12 @@ public sealed class ForegroundFeature : FeatureBase<FrameworkElement, Foreground
             if (property != null)
             {
                 _binding = DependencyPropertyBindingHelper.Bind(
-                    settings, source => source.Foreground, target, property);
+                    settings, source => source.Foreground, target, property, brush =>
+                    {
+                        // Refresh inherited content foregrounds even when only painting changes.
+                        target.InvalidateArrange();
+                        return brush;
+                    });
             }
         }
         catch
@@ -45,9 +50,11 @@ public sealed class ForegroundFeature : FeatureBase<FrameworkElement, Foreground
 
     public override void Detach()
     {
+        var target = _binding != null ? Target : null;
         _binding?.Dispose();
         _binding = null;
         Target = null;
+        target?.InvalidateArrange();
     }
 
     protected override void OnSettingsChanged()

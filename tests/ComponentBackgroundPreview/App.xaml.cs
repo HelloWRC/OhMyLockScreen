@@ -56,11 +56,13 @@ public sealed partial class App : Application
             services.AddFeature<BorderFeature, BorderSettingsControl>();
             services.AddFeature<TextFeature, TextFeatureSettingsControl>();
             services.AddFeature<FontFeature, FontSettingsControl>();
+            services.AddFeature<ForegroundFeature, ForegroundSettingsControl>();
             services.AddFeature<LayoutFeature>();
             services.AddFeature<GridLayoutFeature>();
             services.AddComponent<TextComponent>();
             services.AddComponent<ClockComponent>();
             services.AddComponent<DateComponent>();
+            services.AddComponent<ContainerComponent>();
         }).Build();
         _presenter = new ComponentPresenter { Width = 240, Height = 120 };
         var root = new StackPanel { Background = new SolidColorBrush(Colors.Black), Spacing = 16 };
@@ -150,6 +152,7 @@ public sealed partial class App : Application
             await VerifyTypographyAsync(root);
             await VerifyDropPositionAsync(root);
             await VerifyRealizedGridDropAsync(root);
+            await VerifyReorderedForegroundAsync(root);
         }
         catch (Exception exception)
         {

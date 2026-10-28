@@ -3,6 +3,7 @@
 namespace Windows.UI.Xaml
 {
     public delegate void PropertyChangedCallback(DependencyObject sender, DependencyPropertyChangedEventArgs args);
+    public delegate void DependencyPropertyChangedCallback(DependencyObject sender, DependencyProperty property);
     public sealed class DependencyPropertyChangedEventArgs(object? oldValue, object? newValue)
     {
         public object? OldValue { get; } = oldValue;
@@ -47,6 +48,28 @@ namespace Windows.UI.Xaml
     {
         public DependencyObject? VisualParent { get; set; }
         private readonly Dictionary<DependencyProperty, object?> _values = [];
+        private readonly Dictionary<long, (DependencyProperty Property, DependencyPropertyChangedCallback Callback)> _callbacks = [];
+        private long _nextCallbackToken;
+
+        public long RegisterPropertyChangedCallback(DependencyProperty property, DependencyPropertyChangedCallback callback)
+        {
+            var token = ++_nextCallbackToken;
+            _callbacks.Add(token, (property, callback));
+            return token;
+        }
+
+        public void UnregisterPropertyChangedCallback(DependencyProperty property, long token) => _callbacks.Remove(token);
+
+        private void NotifyPropertyChanged(DependencyProperty property)
+        {
+            foreach (var entry in _callbacks.Values.ToArray())
+            {
+                if (ReferenceEquals(entry.Property, property))
+                {
+                    entry.Callback(this, property);
+                }
+            }
+        }
         public object? GetValue(DependencyProperty property)
         {
             property.ValidateOwner(this);
@@ -67,6 +90,7 @@ namespace Windows.UI.Xaml
             }
 
             property.Metadata.Callback?.Invoke(this, new DependencyPropertyChangedEventArgs(previous, value));
+            NotifyPropertyChanged(property);
         }
 
         public object? ReadLocalValue(DependencyProperty property)
@@ -88,6 +112,7 @@ namespace Windows.UI.Xaml
             if (!Equals(previous, current))
             {
                 property.Metadata.Callback?.Invoke(this, new DependencyPropertyChangedEventArgs(previous, current));
+                NotifyPropertyChanged(property);
             }
         }
     }
@@ -229,6 +254,9 @@ namespace Windows.UI.Xaml
         public void Load() => Loaded?.Invoke(this, new RoutedEventArgs());
         public void Unload() => Unloaded?.Invoke(this, new RoutedEventArgs());
         public void RaiseLayoutUpdated() => LayoutUpdated?.Invoke(this, EventArgs.Empty);
+        public void InvalidateArrange()
+        {
+        }
     }
 }
 

@@ -30,6 +30,8 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     private readonly ComponentRegistryService _components;
     private ObservableSettingsGraph? _graph;
     private object? _pendingSelectionModel;
+    private IReadOnlyDictionary<object, bool>? _pendingExpansionStates;
+    private bool _updatingTree;
     [ObservableProperty]
     private SceneSettings? _scene;
     [ObservableProperty]
@@ -151,6 +153,12 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
     public void Select(object model)
     {
+        // TreeView can raise selection events while its nodes are being reconciled.
+        if (_updatingTree)
+        {
+            return;
+        }
+
         var item = FindItem(model);
         if (item != null)
         {
@@ -217,26 +225,36 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var previousSelection = SelectedItem;
         var structureChanged = false;
-        foreach (var node in Flatten(Roots).ToArray())
+        var wasUpdatingTree = _updatingTree;
+        _updatingTree = true;
+        try
         {
-            var children = SceneHierarchyEditing.GetChildren(node.Model);
-            if (ReferenceEquals(sender, children) || ReferenceEquals(sender, node.Model) && property is "Layers" or "Children" or "Settings" || node.Model is ComponentSettings component && ReferenceEquals(sender, component.Settings) && property == "Children")
+            foreach (var node in Flatten(Roots).ToArray())
             {
-                structureChanged |= ReconcileChildren(node, children?.Cast<object>() ?? []);
-            }
+                var children = SceneHierarchyEditing.GetChildren(node.Model);
+                if (ReferenceEquals(sender, children) || ReferenceEquals(sender, node.Model) && property is "Layers" or "Children" or "Settings" || node.Model is ComponentSettings component && ReferenceEquals(sender, component.Settings) && property == "Children")
+                {
+                    structureChanged |= ReconcileChildren(node, children?.Cast<object>() ?? []);
+                }
 
-            if (ReferenceEquals(sender, node.Model) && property == "Name")
-            {
-                node.RefreshTitle();
+                if (ReferenceEquals(sender, node.Model) && property == "Name")
+                {
+                    node.RefreshTitle();
+                }
             }
+        }
+        finally
+        {
+            _updatingTree = wasUpdatingTree;
         }
 
         if (structureChanged)
         {
             var selection = _pendingSelectionModel is { } selectedModel
                 ? Flatten(Roots).FirstOrDefault(item => ReferenceEquals(item.Model, selectedModel))
-                : SelectedItem;
+                : previousSelection;
             if (_pendingSelectionModel == null)
             {
                 var nodes = Flatten(Roots).ToHashSet();
@@ -253,6 +271,13 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             else if (_pendingSelectionModel == null)
             {
                 SelectedItem = Roots.FirstOrDefault();
+            }
+
+            // Removing and reinserting a node clears TreeView's selection even when
+            // the selected model and SceneTreeItem instance have not changed.
+            if (ReferenceEquals(SelectedItem, previousSelection))
+            {
+                OnPropertyChanged(nameof(SelectedItem));
             }
 
             StructureChanged?.Invoke(this, EventArgs.Empty);
@@ -285,6 +310,10 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
         if (expanded != null)
         {
             item.IsExpanded = expanded.Contains(model);
+        }
+        else if (_pendingExpansionStates?.TryGetValue(model, out var isExpanded) == true)
+        {
+            item.IsExpanded = isExpanded;
         }
 
         ReconcileChildren(item, SceneHierarchyEditing.GetChildren(model)?.Cast<object>() ?? [], expanded);
@@ -325,7 +354,10 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             }
             else if (current != index)
             {
-                parent.Children.Move(current, index);
+                // WinUI 2 TreeView ignores Move notifications. Keep its native nodes
+                // in the same order so later removals target the correct component.
+                parent.Children.RemoveAt(current);
+                parent.Children.Insert(index, desired[index]);
                 changed = true;
             }
         }
@@ -403,7 +435,8 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
     internal ComponentSettings? AddComponent(ComponentRegisterInfo info, SceneTreeItem parent, int index)
     {
-        if (Scene == null || SceneHierarchyEditing.GetChildren(parent.Model) is not { } children)
+        if (Scene == null || IsPreview || !SceneHierarchyEditing.Contains(Scene, parent.Model)
+            || SceneHierarchyEditing.GetChildren(parent.Model) is not { } children)
         {
             return null;
         }
@@ -487,27 +520,36 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
     internal bool MoveItem(SceneTreeItem item, SceneTreeItem parent, int index)
     {
-        if (item.Parent == null)
+        if (Scene == null || IsPreview || item.Parent is not { } sourceParent
+            || !SceneHierarchyEditing.Contains(Scene, sourceParent.Model)
+            || !SceneHierarchyEditing.Contains(Scene, parent.Model)
+            || SceneHierarchyEditing.GetChildren(sourceParent.Model) is not { } source
+            || !source.Contains(item.Model))
         {
             return false;
         }
 
-        _pendingSelectionModel = ReferenceEquals(item, SelectedItem) ? item.Model : null;
+        var subtree = Flatten([item]).ToArray();
+        var previousSelectionModel = _pendingSelectionModel;
+        var previousExpansionStates = _pendingExpansionStates;
+        _pendingSelectionModel = subtree.Contains(SelectedItem) ? SelectedModel : null;
+        _pendingExpansionStates = subtree.ToDictionary(node => node.Model, node => node.IsExpanded, ReferenceEqualityComparer.Instance);
         try
         {
-            var moved = ReferenceEquals(item.Parent, parent)
+            var moved = ReferenceEquals(sourceParent.Model, parent.Model)
                 ? MoveInPlace(item.Model, parent.Model, index)
-                : SceneHierarchyEditing.TryMove(item.Model, item.Parent.Model, parent.Model, index);
+                : SceneHierarchyEditing.TryMove(item.Model, sourceParent.Model, parent.Model, index);
             if (moved && _pendingSelectionModel != null)
             {
-                Select(item.Model);
+                Select(_pendingSelectionModel);
             }
 
             return moved;
         }
         finally
         {
-            _pendingSelectionModel = null;
+            _pendingSelectionModel = previousSelectionModel;
+            _pendingExpansionStates = previousExpansionStates;
         }
     }
 

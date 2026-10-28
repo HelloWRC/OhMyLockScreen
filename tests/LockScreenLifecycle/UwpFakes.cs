@@ -183,7 +183,7 @@ namespace Windows.UI.Core
         public void PressAccelerator(CoreAcceleratorKeyEventType eventType, Windows.System.VirtualKey key) => AcceleratorKeyActivated?.Invoke(this, new(eventType, key));
     }
 
-    public sealed class CoreWindow
+    public sealed partial class CoreWindow
     {
         public CoreDispatcher Dispatcher { get; } = new();
 
@@ -220,7 +220,11 @@ namespace Windows.System
         Escape,
         Shift,
         Control,
-        Menu
+        Menu,
+        Up,
+        Down,
+        Left,
+        Right
     }
 }
 

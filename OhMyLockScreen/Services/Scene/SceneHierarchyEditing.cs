@@ -79,7 +79,7 @@ internal static class SceneHierarchyEditing
         return true;
     }
 
-    private static bool Contains(object? parent, object? item)
+    internal static bool Contains(object? parent, object? item)
     {
         if (parent == null)
         {

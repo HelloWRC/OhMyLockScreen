@@ -12,6 +12,7 @@
                 Unloaded="OnDecorationBorderUnloaded">
                 <ContentPresenter
                     Content="{Binding Content, ElementName=RootPresenter, Mode=OneWay}"
+                    Foreground="{Binding ContentForeground, ElementName=RootPresenter, Mode=OneWay}"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Stretch" />
             </Border>

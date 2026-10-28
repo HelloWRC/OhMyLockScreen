@@ -19,6 +19,7 @@
     <Compile Include="../../OhMyLockScreen/Services/**/*.cs" Link="Services/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/MainPage.xaml.cs" Link="MainPage.xaml.cs" />
     <Compile Include="../../OhMyLockScreen/SceneEditorPage.SystemBackground.cs" Link="SceneEditorPage.SystemBackground.cs" />
+    <Compile Include="../../OhMyLockScreen/SceneEditorPage.Tree.cs" Link="SceneEditorPage.Tree.cs" />
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneSaveToastTracker.cs" Link="Helpers/UI/SceneSaveToastTracker.cs" />
   </ItemGroup>
   <ItemGroup>

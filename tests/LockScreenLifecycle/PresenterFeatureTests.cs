@@ -17,11 +17,50 @@ using OhMyLockScreen.Shared.Extensions.Scene;
 using OhMyLockScreen.Shared.Models.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
 using Windows.UI.Xaml;
+using Windows.UI;
+using Windows.UI.Xaml.Media;
 
 internal static class PresenterFeatureTests
 {
     internal static void Run(Action<string, Action> run)
     {
+        run("Component content isolates composition foregrounds and releases them with its lifecycle", () =>
+        {
+            CreateHost();
+            var source = new AcrylicBrush
+            {
+                TintColor = Color.FromArgb(255, 255, 0, 0),
+                FallbackColor = Color.FromArgb(255, 0, 0, 255),
+                TintOpacity = 0.75,
+                AlwaysUseFallback = true,
+                Opacity = 0.8
+            };
+            var first = new ComponentPresenter { Foreground = source };
+            var second = new ComponentPresenter { Foreground = source };
+            first.Load();
+            second.Load();
+            var firstBrush = first.ContentForeground;
+            Check(firstBrush is AcrylicBrush copy && copy.TintColor == source.TintColor
+                && copy.FallbackColor == source.FallbackColor && copy.TintOpacity == source.TintOpacity
+                && copy.AlwaysUseFallback && copy.Opacity == source.Opacity
+                && !ReferenceEquals(firstBrush, source) && !ReferenceEquals(firstBrush, second.ContentForeground),
+                "Component content shared a composition brush connection or changed its appearance.");
+            first.RaiseLayoutUpdated();
+            Check(ReferenceEquals(firstBrush, first.ContentForeground), "An unchanged layout recreated its foreground.");
+            first.Unload();
+            Check(first.ContentForeground == null && second.ContentForeground is AcrylicBrush,
+                "Unloading one component retained its brush or cleared another component's foreground.");
+            first.Load();
+            Check(first.ContentForeground is AcrylicBrush && !ReferenceEquals(first.ContentForeground, firstBrush)
+                && ReferenceEquals(first.Foreground, source), "Reload reused a disconnected brush or replaced the source foreground.");
+            var solid = new SolidColorBrush();
+            first.Foreground = solid;
+            Check(ReferenceEquals(first.ContentForeground, solid), "Replacing the foreground did not update component content.");
+            first.Foreground = null;
+            Check(first.ContentForeground == null, "Clearing the foreground left the previous content brush attached.");
+            first.Unload();
+            second.Unload();
+        });
         run("Scene layer and component presenters attach matching features only while loaded", () =>
         {
             var cases = Cases();

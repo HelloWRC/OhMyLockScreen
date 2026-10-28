@@ -664,6 +664,240 @@ internal static class SceneTests
             editor.DeleteSelection();
             Check(rootChanges == 0 && resets == 0 && ReferenceEquals(editor.Roots[0], root) && ReferenceEquals(root.Children[0], layer) && ReferenceEquals(layer.Children[0], group) && ReferenceEquals(editor.SelectedItem, layer), "A local hierarchy change rebuilt unrelated branches.");
         });
+        run("Tree reordering keeps add/remove-only native nodes synchronized through subsequent deletions", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            var group = layer.Children[0];
+            var added = editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, layer, 1)!;
+            var nativeNodes = layer.Children.ToList();
+            layer.Children.CollectionChanged += (_, args) =>
+            {
+                // WinUI 2 TreeView handles Add/Remove/Replace/Reset, but ignores Move.
+                if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove)
+                {
+                    nativeNodes.RemoveAt(args.OldStartingIndex);
+                }
+                else if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+                {
+                    nativeNodes.Insert(args.NewStartingIndex, (SceneTreeItem)args.NewItems![0]!);
+                }
+            };
+
+            editor.MoveSelection(-1);
+            Check(nativeNodes.SequenceEqual(layer.Children), "Native nodes retained their old order after moving up.");
+            editor.MoveSelection(1);
+            Check(nativeNodes.SequenceEqual(layer.Children), "Native nodes retained their old order after moving down.");
+            editor.DeleteSelection();
+            Check(nativeNodes.SequenceEqual(layer.Children) && nativeNodes.Count == 1
+                && ReferenceEquals(nativeNodes[0], group) && editor.FindItem(added) == null
+                && ReferenceEquals(editor.SelectedItem, group), "Deleting after reordering removed the wrong native node.");
+            editor.DeleteSelection();
+            Check(nativeNodes.Count == 0 && editor.FindItem(group.Model) == null
+                && ReferenceEquals(editor.SelectedItem, layer), "Deleting the remaining container left stale native descendants.");
+        });
+        run("Tree reconciliation ignores transient selection callbacks and reapplies unchanged selections", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var group = editor.Roots[0].Children[0].Children[0];
+            var selected = group.Children[1];
+            var other = group.Children[0];
+            editor.Select(selected.Model);
+            SceneTreeItem? nativeSelection = selected;
+            editor.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(SceneEditorViewModel.SelectedItem))
+                {
+                    nativeSelection = editor.SelectedItem;
+                }
+            };
+            group.Children.CollectionChanged += (_, args) =>
+            {
+                if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove
+                    && args.OldItems!.Contains(nativeSelection))
+                {
+                    nativeSelection = null;
+                    editor.Select(other.Model);
+                }
+            };
+
+            editor.MoveSelection(-1);
+            Check(ReferenceEquals(editor.SelectedItem, selected) && ReferenceEquals(nativeSelection, selected),
+                "A transient native selection callback replaced the intended selection or the binding was not refreshed.");
+            editor.DeleteSelection();
+            Check(ReferenceEquals(editor.SelectedItem, group) && ReferenceEquals(nativeSelection, group)
+                && group.Children.Count == 1 && ReferenceEquals(group.Children[0], other)
+                && editor.FindItem(selected.Model) == null,
+                "Deletion used the transient selection or left the deleted component in the tree.");
+        });
+        run("Tree keyboard reordering commits models, preserves focus and saves the displayed order", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var page = new SceneEditorPage();
+            page.LoadTree(editor);
+            var group = editor.Roots[0].Children[0].Children[0];
+            var item = group.Children[1];
+            var children = ((ContainerComponentSettings)((ComponentSettings)group.Model).Settings!).Children;
+            editor.Select(group.Model);
+            Check(page.PressTreeKey(item, Windows.System.VirtualKey.Up)
+                && ReferenceEquals(group.Children[0], item) && ReferenceEquals(children[0], item.Model)
+                && ReferenceEquals(editor.SelectedItem, item)
+                && ((Windows.UI.Xaml.Controls.Control)page.SceneTree.ContainerFromItem(item)).HasKeyboardFocus,
+                "Keyboard reordering bypassed the model, used selection instead of focus or lost keyboard focus.");
+            Check(page.PressTreeKey(item, Windows.System.VirtualKey.Down)
+                && ReferenceEquals(group.Children[1], item) && ReferenceEquals(children[1], item.Model),
+                "The down shortcut did not commit the displayed order.");
+            Check(page.PressTreeKey(item, Windows.System.VirtualKey.Left)
+                && ReferenceEquals(group.Children[0], item), "The left shortcut did not move up.");
+            Check(page.PressTreeKey(item, Windows.System.VirtualKey.Right)
+                && ReferenceEquals(group.Children[1], item), "The right shortcut did not move down.");
+            Check(page.PressTreeKey(item, Windows.System.VirtualKey.Down)
+                && ReferenceEquals(group.Children[1], item), "A boundary shortcut reached native reordering.");
+            Check(!page.PressTreeKey(item, Windows.System.VirtualKey.Up, alt: false)
+                && !page.PressTreeKey(item, Windows.System.VirtualKey.Up, shift: false)
+                && !page.PressTreeKey(item, Windows.System.VirtualKey.Up, control: true)
+                && ReferenceEquals(group.Children[1], item), "Ordinary navigation was intercepted as reordering.");
+            editor.IsPreview = true;
+            Check(page.PressTreeKey(item, Windows.System.VirtualKey.Up)
+                && ReferenceEquals(group.Children[1], item), "Preview allowed keyboard editing.");
+            editor.IsPreview = false;
+            page.PressTreeKey(item, Windows.System.VirtualKey.Up);
+            fixture.Service.FlushPending();
+            var saved = fixture.Service.Load(editor.Scene!.SceneId).Layers[0].Children[0].GetSettings<ContainerComponentSettings>();
+            Check(saved.Children[0].Id == ((ComponentSettings)item.Model).Id, "Keyboard order was not saved.");
+            editor.DeleteSelection();
+            Check(editor.FindItem(item.Model) == null && group.Children.Count == 1 && children.Count == 1,
+                "Deletion after keyboard reordering left a stale node or removed the wrong model.");
+        });
+        run("Delayed tree actions reject superseded scenes and preview transitions", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var page = new SceneEditorPage();
+            page.LoadTree(editor);
+            var calls = 0;
+            page.QueueTreeAction(() => calls++);
+            editor.Open(fixture.Service.ActiveSceneId);
+            Window.Current.CoreWindow.Dispatcher.Drain();
+            Check(calls == 0, "An action crossed a scene reload.");
+            page.QueueTreeAction(() => calls++);
+            editor.IsPreview = true;
+            Window.Current.CoreWindow.Dispatcher.Drain();
+            Check(calls == 0, "An action crossed a preview transition.");
+            editor.IsPreview = false;
+            page.QueueTreeAction(() => calls++);
+            Window.Current.CoreWindow.Dispatcher.Drain();
+            Check(calls == 1, "A valid deferred tree action was discarded.");
+        });
+        run("Removed tree targets and sources are rejected before any component leaves its scene", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            var source = layer.Children[0];
+            var targetModel = editor.AddComponent(fixture.Registry.Find(ContainerComponent.Id)!, layer, 1)!;
+            var target = editor.SelectedItem!;
+            var page = new SceneEditorPage();
+            page.LoadTree(editor);
+            var moveAccepted = true;
+            ComponentSettings? added = targetModel;
+            page.QueueTreeAction(() =>
+            {
+                moveAccepted = editor.MoveItem(source, target, 0);
+                added = editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, target, 0);
+            });
+            editor.DeleteSelection();
+            editor.Select(source.Model);
+            Window.Current.CoreWindow.Dispatcher.Drain();
+            Check(!moveAccepted && added == null
+                && ReferenceEquals(editor.FindItem(source.Model), source)
+                && targetModel.GetSettings<ContainerComponentSettings>().Children.Count == 0
+                && ReferenceEquals(editor.SelectedItem, source), "A removed destination accepted or swallowed a component.");
+            var child = source.Children[0];
+            editor.DeleteSelection();
+            Check(!editor.MoveItem(child, layer, 0) && layer.Children.Count == 0,
+                "A child of a removed source container was resurrected.");
+            editor.Select(layer.Model);
+            editor.DeleteSelection();
+            Check(editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, layer, 0) == null,
+                "A removed layer accepted a component.");
+            editor.Open(fixture.Service.ActiveSceneId);
+            Check(!editor.MoveItem(source, editor.Roots[0], 0)
+                && editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, target, 0) == null,
+                "Models from a previous scene instance were accepted.");
+        });
+        run("Tree editing validates the model hierarchy while native drag nodes and rebuilt wrappers change", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            var group = layer.Children[0];
+            var source = group.Children[0];
+            editor.AddLayer();
+            var target = editor.SelectedItem!;
+            // Native drag moves the UI nodes before DragItemsCompleted commits the models.
+            group.Children.Remove(source);
+            target.Children.Add(source);
+            Check(editor.MoveItem(source, target, 0), "Optimistically moved native nodes invalidated a live model move.");
+            editor.RebuildTree();
+            Check(ReferenceEquals(editor.FindItem(source.Model)!.Parent!.Model, target.Model),
+                "Rebuilding did not reflect the committed parent.");
+            Check(editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, layer, 0) != null,
+                "A rebuilt wrapper invalidated a still-live parent model.");
+            var current = editor.FindItem(source.Model)!;
+            editor.IsPreview = true;
+            Check(!editor.MoveItem(current, layer, 0)
+                && editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, layer, 0) == null
+                && ReferenceEquals(editor.FindItem(source.Model), current), "Preview accepted tree editing.");
+            editor.IsPreview = false;
+            var oldParent = current.Parent!;
+            editor.Open(fixture.Service.ActiveSceneId);
+            Check(!editor.MoveItem(current, editor.Roots[0].Children[0], 0)
+                && editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, oldParent, 0) == null
+                && editor.FindItem(current.Model) == null,
+                "A live source or parent from the previous scene instance was accepted after reloading.");
+        });
+        run("Cross-parent moves preserve mixed subtree expansion and descendant selection through rebuilds", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            var group = layer.Children[0];
+            var nestedModel = editor.AddComponent(fixture.Registry.Find(ContainerComponent.Id)!, group, 2)!;
+            var nested = editor.FindItem(nestedModel)!;
+            var child = editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, nested, 0)!;
+            group.IsExpanded = false;
+            group.Children[0].IsExpanded = false;
+            group.Children[1].IsExpanded = true;
+            nested.IsExpanded = false;
+            editor.AddLayer();
+            var target = editor.SelectedItem!;
+            var states = editor.GetAllItems().ToDictionary(item => item.Model, item => item.IsExpanded, ReferenceEqualityComparer.Instance);
+            editor.Select(child);
+            Check(editor.MoveItem(group, target, 0) && ReferenceEquals(editor.SelectedModel, child),
+                "Moving a subtree lost the selected descendant.");
+            foreach (var state in states)
+            {
+                Check(editor.FindItem(state.Key)!.IsExpanded == state.Value, "Moving reset a subtree expansion state.");
+            }
+
+            editor.RebuildTree();
+            Check(ReferenceEquals(editor.SelectedModel, child), "Rebuilding lost the moved descendant selection.");
+            foreach (var state in states)
+            {
+                Check(editor.FindItem(state.Key)!.IsExpanded == state.Value, "Rebuilding lost a preserved expansion state.");
+            }
+        });
         run("Tree dragging reorders in place and moves components across layers without replacing their settings", () =>
         {
             using var fixture = new Fixture();
@@ -695,6 +929,37 @@ internal static class SceneTests
             fixture.Service.FlushPending();
             var saved = fixture.Service.Load(editor.Scene!.SceneId);
             Check(saved.Layers[0].Children[0].Id == component.Id, "The moved component was not persisted in its new layer.");
+        });
+        run("Tree container edges reorder siblings while the center accepts children", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            var group = layer.Children[0];
+            var component = editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, layer, layer.Children.Count)!;
+            var source = editor.FindItem(component)!;
+            var page = new SceneEditorPage();
+            page.LoadTree(editor);
+
+            var before = page.ResolveTreeDrop(source, group, 0);
+            Check(before is { } first && ReferenceEquals(first.Parent, layer) && first.Index == 0,
+                "The top edge of a container was resolved as a child drop.");
+            var inside = page.ResolveTreeDrop(source, group, 1);
+            Check(inside is { } middle && ReferenceEquals(middle.Parent, group) && middle.Index == group.Children.Count,
+                "The middle of a container did not accept a child drop.");
+
+            Check(editor.MoveItem(source, before!.Value.Parent, before.Value.Index), "The sibling drop was rejected.");
+            source = editor.FindItem(component)!;
+            var after = page.ResolveTreeDrop(source, group, 2);
+            Check(after is { } last && ReferenceEquals(last.Parent, layer) && last.Index == 1,
+                "The bottom edge of a container was resolved as a child drop or used the wrong adjusted index.");
+            var child = group.Children[0];
+            var outOfContainer = page.ResolveTreeDrop(child, group, 0);
+            Check(outOfContainer is { } outside && ReferenceEquals(outside.Parent, layer) && outside.Index == 1,
+                "Dropping a child above its container did not move it to the container's sibling level.");
+            Check(page.ResolveTreeDrop(source, group, 0) == null,
+                "An unchanged sibling insertion slot unexpectedly became a child drop.");
         });
         run("Moving into and within a container keeps the component under that container", () =>
         {

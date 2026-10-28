@@ -504,6 +504,7 @@
                                 ItemsSource="{x:Bind ViewModel.Roots}"
                                 SelectedItem="{x:Bind ViewModel.SelectedItem, Mode=OneWay}"
                                 CanReorderItems="True"
+                                PreviewKeyDown="OnTreePreviewKeyDown"
                                 DragItemsStarting="OnTreeDragItemsStarting"
                                 DragItemsCompleted="OnDragItemsCompleted"
                                 DragOver="OnTreeDragOver"
