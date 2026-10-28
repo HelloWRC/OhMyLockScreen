@@ -37,6 +37,8 @@
     <Compile Include="../../OhMyLockScreen/Controls/Components/TextDefaultFeaturesProviders.cs" Link="Controls/Components/TextDefaultFeaturesProviders.cs" />
     <Compile Include="../../OhMyLockScreen/Controls/Components/Media*.cs" Link="Controls/Components/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/Media/*.cs" Link="Services/Media/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Controls/Components/SystemStatus*.cs" Link="Controls/Components/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Services/SystemStatus/*.cs" Link="Services/SystemStatus/%(Filename)%(Extension)" />
     <Page Include="../../OhMyLockScreen/Controls/Components/*Component.xaml" Link="Controls/Components/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/ViewModels/BorderSettingsViewModel.cs" Link="ViewModels/BorderSettingsViewModel.cs" />
     <Compile Include="../../OhMyLockScreen/ViewModels/LayoutMarginsViewModel.cs" Link="ViewModels/LayoutMarginsViewModel.cs" />

@@ -131,6 +131,7 @@ namespace Windows.UI.Xaml.Controls
         public static readonly DependencyProperty ColumnProperty = RegisterPosition("Column", 0);
         public static readonly DependencyProperty RowSpanProperty = RegisterPosition("RowSpan", 1);
         public static readonly DependencyProperty ColumnSpanProperty = RegisterPosition("ColumnSpan", 1);
+        public static void SetColumn(DependencyObject target, int column) => target.SetValue(ColumnProperty, column);
         private static DependencyProperty RegisterPosition(string name, int minimum)
         {
             return DependencyProperty.RegisterAttached(name, typeof(int), typeof(Grid), new PropertyMetadata(minimum, (_, args) =>

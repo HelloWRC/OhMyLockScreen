@@ -1,3 +1,8 @@
+param(
+    [ValidateSet('media', 'system-status')]
+    [string]$Scenario = 'media'
+)
+
 $ErrorActionPreference = 'Stop'
 
 # Activate only the isolated test package. This package has no lock-screen extension.
@@ -33,13 +38,14 @@ public static class MediaPreviewActivation
             out uint processId);
     }
 
-    public static uint Launch(string appUserModelId)
+    public static uint Launch(string appUserModelId, string scenario)
     {
         var type = Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C"));
         var manager = (IApplicationActivationManager)Activator.CreateInstance(type);
         try
         {
-            Marshal.ThrowExceptionForHR(manager.ActivateApplication(appUserModelId, "media", 0, out uint processId));
+            uint processId;
+            Marshal.ThrowExceptionForHR(manager.ActivateApplication(appUserModelId, scenario, 0, out processId));
             return processId;
         }
         finally
@@ -51,4 +57,4 @@ public static class MediaPreviewActivation
 '@
 }
 
-[MediaPreviewActivation]::Launch("$($previewPackage.PackageFamilyName)!App")
+[MediaPreviewActivation]::Launch("$($previewPackage.PackageFamilyName)!App", $Scenario)

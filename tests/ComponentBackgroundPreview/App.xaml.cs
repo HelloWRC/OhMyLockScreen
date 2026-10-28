@@ -45,6 +45,12 @@ public sealed partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (args.Arguments.Contains("system-status", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchSystemStatusPreview();
+            return;
+        }
+
         if (args.Arguments.Contains("media", StringComparison.OrdinalIgnoreCase))
         {
             LaunchMediaPreview();

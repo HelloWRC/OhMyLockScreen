@@ -24,6 +24,14 @@ if (args.Contains("--media-only"))
     return;
 }
 
+if (args.Contains("--system-status-only"))
+{
+    SystemStatusTests.Run(Run);
+    await SystemStatusTests.RunAsync(RunAsync);
+    Console.WriteLine($"All {passed} system status checks passed using isolated settings and simulated sources.");
+    return;
+}
+
 if (args.Contains("--brush-only"))
 {
     BrushSerializationTests.Run(Run);
@@ -117,6 +125,8 @@ if (args.Contains("--layout-only"))
 }
 
 await InfrastructureTests.RunAsync(Run, RunAsync);
+SystemStatusTests.Run(Run);
+await SystemStatusTests.RunAsync(RunAsync);
 MediaTests.Run(Run);
 await MediaTests.RunAsync(RunAsync);
 BrushSerializationTests.Run(Run);
