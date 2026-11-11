@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <Platforms>x86;x64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifier>win-$(Platform)</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DisableRuntimeMarshalling>true</DisableRuntimeMarshalling>
+    <DefineConstants>$(DefineConstants);AUDIO_HOST</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="System.Reactive" Version="6.1.0" />
+    <Compile Include="../OhMyLockScreen/Services/Audio/*.cs" Exclude="../OhMyLockScreen/Services/Audio/AudioHostSpectrumClient.cs" Link="Audio/%(Filename)%(Extension)" />
+    <Compile Include="../OhMyLockScreen.Shared/Models/Audio/*.cs" Link="Models/%(Filename)%(Extension)" />
+    <Compile Include="../OhMyLockScreen.Shared/Abstractions/Services/Audio/*.cs" Link="Abstractions/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

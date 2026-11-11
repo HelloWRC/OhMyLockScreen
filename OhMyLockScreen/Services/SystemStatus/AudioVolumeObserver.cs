@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
+using OhMyLockScreen.Services.Audio;
 using OhMyLockScreen.Shared.Models.SystemStatus;
 using Windows.Media.Devices;
 
@@ -68,7 +69,7 @@ internal sealed partial class AudioVolumeObserver : IDisposable
         {
             if (_disposed || generation != _generation || error != null)
             {
-                AudioVolumeInterop.Release(endpoint);
+                AudioInterop.Release(endpoint);
                 if (!_disposed && generation == _generation && error != null)
                 {
                     _failure(error);
@@ -129,7 +130,7 @@ internal sealed partial class AudioVolumeObserver : IDisposable
                 _endpoint.UnregisterControlChangeNotify(_callback);
             }
 
-            AudioVolumeInterop.Release(_endpoint);
+            AudioInterop.Release(_endpoint);
             _endpoint = null;
             _callback = null;
         }
@@ -183,7 +184,7 @@ internal sealed partial class AudioVolumeObserver : IDisposable
             try
             {
                 var iid = typeof(IAudioEndpointVolume).GUID;
-                Marshal.ThrowExceptionForHR(AudioVolumeInterop.ActivateAudioInterfaceAsync(device, in iid, 0, (nint)pointer, out var operation));
+                Marshal.ThrowExceptionForHR(AudioInterop.ActivateAudioInterfaceAsync(device, in iid, 0, (nint)pointer, out var operation));
                 lock (_operationSync)
                 {
                     // Completion may precede the return from ActivateAudioInterfaceAsync.
@@ -211,10 +212,10 @@ internal sealed partial class AudioVolumeObserver : IDisposable
             Exception? error = null;
             try
             {
-                wrapper = AudioVolumeInterop.WrapUnique<IActivateAudioInterfaceAsyncOperation>(operation);
+                wrapper = AudioInterop.WrapUnique<IActivateAudioInterfaceAsyncOperation>(operation);
                 Marshal.ThrowExceptionForHR(wrapper.GetActivateResult(out var result, out activated));
                 Marshal.ThrowExceptionForHR(result);
-                endpoint = AudioVolumeInterop.WrapUnique<IAudioEndpointVolume>(activated);
+                endpoint = AudioInterop.WrapUnique<IAudioEndpointVolume>(activated);
             }
             catch (Exception exception)
             {
@@ -227,7 +228,7 @@ internal sealed partial class AudioVolumeObserver : IDisposable
                     Marshal.Release(activated);
                 }
 
-                AudioVolumeInterop.Release(wrapper);
+                AudioInterop.Release(wrapper);
             }
 
             try

@@ -23,6 +23,10 @@
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneSaveToastTracker.cs" Link="Helpers/UI/SceneSaveToastTracker.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Remove="../../OhMyLockScreen/Services/Audio/AudioInterop.cs" />
+    <Compile Remove="../../OhMyLockScreen/Services/Audio/AudioHostSpectrumClient.cs" />
+    <Compile Remove="../../OhMyLockScreen/Services/Audio/WindowsAudioSpectrumSource.cs" />
+    <Compile Remove="../../OhMyLockScreen/Controls/Components/AudioSpectrum*.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/Media/**/*.cs" />
     <Compile Remove="../../OhMyLockScreen/Controls/Components/MediaComponent.cs" />
     <Compile Remove="../../OhMyLockScreen/Controls/Components/MediaParts.cs" />
@@ -38,6 +42,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="FluentIcons.Common" Version="2.1.339.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
     <PackageReference Include="ReactiveUI" Version="26.0.1" />

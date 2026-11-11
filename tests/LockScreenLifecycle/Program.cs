@@ -16,6 +16,14 @@ async Task RunAsync(string name, Func<Task> test)
     Console.WriteLine($"PASS: {name}");
 }
 
+if (args.Contains("--spectrum-only"))
+{
+    AudioSpectrumTests.Run(Run);
+    await AudioSpectrumTests.RunAsync(RunAsync);
+    Console.WriteLine($"All {passed} spectrum checks passed using isolated settings and simulated audio.");
+    return;
+}
+
 if (args.Contains("--media-only"))
 {
     MediaTests.Run(Run);
@@ -125,6 +133,8 @@ if (args.Contains("--layout-only"))
 }
 
 await InfrastructureTests.RunAsync(Run, RunAsync);
+AudioSpectrumTests.Run(Run);
+await AudioSpectrumTests.RunAsync(RunAsync);
 SystemStatusTests.Run(Run);
 await SystemStatusTests.RunAsync(RunAsync);
 MediaTests.Run(Run);

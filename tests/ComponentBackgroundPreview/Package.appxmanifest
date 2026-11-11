@@ -2,15 +2,17 @@
 <Package
     xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
     xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
-    IgnorableNamespaces="uap">
-  <Identity Name="dev.hellowrc.OhMyLockScreen.BackgroundPreview" Publisher="CN=HelloWRC.Dev" Version="1.0.0.0" />
+    xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+    xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+    IgnorableNamespaces="uap desktop rescap">
+  <Identity Name="dev.hellowrc.OhMyLockScreen.BackgroundPreview" Publisher="CN=HelloWRC.Dev" Version="1.0.0.1" />
   <Properties>
     <DisplayName>Component Background Preview</DisplayName>
     <PublisherDisplayName>HelloWRC.Dev</PublisherDisplayName>
     <Logo>Assets/StoreLogo.png</Logo>
   </Properties>
   <Dependencies>
-    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
   </Dependencies>
   <Resources>
     <Resource Language="x-generate" />
@@ -22,9 +24,17 @@
                           BackgroundColor="transparent">
         <uap:SplashScreen Image="Assets/SplashScreen.png" />
       </uap:VisualElements>
+      <Extensions>
+        <desktop:Extension Category="windows.fullTrustProcess" Executable="OhMyLockScreen.AudioHost.exe">
+          <desktop:FullTrustProcess>
+            <desktop:ParameterGroup GroupId="AudioSpectrum" Parameters="--audio-spectrum" />
+          </desktop:FullTrustProcess>
+        </desktop:Extension>
+      </Extensions>
     </Application>
   </Applications>
   <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
     <Capability Name="internetClient" />
     <DeviceCapability Name="bluetooth" />
   </Capabilities>

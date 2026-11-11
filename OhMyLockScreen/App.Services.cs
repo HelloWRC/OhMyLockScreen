@@ -24,6 +24,8 @@ using OhMyLockScreen.Services.Media;
 using OhMyLockScreen.Shared.Abstractions.Services.Media;
 using OhMyLockScreen.Services.SystemStatus;
 using OhMyLockScreen.Shared.Abstractions.Services.SystemStatus;
+using OhMyLockScreen.Services.Audio;
+using OhMyLockScreen.Shared.Abstractions.Services.Audio;
 
 namespace OhMyLockScreen;
 
@@ -42,6 +44,10 @@ public sealed partial class App
         services.AddSingleton(provider => new SettingsService(provider.GetRequiredService<ILogger<SettingsService>>(), Path.Combine(ApplicationData.Current.LocalFolder.Path, "Settings.json")));
         services.AddSingleton<ISceneService>(provider => new SceneService(provider.GetRequiredService<SettingsService>(), provider.GetRequiredService<ILogger<SceneService>>(), ApplicationData.Current.LocalFolder.Path));
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IAudioSpectrumSource, WindowsAudioSpectrumSource>();
+        services.AddSingleton<AudioSpectrumService>();
+        services.AddSingleton<IAudioSpectrumService>(provider => provider.GetRequiredService<AudioSpectrumService>());
+        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<AudioSpectrumService>());
         services.AddSingleton<ISystemStatusSource, WindowsSystemStatusSource>();
         services.AddSingleton<SystemStatusService>();
         services.AddSingleton<ISystemStatusService>(provider => provider.GetRequiredService<SystemStatusService>());
@@ -61,6 +67,7 @@ public sealed partial class App
         services.AddComponent<ClockComponent, ClockSettingsControl>();
         services.AddComponent<DateComponent>();
         services.AddComponent<SystemStatusComponent, SystemStatusSettingsControl>();
+        services.AddComponent<AudioSpectrumComponent, AudioSpectrumSettingsControl>();
         services.AddComponent<ContainerComponent, ContainerSettingsControl>();
         services.AddComponent<MediaComponent, MediaSettingsControl>();
         services.AddComponent<MediaTextComponent, MediaTextSettingsControl>();

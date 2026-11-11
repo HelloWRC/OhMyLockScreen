@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('media', 'system-status')]
+    [ValidateSet('media', 'system-status', 'spectrum')]
     [string]$Scenario = 'media'
 )
 
@@ -13,7 +13,10 @@ if (-not (Test-Path -LiteralPath $previewManifest)) {
 }
 
 $previewPackage = Get-AppxPackage -Name 'dev.hellowrc.OhMyLockScreen.BackgroundPreview'
-if (-not $previewPackage -or $previewPackage.InstallLocation -ne $previewLayout) {
+[xml]$layoutManifest = Get-Content -LiteralPath $previewManifest -Raw
+$layoutVersion = [version]$layoutManifest.Package.Identity.Version
+# Extension/capability changes use a higher package version; ordinary rebuilds reuse registration.
+if (-not $previewPackage -or $previewPackage.InstallLocation -ne $previewLayout -or [version]$previewPackage.Version -lt $layoutVersion) {
     Add-AppxPackage -Register $previewManifest -ForceApplicationShutdown
     $previewPackage = Get-AppxPackage -Name 'dev.hellowrc.OhMyLockScreen.BackgroundPreview'
 }

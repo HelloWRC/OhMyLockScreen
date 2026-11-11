@@ -18,7 +18,13 @@
     <AppxBundle>Never</AppxBundle>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <ProjectReference Include="../../OhMyLockScreen.Shared/OhMyLockScreen.Shared.csproj" />
+    <ProjectReference Include="../../OhMyLockScreen.AudioHost/OhMyLockScreen.AudioHost.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <Content Include="../../OhMyLockScreen.AudioHost/bin/$(Platform)/$(Configuration)/net10.0-windows10.0.26100.0/win-$(Platform)/OhMyLockScreen.AudioHost.exe" Link="OhMyLockScreen.AudioHost.exe" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../OhMyLockScreen.AudioHost/bin/$(Platform)/$(Configuration)/net10.0-windows10.0.26100.0/win-$(Platform)/OhMyLockScreen.AudioHost.dll" Link="OhMyLockScreen.AudioHost.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../OhMyLockScreen.AudioHost/bin/$(Platform)/$(Configuration)/net10.0-windows10.0.26100.0/win-$(Platform)/OhMyLockScreen.AudioHost.deps.json" Link="OhMyLockScreen.AudioHost.deps.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../OhMyLockScreen.AudioHost/bin/$(Platform)/$(Configuration)/net10.0-windows10.0.26100.0/win-$(Platform)/OhMyLockScreen.AudioHost.runtimeconfig.json" Link="OhMyLockScreen.AudioHost.runtimeconfig.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../OhMyLockScreen/Assets/*.png" Link="Assets/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Models/Features/**/*.cs" Link="Models/Features/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BorderFeature.cs" Link="Services/BorderFeature.cs" />
@@ -39,6 +45,8 @@
     <Compile Include="../../OhMyLockScreen/Services/Media/*.cs" Link="Services/Media/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Controls/Components/SystemStatus*.cs" Link="Controls/Components/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/SystemStatus/*.cs" Link="Services/SystemStatus/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Services/Audio/*.cs" Link="Services/Audio/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Controls/Components/AudioSpectrum*.cs" Link="Controls/Components/%(Filename)%(Extension)" />
     <Page Include="../../OhMyLockScreen/Controls/Components/*Component.xaml" Link="Controls/Components/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/ViewModels/BorderSettingsViewModel.cs" Link="ViewModels/BorderSettingsViewModel.cs" />
     <Compile Include="../../OhMyLockScreen/ViewModels/LayoutMarginsViewModel.cs" Link="ViewModels/LayoutMarginsViewModel.cs" />
