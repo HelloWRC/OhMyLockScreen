@@ -4,7 +4,9 @@ using OhMyLockScreen.Models.Features.Appearance;
 using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.FeatureHost;
 using OhMyLockScreen.Shared.Attributes.FeatureHost;
+using OhMyLockScreen.Shared.Controls.Scene;
 using OhMyLockScreen.Shared.Helpers;
+using OhMyLockScreen.Shared.Helpers.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 
@@ -71,7 +73,8 @@ public sealed class BackgroundFeature : FeatureBase<FrameworkElement, Background
         };
         if (property != null)
         {
-            _binding = DependencyPropertyBindingHelper.Bind(settings, source => source.Background, target!, property);
+            _binding = DependencyPropertyBindingHelper.Bind(settings, source => source.Background, target!, property,
+                brush => SceneImageBrush.Resolve(brush, (Target as ISceneBlobContext)?.BlobUriConverter));
         }
     }
 

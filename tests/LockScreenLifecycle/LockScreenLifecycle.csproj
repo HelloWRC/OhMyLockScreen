@@ -37,6 +37,8 @@
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/Scene/VideoSwapChain.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/ToastCard.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BrushEditControl.xaml.cs" />
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BlobPicker.xaml.cs" />
+    <Compile Remove="../../OhMyLockScreen.Shared/Helpers/UI/SceneImageDecoder.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BrushGradientAdorner.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/NumberBoxBehavior.cs" />
   </ItemGroup>

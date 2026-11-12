@@ -3,8 +3,6 @@ using Windows.Devices.Input;
 using Windows.Foundation;
 using Windows.Foundation.Metadata;
 using Windows.Globalization.NumberFormatting;
-using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.System;
 using Windows.UI;
 using Windows.UI.Xaml;
@@ -13,6 +11,7 @@ using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
+using OhMyLockScreen.Shared.Controls.Scene;
 using OhMyLockScreen.Shared.Helpers.UI;
 using Muxc = Microsoft.UI.Xaml.Controls;
 using RadialGradientBrush = Microsoft.UI.Xaml.Media.RadialGradientBrush;
@@ -31,6 +30,25 @@ public sealed partial class BrushEditControl : UserControl
     public static readonly DependencyProperty TargetElementProperty = DependencyProperty.Register(
         nameof(TargetElement), typeof(FrameworkElement), typeof(BrushEditControl), new PropertyMetadata(null, OnTargetChanged));
 
+    public static readonly DependencyProperty BlobUriConverterProperty = DependencyProperty.Register(
+        nameof(BlobUriConverter), typeof(SceneBlobUriConverter), typeof(BrushEditControl),
+        new PropertyMetadata(null, OnBlobContextChanged));
+
+    public static readonly DependencyProperty ImageBlobIdProperty = DependencyProperty.Register(
+        nameof(ImageBlobId), typeof(string), typeof(BrushEditControl), new PropertyMetadata(null, OnImageBlobIdChanged));
+
+    public SceneBlobUriConverter? BlobUriConverter
+    {
+        get => (SceneBlobUriConverter?)GetValue(BlobUriConverterProperty);
+        set => SetValue(BlobUriConverterProperty, value);
+    }
+
+    public string? ImageBlobId
+    {
+        get => (string?)GetValue(ImageBlobIdProperty);
+        set => SetValue(ImageBlobIdProperty, value);
+    }
+
     public Brush? Brush
     {
         get => (Brush?)GetValue(BrushProperty);
@@ -47,6 +65,7 @@ public sealed partial class BrushEditControl : UserControl
     private readonly List<(DependencyObject Source, DependencyProperty Property, long Token)> _subscriptions = [];
     private GradientStop[] _observedStops = [];
     private BitmapImage? _observedImage;
+    private ImageBrush? _previewImage;
     private BrushGradientAdorner? _adorner;
     private bool _ready;
     private bool _loaded;
@@ -58,12 +77,13 @@ public sealed partial class BrushEditControl : UserControl
     private int _dragStop = -1;
     private uint _dragPointer;
     private double _dragGrabOffset;
-    private long _revision;
-    private long _browseRequest;
 
     public BrushEditControl()
     {
         InitializeComponent();
+        ImagePicker.FileTypes = BrushImageImport.Extensions;
+        ImagePicker.ValidateAsync = async uri => { await SceneImageDecoder.ReadSizeAsync(uri); };
+        ImagePicker.PickFailed += (_, exception) => ShowError(exception);
         // NumberBox supplies a local default formatter, so a style setter cannot replace it.
         var formatter = (Windows.Globalization.NumberFormatting.PercentFormatter)Resources["PercentageFormatter"];
         OffsetInput.NumberFormatter = new PercentFormatter
@@ -86,7 +106,7 @@ public sealed partial class BrushEditControl : UserControl
     private static void OnBrushChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
         var editor = (BrushEditControl)sender;
-        editor._revision++;
+        editor.ImagePicker.InvalidateSelection();
         if (!editor._publishing)
         {
             editor.CancelStripDrag();
@@ -97,9 +117,33 @@ public sealed partial class BrushEditControl : UserControl
         editor.Sync();
     }
 
+    private static void OnBlobContextChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
+    {
+        var editor = (BrushEditControl)sender;
+        editor.Observe();
+        editor.Sync();
+    }
+
+    private static void OnImageBlobIdChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
+    {
+        var editor = (BrushEditControl)sender;
+        if (editor._synchronizing || editor.Brush is not ImageBrush)
+        {
+            return;
+        }
+
+        editor.Edit(copy =>
+        {
+            var imageCopy = (ImageBrush)copy;
+            imageCopy.ImageSource = null;
+            SceneImageBrush.SetBlobId(imageCopy, (string?)args.NewValue);
+        });
+    }
+
     private static void OnTargetChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
         var editor = (BrushEditControl)sender;
+        editor.ImagePicker.InvalidateSelection();
         editor._adorner?.Dispose();
         editor._adorner = null;
         editor.UpdateAdorner();
@@ -109,7 +153,6 @@ public sealed partial class BrushEditControl : UserControl
     {
         _loaded = true;
         _selectionReady = false;
-        BrowseButton.IsEnabled = true;
         Observe();
         Sync();
         _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
@@ -126,10 +169,11 @@ public sealed partial class BrushEditControl : UserControl
     {
         _loaded = false;
         _selectionReady = false;
-        _browseRequest++;
+        ImagePicker.InvalidateSelection();
         _collectionTimer.Stop();
         CancelStripDrag();
         Unobserve();
+        ImagePreviewSurface.Fill = null;
         _adorner?.Dispose();
         _adorner = null;
     }
@@ -206,8 +250,9 @@ public sealed partial class BrushEditControl : UserControl
         }
         if (Brush is ImageBrush image)
         {
+            _previewImage = (ImageBrush?)SceneImageBrush.Resolve(image, BlobUriConverter);
             Watch(image.ImageSource);
-            if (image.ImageSource is BitmapImage bitmap)
+            if (_previewImage?.ImageSource is BitmapImage bitmap)
             {
                 _observedImage = bitmap;
                 bitmap.ImageOpened += OnImageOpened;
@@ -224,6 +269,7 @@ public sealed partial class BrushEditControl : UserControl
         }
         _subscriptions.Clear();
         _observedStops = [];
+        _previewImage = null;
         if (_observedImage != null)
         {
             _observedImage.ImageOpened -= OnImageOpened;
@@ -234,7 +280,7 @@ public sealed partial class BrushEditControl : UserControl
 
     private void OnObservedPropertyChanged(DependencyObject sender, DependencyProperty property)
     {
-        _revision++;
+        ImagePicker.InvalidateSelection();
         Observe();
         Sync();
     }
@@ -295,13 +341,15 @@ public sealed partial class BrushEditControl : UserControl
             }
             if (Brush is ImageBrush image)
             {
-                ImagePreviewSurface.Fill = image;
-                EmptyImageText.Text = "请选择图片";
-                EmptyImageText.Visibility = Visible(image.ImageSource == null);
+                ImageBlobId = SceneImageBrush.GetBlobId(image);
+                ImagePreviewSurface.Fill = _previewImage;
+                EmptyImageText.Text = ImageBlobId == null ? "请选择图片" : "无法显示图片";
+                EmptyImageText.Visibility = Visible(_previewImage?.ImageSource == null);
                 StretchSelector.SelectedIndex = (int)image.Stretch;
             }
             else
             {
+                ImageBlobId = null;
                 ImagePreviewSurface.Fill = null;
             }
             foreach (var child in EditorPanel.Children.OfType<FrameworkElement>().Where(child => child != TypeSelector))
@@ -686,54 +734,6 @@ public sealed partial class BrushEditControl : UserControl
             HandleStopKey(index, args);
         }
     }
-
-    private async void OnBrowseClick(object sender, RoutedEventArgs args)
-    {
-        var revision = _revision;
-        var request = ++_browseRequest;
-        BrowseButton.IsEnabled = false;
-        try
-        {
-            var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
-            foreach (var extension in BrushImageImport.Extensions)
-            {
-                picker.FileTypeFilter.Add(extension);
-            }
-            var file = await picker.PickSingleFileAsync();
-            if (file == null || !IsCurrentImport(request, revision))
-            {
-                return;
-            }
-            await BrushImageImport.RunAsync(
-                () => file.OpenStreamForReadAsync(),
-                file.FileType,
-                Path.Combine(ApplicationData.Current.LocalFolder.Path, "BrushAssets"),
-                async path =>
-                {
-                    var imported = await StorageFile.GetFileFromPathAsync(path);
-                    using var stream = await imported.OpenReadAsync();
-                    await new BitmapImage().SetSourceAsync(stream);
-                },
-                () => IsCurrentImport(request, revision),
-                uri => Publish(BrushEditorOperations.Edit(Brush!, copy => ((ImageBrush)copy).ImageSource = new BitmapImage(uri))));
-        }
-        catch (Exception exception)
-        {
-            if (IsCurrentImport(request, revision))
-            {
-                ShowError(exception);
-            }
-        }
-        finally
-        {
-            if (request == _browseRequest)
-            {
-                BrowseButton.IsEnabled = true;
-            }
-        }
-    }
-
-    private bool IsCurrentImport(long request, long revision) => _loaded && request == _browseRequest && revision == _revision && Brush is ImageBrush;
 
     private void ShowError(Exception exception)
     {

@@ -18,7 +18,7 @@ using Windows.UI.Xaml.Media;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Models.Features.Appearance;
 using OhMyLockScreen.Controls.Components;
-using Windows.UI.Xaml.Media.Imaging;
+using OhMyLockScreen.Shared.Helpers.UI;
 using Stretch = Windows.UI.Xaml.Media.Stretch;
 
 namespace OhMyLockScreen.ViewModels;
@@ -470,7 +470,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
         return component;
     }
 
-    internal ComponentSettings? AddImageComponent(string name, Uri source, int width, int height, object parentModel, int index)
+    internal ComponentSettings? AddImageComponent(string name, string blobId, int width, int height, object parentModel, int index)
     {
         if (Scene == null || IsPreview || FindItem(parentModel) == null)
         {
@@ -488,12 +488,14 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
         layout.Height = height;
         layout.IsAutoWidth = false;
         layout.IsAutoHeight = false;
+        var background = new ImageBrush { Stretch = Stretch.Uniform };
+        SceneImageBrush.SetBlobId(background, blobId);
         component.Features.Add(new FeatureInfo
         {
             Id = "omls.features.appearance.background",
             Settings = new BackgroundFeatureSettings
             {
-                Background = new ImageBrush { ImageSource = new BitmapImage(source), Stretch = Stretch.Uniform }
+                Background = background
             }
         });
 

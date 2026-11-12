@@ -402,6 +402,15 @@ public sealed class SceneService : ISceneService, IDisposable
         }
     }
 
+    internal T WithSceneDirectory<T>(Guid id, Func<string, T> action)
+    {
+        lock (_sync)
+        {
+            RequireScene(id);
+            return action(GetDirectory(id));
+        }
+    }
+
     private string GetDirectory(Guid id)
     {
         if (id == Guid.Empty)
@@ -431,7 +440,8 @@ public sealed class SceneService : ISceneService, IDisposable
         foreach (var entry in Directory.EnumerateFileSystemEntries(source))
         {
             var name = Path.GetFileName(entry);
-            if (name is "scene.json" or "scene.json.bak" or "scene.json.tmp")
+            if (name is "scene.json" or "scene.json.bak" or "scene.json.tmp"
+                || name.StartsWith(SceneBlobStorageService.TemporaryFilePrefix, StringComparison.Ordinal))
             {
                 continue;
             }

@@ -44,7 +44,6 @@ if (args.Contains("--brush-only"))
 {
     BrushSerializationTests.Run(Run);
     BrushEditorTests.Run(Run);
-    await BrushEditorTests.RunImportAsync(RunAsync);
     Console.WriteLine($"All {passed} brush serialization checks passed using simulated UWP values.");
     return;
 }
@@ -67,6 +66,7 @@ if (args.Contains("--scene-only"))
 {
     await SceneTests.RunAsync(Run, RunAsync);
     await SceneMediaImportTests.RunAsync(RunAsync);
+    await SceneBlobStorageTests.RunAsync(RunAsync);
     Console.WriteLine($"All {passed} scene checks passed using independent temporary scene folders and simulated UWP views.");
     return;
 }
@@ -141,7 +141,6 @@ MediaTests.Run(Run);
 await MediaTests.RunAsync(RunAsync);
 BrushSerializationTests.Run(Run);
 BrushEditorTests.Run(Run);
-await BrushEditorTests.RunImportAsync(RunAsync);
 ToastTests.Run(Run);
 ComponentTests.Run(Run);
 DependencyPropertyBindingTests.Run(Run);
@@ -155,6 +154,7 @@ LayoutTests.Run(Run);
 EditorConverterTests.Run(Run);
 await SceneTests.RunAsync(Run, RunAsync);
 await SceneMediaImportTests.RunAsync(RunAsync);
+await SceneBlobStorageTests.RunAsync(RunAsync);
 await DismissalTests.RunAsync(Run, RunAsync);
 VideoBackgroundTests.Run(Run);
 await SystemBackgroundTests.RunAsync(Run, RunAsync);

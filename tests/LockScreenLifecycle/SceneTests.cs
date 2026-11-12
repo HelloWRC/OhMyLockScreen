@@ -26,7 +26,6 @@ using Windows.UI.Xaml.Media;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using OhMyLockScreen.Shared.Helpers.UI;
-using Windows.UI.Xaml.Media.Imaging;
 
 internal static class SceneTests
 {
@@ -38,22 +37,21 @@ internal static class SceneTests
             using var editor = fixture.Editor();
             editor.Open(fixture.Service.ActiveSceneId);
             var parent = editor.Roots[0].Children[0].Children[0].Model;
-            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, "BrushAssets");
             var original = Path.Combine(ApplicationData.Current.LocalFolder.Path, "original.PNG");
             File.WriteAllBytes(original, [1, 2, 3]);
-            ComponentSettings? first = null;
-            var imported = await BrushImageImport.RunAsync(
-                () => Task.FromResult<Stream>(File.OpenRead(original)), ".PNG", directory,
-                _ => Task.CompletedTask, () => editor.FindItem(parent) != null,
-                uri =>
-                {
-                    first = editor.AddImageComponent("First", uri, 1920, 1080, parent, 0);
-                    SceneLayoutEditing.ApplyDropPosition(first!, new Canvas(), new Point(123.6, 45.2));
-                });
+            var sceneId = editor.Scene!.SceneId;
+            var blobs = new SceneBlobStorageService(fixture.Service);
+            string blobId;
+            using (var stream = File.OpenRead(original))
+            {
+                blobId = await blobs.ImportAsync(sceneId, stream);
+            }
             File.Delete(original);
-            var second = editor.AddImageComponent("Second", new Uri("ms-appdata:///local/BrushAssets/second.png"), 640, 480, parent, 1)!;
+            var first = editor.AddImageComponent("First", blobId, 1920, 1080, parent, 0);
+            SceneLayoutEditing.ApplyDropPosition(first!, new Canvas(), new Point(123.6, 45.2));
+            var second = editor.AddImageComponent("Second", blobId, 640, 480, parent, 1)!;
             SceneLayoutEditing.ApplyDropPosition(second, new Canvas(), new Point(123.6, 45.2));
-            Check(imported && first is { Settings: ContainerComponentSettings { Children.Count: 0 } },
+            Check(first is { Settings: ContainerComponentSettings { Children.Count: 0 } },
                 "The image did not create an empty layout container.");
             var children = ((ContainerComponentSettings)((ComponentSettings)parent).Settings!).Children;
             Check(ReferenceEquals(children[0], first) && ReferenceEquals(children[1], second)
@@ -66,8 +64,10 @@ internal static class SceneTests
                 "Image dimensions or alignment did not preserve the original pixel size.");
             var brush = (ImageBrush)first.Features.Single(feature => feature.Settings is BackgroundFeatureSettings)
                 .GetSettings<BackgroundFeatureSettings>().Background!;
-            Check(brush.Stretch == Windows.UI.Xaml.Media.Stretch.Uniform && brush.ImageSource is BitmapImage { UriSource.Scheme: "ms-appdata" }
-                && File.ReadAllBytes(Directory.GetFiles(directory).Single()).SequenceEqual(new byte[] { 1, 2, 3 }),
+            var blobPath = Path.Combine(fixture.Service.GetSceneDirectory(sceneId), "Blobs", blobId[..2], blobId);
+            Check(brush.Stretch == Windows.UI.Xaml.Media.Stretch.Uniform && brush.ImageSource == null
+                && SceneImageBrush.GetBlobId(brush) == blobId
+                && File.ReadAllBytes(blobPath).SequenceEqual(new byte[] { 1, 2, 3 }),
                 "The brush was cropped or still depended on the original file.");
             fixture.Service.FlushPending();
             var restored = (ContainerComponentSettings)fixture.Service.Load(editor.Scene!.SceneId).Layers[0].Children[0].Settings!;
@@ -75,40 +75,29 @@ internal static class SceneTests
             Check(restoredImage.Name == "First"
                 && restoredImage.Features.Single(feature => feature.Settings is LayoutFeatureSettings).GetSettings<LayoutFeatureSettings>().Width == 1920
                 && SceneLayoutEditing.GetLayout(restoredImage, create: false)!.Margin == layout.Margin
-                && ((BitmapImage)((ImageBrush)restoredImage.Features.Single(feature => feature.Settings is BackgroundFeatureSettings)
-                    .GetSettings<BackgroundFeatureSettings>().Background!).ImageSource!).UriSource == ((BitmapImage)brush.ImageSource!).UriSource,
+                && SceneImageBrush.GetBlobId((ImageBrush)restoredImage.Features.Single(feature => feature.Settings is BackgroundFeatureSettings)
+                    .GetSettings<BackgroundFeatureSettings>().Background!) == blobId,
                 "Image layout or persistent brush was lost after reloading the scene.");
         });
-        await runAsync("Removed image targets cancel copied assets and empty scenes create a layer only on insertion", async () =>
+        run("Removed image targets reject insertion and empty scenes create a layer only on insertion", () =>
         {
             using var fixture = new Fixture();
             using var editor = fixture.Editor();
             editor.Open(fixture.Service.ActiveSceneId);
             var scene = editor.Scene!;
             var parent = scene.Layers[0];
-            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, "BrushAssets");
-            var imported = await BrushImageImport.RunAsync(
-                () => Task.FromResult<Stream>(new MemoryStream([1, 2, 3])), ".png", directory,
-                _ =>
-                {
-                    scene.Layers.Remove(parent);
-                    return Task.CompletedTask;
-                },
-                () => editor.FindItem(parent) != null,
-                _ => throw new Exception("A removed target accepted an image."));
-            Check(!imported && Directory.GetFiles(directory).Length == 0 && scene.Layers.Count == 0,
-                "A removed target leaked an image or created a layer.");
-            var uri = new Uri("ms-appdata:///local/BrushAssets/image.png");
-            Check(editor.AddImageComponent("Removed", uri, 10, 20, parent, 0) == null, "A stale parent accepted an image.");
+            scene.Layers.Remove(parent);
+            var blobId = new string('a', 64);
+            Check(editor.AddImageComponent("Removed", blobId, 10, 20, parent, 0) == null, "A stale parent accepted an image.");
             editor.IsPreview = true;
-            Check(editor.AddImageComponent("Preview", uri, 10, 20, scene, 0) == null && scene.Layers.Count == 0,
+            Check(editor.AddImageComponent("Preview", blobId, 10, 20, scene, 0) == null && scene.Layers.Count == 0,
                 "Preview inserted an image or created a layer.");
             editor.IsPreview = false;
-            var image = editor.AddImageComponent("Image", uri, 10, 20, scene, 0);
+            var image = editor.AddImageComponent("Image", blobId, 10, 20, scene, 0);
             Check(scene.Layers.Count == 1 && ReferenceEquals(scene.Layers[0].Children.Single(), image),
                 "An empty scene did not receive an image layer.");
             editor.Open(scene.SceneId);
-            Check(editor.AddImageComponent("Stale scene", uri, 10, 20, scene, 0) == null,
+            Check(editor.AddImageComponent("Stale scene", blobId, 10, 20, scene, 0) == null,
                 "An image was inserted into a superseded scene instance.");
         });
         run("Free-layout drops replace alignment and margins without changing size or automatic switches", () =>
@@ -188,7 +177,7 @@ internal static class SceneTests
             editor.Open(fixture.Service.ActiveSceneId);
             var parent = editor.Scene!.Layers[0];
             var panel = new Grid { ActualWidth = 1000, ActualHeight = 800 };
-            var image = editor.AddImageComponent("Positioned", new Uri("ms-appdata:///local/BrushAssets/positioned.png"),
+            var image = editor.AddImageComponent("Positioned", new string('a', 64),
                 200, 120, parent, 0)!;
             SceneLayoutEditing.ApplyDropPosition(image, panel, new Point(760, 660));
             SceneLayoutEditing.AlignDropPosition(image, panel, new Rect(760, 660, 200, 120));
@@ -386,9 +375,9 @@ internal static class SceneTests
             var scene = fixture.Service.Load(fixture.Service.ActiveSceneId);
             var directory = fixture.Service.GetSceneDirectory(scene.SceneId);
             Check(File.Exists(Path.Combine(directory, "scene.json")), "Missing scene.json in the scene folder.");
-            Check(scene.Background.Mode == BackgroundMode.None && scene.Background.Source == "" && !Directory.Exists(Path.Combine(directory, "Assets")), "The default scene configured or copied a video background.");
+            Check(scene.Background.Mode == BackgroundMode.None && scene.Background.BlobId == null && !Directory.Exists(Path.Combine(directory, "Blobs")), "The default scene configured or copied a video background.");
             var another = fixture.Service.Create("新的系统背景场景");
-            Check(another.Background.Mode == BackgroundMode.None && another.Background.Source == "", "Creating a scene selected a default video.");
+            Check(another.Background.Mode == BackgroundMode.None && another.Background.BlobId == null, "Creating a scene selected a default video.");
             Check(Directory.GetFiles(fixture.Service.ScenesPath, "*.json").Length == 0, "Scene configs escaped their individual folders.");
             Check(fixture.Settings.Settings.LastEditedSceneId == scene.SceneId, "The initial edited scene was not persisted.");
         });
@@ -552,21 +541,22 @@ internal static class SceneTests
             fixture.Service.SetActive(other.SceneId);
             Check(fixture.Settings.Settings.ActiveSceneId == other.SceneId && fixture.Service.Load(other.SceneId).Name == "已重命名", "Explicit activation did not persist the selection.");
         });
-        run("Duplicating a scene copies resources and retains independent relative references", () =>
+        await runAsync("Duplicating a scene copies blobs and retains independent references", async () =>
         {
             using var fixture = new Fixture();
             var original = fixture.Service.Load(fixture.Service.ActiveSceneId);
-            var assets = Path.Combine(fixture.Service.GetSceneDirectory(original.SceneId), "Assets");
-            Directory.CreateDirectory(assets);
-            File.WriteAllText(Path.Combine(assets, "background.mp4"), "example video");
+            var blobs = new SceneBlobStorageService(fixture.Service);
+            using var stream = new MemoryStream("example video"u8.ToArray());
+            var blobId = await blobs.ImportAsync(original.SceneId, stream);
             original.Background.Mode = BackgroundMode.Video;
-            original.Background.Source = "Assets/background.mp4";
+            original.Background.BlobId = blobId;
             original.Name = "原始场景";
             fixture.Service.QueueSave(original);
             var clone = fixture.Service.Duplicate(original.SceneId);
-            var originalPath = Path.Combine(fixture.Service.GetSceneDirectory(original.SceneId), original.Background.Source);
-            var clonePath = Path.Combine(fixture.Service.GetSceneDirectory(clone.SceneId), clone.Background.Source);
-            Check(clone.SceneId != original.SceneId && clone.Name == "原始场景 副本" && File.ReadAllBytes(clonePath).SequenceEqual(File.ReadAllBytes(originalPath)), "Copy did not use the latest model and copy resources.");
+            var originalPath = Path.Combine(fixture.Service.GetSceneDirectory(original.SceneId), "Blobs", blobId[..2], blobId);
+            var clonePath = Path.Combine(fixture.Service.GetSceneDirectory(clone.SceneId), "Blobs", blobId[..2], blobId);
+            Check(clone.SceneId != original.SceneId && clone.Name == "原始场景 副本" && clone.Background.BlobId == blobId
+                && File.ReadAllBytes(clonePath).SequenceEqual(File.ReadAllBytes(originalPath)), "Copy did not use the latest model and copy resources.");
             File.WriteAllText(clonePath, "changed clone resource");
             Check(File.ReadAllText(originalPath) == "example video", "Copies share a resource file.");
             fixture.Service.SetActive(clone.SceneId);

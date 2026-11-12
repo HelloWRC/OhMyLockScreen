@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
 using Windows.Foundation;
@@ -10,8 +11,29 @@ using Windows.UI.Xaml.Media.Animation;
 
 namespace OhMyLockScreen.Shared.Controls.Scene;
 
-public sealed partial class ScenePresenter : UserControl
+public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
 {
+    public static readonly DependencyProperty BlobUriConverterProperty = DependencyProperty.Register(
+        nameof(BlobUriConverter), typeof(SceneBlobUriConverter), typeof(ScenePresenter), new PropertyMetadata(null));
+
+    public SceneBlobUriConverter? BlobUriConverter
+    {
+        get => (SceneBlobUriConverter?)GetValue(BlobUriConverterProperty);
+        private set => SetValue(BlobUriConverterProperty, value);
+    }
+
+    private void UpdateBlobContext()
+    {
+        if (Scene?.SceneId == BlobUriConverter?.SceneId)
+        {
+            return;
+        }
+
+        BlobUriConverter = Scene is { } scene && IAppHost.TryGetService<ISceneBlobStorageService>() is { } storage
+            ? new SceneBlobUriConverter(storage, scene.SceneId)
+            : null;
+    }
+
     public static readonly DependencyProperty IsEditingProperty = DependencyProperty.Register(
         nameof(IsEditing), typeof(bool), typeof(ScenePresenter), new PropertyMetadata(false));
 
@@ -61,6 +83,7 @@ public sealed partial class ScenePresenter : UserControl
     private static void OnSceneChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
         var presenter = (ScenePresenter)sender;
+        presenter.UpdateBlobContext();
         if (presenter._featureAttacher != null)
         {
             presenter._featureAttacher.FeatureContainer = presenter.Scene;
@@ -81,6 +104,7 @@ public sealed partial class ScenePresenter : UserControl
         }
 
         IsActive = true;
+        UpdateBlobContext();
         Bindings.Update();
         _featureAttacher ??= new FeatureAttacher(this) { FeatureContainer = Scene };
         _featureAttacher.Attach();

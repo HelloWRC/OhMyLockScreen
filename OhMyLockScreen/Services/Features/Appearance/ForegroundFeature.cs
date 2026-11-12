@@ -1,7 +1,9 @@
 using OhMyLockScreen.Models.Features.Appearance;
 using OhMyLockScreen.Shared.Abstractions.FeatureHost;
 using OhMyLockScreen.Shared.Attributes.FeatureHost;
+using OhMyLockScreen.Shared.Controls.Scene;
 using OhMyLockScreen.Shared.Helpers;
+using OhMyLockScreen.Shared.Helpers.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 
@@ -37,7 +39,7 @@ public sealed class ForegroundFeature : FeatureBase<FrameworkElement, Foreground
                     {
                         // Refresh inherited content foregrounds even when only painting changes.
                         target.InvalidateArrange();
-                        return brush;
+                        return SceneImageBrush.Resolve(brush, (target as ISceneBlobContext)?.BlobUriConverter);
                     });
             }
         }

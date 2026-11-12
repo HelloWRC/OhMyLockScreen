@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using LibVLCSharp.Shared;
 using OhMyLockScreen.Shared.Controls.Scene;
 using SharpDX.Direct3D11;
-using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Storage;
 using Windows.UI;
@@ -55,6 +55,7 @@ public sealed partial class App : Application
         try
         {
             await Task.Delay(500);
+            var video = await StageVideoBlobAsync();
             var baseline = ReadGpuMemory();
             Report($"Baseline: {baseline}");
             for (var cycle = 0; cycle < 24; cycle++)
@@ -68,7 +69,7 @@ public sealed partial class App : Application
                     Report($"VLC: {_vlc.Version}");
                 }
                 _player = new MediaPlayer(_vlc) { Mute = true };
-                using var media = new Media(_vlc, Path.Combine(Package.Current.InstalledLocation.Path, "TestVideo.mp4"), FromType.FromPath);
+                using var media = new Media(_vlc, video.Path, FromType.FromPath);
                 if (!_player.Play(media))
                 {
                     throw new InvalidOperationException("The real UWP player could not start.");
@@ -139,6 +140,24 @@ public sealed partial class App : Application
         {
             Report("FAIL: " + exception);
         }
+    }
+
+    private static async Task<StorageFile> StageVideoBlobAsync()
+    {
+        var fixture = await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///TestVideo.mp4"));
+        using var source = await fixture.OpenStreamForReadAsync();
+        var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(source));
+        var sceneId = Guid.Parse("dcf0dc9c-e0fb-47da-823d-14fb31c09d10");
+        var relativePath = $"Scenes/{sceneId:N}/Blobs/{hash[..2]}";
+        var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, relativePath);
+        Directory.CreateDirectory(directory);
+        using (var destination = File.Create(Path.Combine(directory, hash)))
+        {
+            source.Position = 0;
+            await source.CopyToAsync(destination);
+        }
+
+        return await StorageFile.GetFileFromApplicationUriAsync(new Uri($"ms-appdata:///local/{relativePath}/{hash}"));
     }
 
     private readonly record struct GpuMemory(long Local, long Shared)

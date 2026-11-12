@@ -149,12 +149,11 @@
                     <ComboBoxItem Content="等比填充" />
                 </ComboBox>
             </Grid>
-            <Button x:Name="BrowseButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Click="OnBrowseClick">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon Glyph="&#xE838;" FontSize="16" />
-                    <TextBlock Text="浏览文件…" />
-                </StackPanel>
-            </Button>
+            <local:BlobPicker
+                x:Name="ImagePicker"
+                BlobId="{x:Bind ImageBlobId, Mode=TwoWay}"
+                BlobUriConverter="{x:Bind BlobUriConverter, Mode=OneWay}"
+                SuggestedStartLocation="PicturesLibrary" />
         </StackPanel>
         <CheckBox x:Name="FallbackCheckBox" Visibility="Collapsed" Content="始终使用回退颜色"
                   Checked="OnFallbackChanged" Unchecked="OnFallbackChanged" MinHeight="32" />

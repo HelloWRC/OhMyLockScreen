@@ -5,6 +5,7 @@
     xmlns:local="using:OhMyLockScreen.Controls.Editor"
     xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI">
     <ui:BrushEditControl
+        BlobUriConverter="{x:Bind BlobUriConverter, Mode=OneWay}"
         Brush="{x:Bind Settings.Foreground, Mode=TwoWay}"
         TargetElement="{x:Bind TargetElement, Mode=OneWay}" />
 </local:ForegroundSettingsControlBase>

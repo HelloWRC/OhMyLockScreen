@@ -28,12 +28,18 @@
     <Content Include="../../OhMyLockScreen/Assets/*.png" Link="Assets/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Models/Features/**/*.cs" Link="Models/Features/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BorderFeature.cs" Link="Services/BorderFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BackgroundFeature.cs" Link="Services/BackgroundFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/TextFeature.cs" Link="Services/TextFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/FontFeature.cs" Link="Services/FontFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/ForegroundFeature.cs" Link="Services/ForegroundFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Layout/LayoutFeature.cs" Link="Services/LayoutFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Layout/GridLayoutFeature.cs" Link="Services/GridLayoutFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/SceneLayoutEditing.cs" Link="Services/SceneLayoutEditing.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Scene/SceneBlobStorageService.cs" Link="Services/SceneBlobStorageService.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Scene/SceneService.cs" Link="Services/SceneService.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Scene/DefaultSceneFactory.cs" Link="Services/DefaultSceneFactory.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/SettingsService.cs" Link="Services/SettingsService.cs" />
+    <Compile Include="../../OhMyLockScreen/Models/Settings.cs" Link="Models/Settings.cs" />
     <Compile Include="../../OhMyLockScreen/Services/FontCatalogService.cs" Link="Services/FontCatalogService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/FeatureHost/FeatureService.cs" Link="Services/FeatureService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/ComponentsService.cs" Link="Services/ComponentsService.cs" />

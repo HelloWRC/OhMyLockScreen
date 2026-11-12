@@ -1,0 +1,15 @@
+<UserControl
+    x:Class="OhMyLockScreen.Shared.Controls.UI.BlobPicker"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Button
+        x:Name="BrowseButton"
+        HorizontalAlignment="Stretch"
+        HorizontalContentAlignment="Center"
+        Click="OnBrowseClick">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <FontIcon Glyph="&#xE838;" FontSize="16" />
+            <TextBlock Text="浏览文件…" />
+        </StackPanel>
+    </Button>
+</UserControl>

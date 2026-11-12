@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text;
 using OhMyLockScreen.Services;
 using OhMyLockScreen.Services.FeatureHost;
 using OhMyLockScreen.Services.Scene;
@@ -222,8 +223,7 @@ internal static class VideoBackgroundTests
             fixture.View.Initialize("old");
             var first = fixture.View.MediaPlayer!;
             first.Finish();
-            fixture.AddVideo("replacement.mkv");
-            fixture.Scene.Background.Source = "Assets/replacement.mkv";
+            fixture.Scene.Background.BlobId = fixture.AddVideo("replacement");
             fixture.View.Initialize("replacement");
             var second = fixture.View.MediaPlayer!;
             fixture.Presenter.Dispatcher.Drain();
@@ -274,24 +274,25 @@ internal static class VideoBackgroundTests
             oldView.Initialize("first");
             var first = oldView.MediaPlayer!;
             var oldBackground = fixture.Scene.Background;
-            var secondPath = fixture.AddVideo("second.mkv");
+            var firstBlob = fixture.Scene.Background.BlobId;
+            var secondBlob = fixture.AddVideo("second");
             fixture.Scene.Background = new BackgroundSettings
             {
                 Mode = BackgroundMode.Video,
-                Source = "Assets/second.mkv",
+                BlobId = secondBlob,
                 EnableSound = true
             };
             Check(first.IsDisposed && first.LibVlc.IsDisposed && first.StopCalls == 1 && first.Subscribers == 0,
                 "Replacing settings did not release the old player and libvlc.");
             var secondView = fixture.View;
             oldView.Initialize("stale");
-            oldBackground.Source = "Assets/obsolete.mp4";
+            oldBackground.BlobId = new string('a', 64);
             Check(ReferenceEquals(secondView, fixture.View), "An old model or swapchain changed the new video.");
             secondView.Initialize("second");
             var second = secondView.MediaPlayer!;
-            Check(second.Media!.Source == secondPath && !second.Mute, "Replacement settings were not applied.");
+            Check(second.Media!.Source == fixture.GetBlobPath(secondBlob) && !second.Mute, "Replacement settings were not applied.");
 
-            fixture.Scene.Background.Source = "Assets/背景 #100%.mp4";
+            fixture.Scene.Background.BlobId = firstBlob;
             Check(second.IsDisposed && !ReferenceEquals(secondView, fixture.View), "Changing source kept the old player.");
             var thirdView = fixture.View;
             thirdView.Initialize("third");
@@ -299,7 +300,7 @@ internal static class VideoBackgroundTests
             fixture.Presenter.Scene = new SceneSettings();
             Check(third.IsDisposed && fixture.Presenter.BackgroundLayerElement.Visibility == Visibility.Collapsed,
                 "Switching to a scene without video did not stop playback.");
-            fixture.Scene.Background.Source = "Assets/second.mkv";
+            fixture.Scene.Background.BlobId = secondBlob;
             Check(fixture.Presenter.BackgroundLayerElement.Children.Count == 0, "An old scene remained subscribed.");
         });
 
@@ -310,8 +311,7 @@ internal static class VideoBackgroundTests
             var firstView = fixture.View;
             firstView.Initialize("first");
             firstView.MediaPlayer!.Fail();
-            fixture.AddVideo("second.webm");
-            fixture.Scene.Background.Source = "Assets/second.webm";
+            fixture.Scene.Background.BlobId = fixture.AddVideo("second");
             var secondView = fixture.View;
             secondView.Initialize("second");
             var second = secondView.MediaPlayer!;
@@ -355,7 +355,7 @@ internal static class VideoBackgroundTests
                 "Synchronous playback failure left a video or failed to report.");
         });
 
-        foreach (var source in new[] { "../outside.mp4", "Assets/missing.mp4" })
+        foreach (var source in new[] { "../outside.mp4", new string('a', 64) })
         {
             run($"Video rejects invalid background source {source}", () =>
             {
@@ -364,7 +364,7 @@ internal static class VideoBackgroundTests
                 var player = fixture.View.MediaPlayer!;
                 string? failure = null;
                 fixture.Presenter.BackgroundFailed += (_, message) => failure = message;
-                fixture.Scene.Background.Source = source;
+                fixture.Scene.Background.BlobId = source;
                 Check(failure?.StartsWith("无法加载背景视频：") == true && player.IsDisposed
                     && fixture.Presenter.BackgroundLayerElement.Children.Count == 0,
                     "Invalid source did not report an error and release previous playback.");
@@ -382,12 +382,32 @@ internal static class VideoBackgroundTests
             fixture.Scene.Background.Mode = BackgroundMode.Video;
             fixture.View.Initialize("second");
             var second = fixture.View.MediaPlayer!;
-            fixture.Scene.Background.Source = " ";
+            fixture.Scene.Background.BlobId = null;
             Check(second.IsDisposed && fixture.Presenter.BackgroundLayerElement.Children.Count == 0,
                 "An empty source kept playback alive.");
             fixture.Presenter.Scene = null;
             Check(fixture.Presenter.BackgroundLayerElement.Visibility == Visibility.Collapsed,
                 "A null scene did not hide video.");
+        });
+
+        run("A pending blob open cannot restore video after a scene switch", () =>
+        {
+            using var fixture = new Fixture();
+            var blobId = fixture.AddVideo("pending");
+            var open = new TaskCompletionSource<StorageFile>();
+            StorageFile.OpenFromApplicationUri = _ => open.Task;
+            try
+            {
+                fixture.Scene.Background.BlobId = blobId;
+                fixture.Presenter.Scene = new SceneSettings();
+                open.SetResult(new StorageFile { Path = fixture.GetBlobPath(blobId) });
+                fixture.Presenter.Dispatcher.Drain();
+                Check(fixture.Presenter.BackgroundLayerElement.Children.Count == 0, "A stale file open showed video.");
+            }
+            finally
+            {
+                StorageFile.OpenFromApplicationUri = null;
+            }
         });
 
         run("Suspension pauses and resumes only current playback, including deferred initialization", () =>
@@ -460,6 +480,7 @@ internal static class VideoBackgroundTests
         internal string VideoPath { get; }
         internal VideoView View => (VideoView)Presenter.BackgroundLayerElement.Children.Single();
         private readonly SceneService _scenes;
+        private readonly SceneBlobStorageService _blobs;
         private readonly SettingsService _settings;
 
         internal Fixture()
@@ -469,39 +490,41 @@ internal static class VideoBackgroundTests
             _settings.LoadSettingsAsync().GetAwaiter().GetResult();
             _scenes = new SceneService(_settings, NullLogger<SceneService>.Instance, directory);
             _scenes.Initialize();
+            _blobs = new SceneBlobStorageService(_scenes);
             IAppHost.Host = new HostBuilder().ConfigureLogging(logging => logging.AddDebug())
                 .ConfigureServices(services =>
                 {
                     services.AddSingleton(_settings);
                     services.AddSingleton<ISceneService>(_scenes);
+                    services.AddSingleton<ISceneBlobStorageService>(_blobs);
                     services.AddSingleton<FeatureRegistryService>();
                     services.AddSingleton<IFeatureService, FeatureService>();
                 }).Build();
             Scene = new SceneSettings { SceneId = _scenes.ActiveSceneId };
-            VideoPath = AddVideo("背景 #100%.mp4");
+            var blobId = AddVideo("first");
+            VideoPath = GetBlobPath(blobId);
             Scene.Background.Mode = BackgroundMode.Video;
-            Scene.Background.Source = "Assets/背景 #100%.mp4";
+            Scene.Background.BlobId = blobId;
             Presenter = new ScenePresenter { Scene = Scene };
             Presenter.Load();
         }
 
-        internal string AddVideo(string name)
+        internal string AddVideo(string contents) => AddVideo(Scene.SceneId, contents);
+
+        internal string GetBlobPath(string blobId) =>
+            Path.Combine(_scenes.GetSceneDirectory(Scene.SceneId), "Blobs", blobId[..2], blobId);
+
+        private string AddVideo(Guid sceneId, string contents)
         {
-            var assets = Path.Combine(_scenes.GetSceneDirectory(Scene.SceneId), "Assets");
-            Directory.CreateDirectory(assets);
-            var path = Path.Combine(assets, name);
-            File.WriteAllText(path, "simulated video");
-            return path;
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(contents));
+            return _blobs.ImportAsync(sceneId, stream).GetAwaiter().GetResult();
         }
 
         internal SceneSettings CreateVideoScene()
         {
             var scene = _scenes.Create("Second video scene");
-            var assets = Path.Combine(_scenes.GetSceneDirectory(scene.SceneId), "Assets");
-            Directory.CreateDirectory(assets);
-            File.WriteAllText(Path.Combine(assets, "second.mp4"), "simulated video");
             scene.Background.Mode = BackgroundMode.Video;
-            scene.Background.Source = "Assets/second.mp4";
+            scene.Background.BlobId = AddVideo(scene.SceneId, "another scene");
             return scene;
         }
 

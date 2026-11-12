@@ -21,7 +21,6 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.ApplicationModel.Core;
 using Windows.Foundation;
 using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.System;
 using Windows.UI;
 using Windows.UI.Core;
@@ -42,6 +41,7 @@ namespace OhMyLockScreen;
 public sealed partial class SceneEditorPage : Page
 {
     private readonly ISceneService _scenes;
+    private readonly ISceneBlobStorageService _blobs;
     private readonly SettingsService _settings;
     private readonly IComponentsService _components;
     private readonly IFeatureService _features;
@@ -86,6 +86,7 @@ public sealed partial class SceneEditorPage : Page
     public SceneEditorPage()
     {
         _scenes = IAppHost.GetRequiredService<ISceneService>();
+        _blobs = IAppHost.GetRequiredService<ISceneBlobStorageService>();
         _settings = IAppHost.GetRequiredService<SettingsService>();
         _components = IAppHost.GetRequiredService<IComponentsService>();
         _features = IAppHost.GetRequiredService<IFeatureService>();
@@ -93,6 +94,9 @@ public sealed partial class SceneEditorPage : Page
         ViewModel = IAppHost.GetRequiredService<SceneEditorViewModel>();
         _observedTreeItemDragOverHandler = OnObservedTreeItemDragOver;
         InitializeComponent();
+        VideoPicker.FileTypes = SceneMediaImport.VideoExtensions;
+        VideoPicker.PickFailed += (_, exception) => ShowError(exception);
+        VideoPicker.BlobPicked += OnVideoBlobPicked;
         InitializePanelAnimations();
         SceneTree.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnTreeDragOver), true);
         SceneTree.AddHandler(UIElement.DropEvent, new DragEventHandler(OnTreeDrop), true);
@@ -158,6 +162,7 @@ public sealed partial class SceneEditorPage : Page
         _loaded = false;
         _pendingDropAlignments.Clear();
         _mediaImportRevision++;
+        VideoPicker.InvalidateSelection();
         ViewModel.PropertyChanged -= OnMediaImportStateChanged;
         DetachSystemBackground();
         RefreshFeatureEditorTargets();
@@ -744,6 +749,7 @@ public sealed partial class SceneEditorPage : Page
                     if (removed.Editor is FeatureSettingsControlBase featureEditor)
                     {
                         featureEditor.TargetElement = null;
+                        featureEditor.BlobUriConverter = null;
                     }
                     ViewModel.InspectorSections.Remove(removed);
                 }
@@ -770,6 +776,7 @@ public sealed partial class SceneEditorPage : Page
                 if (section.Editor is FeatureSettingsControlBase featureEditor)
                 {
                     featureEditor.TargetElement = null;
+                    featureEditor.BlobUriConverter = null;
                 }
             }
             ViewModel.InspectorSections.Clear();
@@ -822,6 +829,14 @@ public sealed partial class SceneEditorPage : Page
             if (!ReferenceEquals(editor.TargetElement, target))
             {
                 editor.TargetElement = target;
+            }
+
+            var blobContext = presenter != null && ReferenceEquals(section.Model, ViewModel.SelectedModel)
+                ? EditorPresenter.BlobUriConverter
+                : null;
+            if (!ReferenceEquals(editor.BlobUriConverter, blobContext))
+            {
+                editor.BlobUriConverter = blobContext;
             }
         }
     }
@@ -892,42 +907,13 @@ public sealed partial class SceneEditorPage : Page
         });
     }
 
-    private async void OnBrowseBackgroundClick(object sender, RoutedEventArgs args)
+    private void OnVideoBlobPicked(object? sender, string fileName)
     {
-        if (ViewModel.IsPreview || ViewModel.Scene is not { } scene)
+        if (_loaded && !ViewModel.IsPreview && ViewModel.Scene is { } scene)
         {
-            return;
-        }
-
-        var revision = ++_mediaImportRevision;
-        try
-        {
-            var picker = new FileOpenPicker
-            {
-                SuggestedStartLocation = PickerLocationId.VideosLibrary
-            };
-            foreach (var extension in SceneMediaImport.VideoExtensions)
-            {
-                picker.FileTypeFilter.Add(extension);
-            }
-
-            var file = await picker.PickSingleFileAsync();
-            if (file == null || !IsCurrentMediaImport(scene, revision))
-            {
-                return;
-            }
-
-            if (await ImportVideoBackgroundAsync(file, scene, revision))
-            {
-                TrackToast(this.ShowSuccessToastRef($"已设置视频背景：{file.Name}"));
-            }
-        }
-        catch (Exception exception)
-        {
-            if (IsCurrentMediaImport(scene, revision))
-            {
-                ShowError(exception);
-            }
+            _mediaImportRevision++;
+            scene.Background.Mode = BackgroundMode.Video;
+            TrackToast(this.ShowSuccessToastRef($"已设置视频背景：{fileName}"));
         }
     }
 

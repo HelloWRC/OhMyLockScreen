@@ -42,7 +42,9 @@ public sealed partial class App
     {
         services.AddSingleton<IHostLifetime, UwpHostLifetime>();
         services.AddSingleton(provider => new SettingsService(provider.GetRequiredService<ILogger<SettingsService>>(), Path.Combine(ApplicationData.Current.LocalFolder.Path, "Settings.json")));
-        services.AddSingleton<ISceneService>(provider => new SceneService(provider.GetRequiredService<SettingsService>(), provider.GetRequiredService<ILogger<SceneService>>(), ApplicationData.Current.LocalFolder.Path));
+        services.AddSingleton(provider => new SceneService(provider.GetRequiredService<SettingsService>(), provider.GetRequiredService<ILogger<SceneService>>(), ApplicationData.Current.LocalFolder.Path));
+        services.AddSingleton<ISceneService>(provider => provider.GetRequiredService<SceneService>());
+        services.AddSingleton<ISceneBlobStorageService, SceneBlobStorageService>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IAudioSpectrumSource, WindowsAudioSpectrumSource>();
         services.AddSingleton<AudioSpectrumService>();

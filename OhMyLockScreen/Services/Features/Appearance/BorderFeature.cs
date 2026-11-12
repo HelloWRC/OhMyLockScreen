@@ -5,7 +5,9 @@ using OhMyLockScreen.Models.Features.Appearance;
 using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.FeatureHost;
 using OhMyLockScreen.Shared.Attributes.FeatureHost;
+using OhMyLockScreen.Shared.Controls.Scene;
 using OhMyLockScreen.Shared.Helpers;
+using OhMyLockScreen.Shared.Helpers.UI;
 using Windows.UI.Xaml.Controls;
 
 namespace OhMyLockScreen.Services.Features.Appearance;
@@ -54,7 +56,8 @@ public sealed class BorderFeature : FeatureBase<IBorderable, BorderFeatureSettin
         try
         {
             _bindings.Add(DependencyPropertyBindingHelper.Bind(
-                settings, source => source.BorderBrush, border, Border.BorderBrushProperty));
+                settings, source => source.BorderBrush, border, Border.BorderBrushProperty,
+                brush => SceneImageBrush.Resolve(brush, (Target as ISceneBlobContext)?.BlobUriConverter)));
             _bindings.Add(DependencyPropertyBindingHelper.Bind(
                 settings, source => source.BorderThickness, border, Border.BorderThicknessProperty));
             _bindings.Add(DependencyPropertyBindingHelper.Bind(

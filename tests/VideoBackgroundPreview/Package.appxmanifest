@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" IgnorableNamespaces="uap">
-  <Identity Name="dev.hellowrc.OhMyLockScreen.VideoPreview" Publisher="CN=HelloWRC.Dev" Version="1.0.8.0" />
+  <Identity Name="dev.hellowrc.OhMyLockScreen.VideoPreview" Publisher="CN=HelloWRC.Dev" Version="1.0.9.0" />
   <Properties>
     <DisplayName>Video Background Preview</DisplayName>
     <PublisherDisplayName>HelloWRC.Dev</PublisherDisplayName>

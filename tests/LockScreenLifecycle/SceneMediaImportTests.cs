@@ -60,50 +60,6 @@ internal static class SceneMediaImportTests
             Check(imports == 1 && result.VideoName == null && result.FailedFiles.Count == 0,
                 "A canceled drop continued or reported a stale failure.");
         });
-
-        await run("Video copies publish scene-relative assets and clean up uncommitted files", async () =>
-        {
-            var sceneDirectory = Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "Scene");
-            var assets = Path.Combine(sceneDirectory, "Assets");
-            var bytes = new byte[] { 4, 5, 6 };
-            string? source = null;
-            var imported = await SceneMediaImport.ImportVideoAsync(
-                () => Task.FromResult<Stream>(new MemoryStream(bytes)), ".MP4", sceneDirectory, () => true, value => source = value);
-            Check(imported && source is not null && source.StartsWith("Assets/") && source.EndsWith(".mp4")
-                && File.ReadAllBytes(Path.Combine(sceneDirectory, source)).SequenceEqual(bytes), "The copied video was not persistent.");
-            var previous = source;
-            var current = true;
-            var canceled = await SceneMediaImport.ImportVideoAsync(() =>
-            {
-                current = false;
-                return Task.FromResult<Stream>(new MemoryStream(bytes));
-            }, ".mp4", sceneDirectory, () => current, value => source = value);
-            Check(!canceled && source == previous && Directory.GetFiles(assets).Length == 1,
-                "A stale video copy was published or leaked.");
-            try
-            {
-                await SceneMediaImport.ImportVideoAsync(
-                    () => throw new IOException("read failed"), ".mp4", sceneDirectory, () => true, value => source = value);
-                throw new Exception("A copy failure was ignored.");
-            }
-            catch (IOException)
-            {
-            }
-
-            Check(source == previous && Directory.GetFiles(assets).Length == 1, "A failed video copy changed the background or leaked a file.");
-            try
-            {
-                await SceneMediaImport.ImportVideoAsync(
-                    () => Task.FromResult<Stream>(new MemoryStream(bytes)), ".mp4", sceneDirectory, () => true,
-                    _ => throw new InvalidOperationException("target removed"));
-                throw new Exception("A commit failure was ignored.");
-            }
-            catch (InvalidOperationException)
-            {
-            }
-
-            Check(Directory.GetFiles(assets).Length == 1, "A failed video commit leaked a file.");
-        });
     }
 
     private static void Check(bool condition, string message)

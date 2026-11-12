@@ -1,3 +1,4 @@
+using OhMyLockScreen.Shared.Controls.Scene;
 using Windows.UI.Xaml;
 
 namespace OhMyLockScreen.Shared.Abstractions.Controls;
@@ -5,6 +6,15 @@ namespace OhMyLockScreen.Shared.Abstractions.Controls;
 /// <summary>支持设置注入和编辑目标的特性设置控件基类。</summary>
 public abstract class FeatureSettingsControlBase : ControlWithSettingsBase
 {
+    public static readonly DependencyProperty BlobUriConverterProperty = DependencyProperty.Register(
+        nameof(BlobUriConverter), typeof(SceneBlobUriConverter), typeof(FeatureSettingsControlBase), new PropertyMetadata(null));
+
+    public SceneBlobUriConverter? BlobUriConverter
+    {
+        get => (SceneBlobUriConverter?)GetValue(BlobUriConverterProperty);
+        set => SetValue(BlobUriConverterProperty, value);
+    }
+
     public static readonly DependencyProperty TargetElementProperty = DependencyProperty.Register(
         nameof(TargetElement), typeof(FrameworkElement), typeof(FeatureSettingsControlBase), new PropertyMetadata(null));
 

@@ -10,56 +10,6 @@ using OhMyLockScreen.Shared.Helpers.Serialization;
 
 internal static class BrushEditorTests
 {
-    internal static async Task RunImportAsync(Func<string, Func<Task>, Task> run)
-    {
-        await run("Image import commits a validated persistent URI and retains copied bytes", async () =>
-        {
-            var directory = Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "BrushAssets");
-            Uri? published = null;
-            var bytes = new byte[] { 10, 20, 30 };
-            var result = await BrushImageImport.RunAsync(
-                () => Task.FromResult<Stream>(new MemoryStream(bytes)), ".PNG", directory,
-                path =>
-                {
-                    Check(File.ReadAllBytes(path).SequenceEqual(bytes), "Validation received incorrect bytes.");
-                    return Task.CompletedTask;
-                },
-                () => true, uri => published = uri);
-            Check(result && published is { Scheme: "ms-appdata" } && published.AbsolutePath.StartsWith("/local/BrushAssets/"), "Persistent URI was not published.");
-            Check(Directory.GetFiles(directory).Length == 1 && File.ReadAllBytes(Directory.GetFiles(directory)[0]).SequenceEqual(bytes), "Committed file was lost.");
-        });
-
-        await run("Image import cancellation, validation failure and superseded requests preserve the current brush", async () =>
-        {
-            var directory = Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "BrushAssets");
-            var published = false;
-            var opened = false;
-            Task<Stream> Open()
-            {
-                opened = true;
-                return Task.FromResult<Stream>(new MemoryStream([1, 2, 3]));
-            }
-            var canceled = await BrushImageImport.RunAsync(Open, ".png", directory, _ => Task.CompletedTask, () => false, _ => published = true);
-            Check(!canceled && !opened && !Directory.Exists(directory), "Canceled selection imported a file.");
-            try
-            {
-                await BrushImageImport.RunAsync(Open, ".png", directory, _ => throw new InvalidDataException("invalid image"), () => true, _ => published = true);
-                throw new Exception("Decode failure was ignored.");
-            }
-            catch (InvalidDataException)
-            {
-            }
-            Check(!published && Directory.GetFiles(directory).Length == 0, "Failed image import published or leaked a file.");
-            var current = true;
-            var stale = await BrushImageImport.RunAsync(Open, ".png", directory, _ =>
-            {
-                current = false;
-                return Task.CompletedTask;
-            }, () => current, _ => published = true);
-            Check(!stale && !published && Directory.GetFiles(directory).Length == 0, "Superseded image import published or leaked a file.");
-        });
-    }
-
     internal static void Run(Action<string, Action> run)
     {
         run("Gradient dragging rounds stop percentages without changing non-drag edits", () =>

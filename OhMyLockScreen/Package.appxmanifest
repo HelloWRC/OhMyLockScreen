@@ -12,7 +12,7 @@
   <Identity
     Name="dev.hellowrc.OhMyLockScreen"
     Publisher="CN=HelloWRC.Dev"
-    Version="1.0.4.2" />
+    Version="1.0.5.2" />
 
   <mp:PhoneIdentity PhoneProductId="21d1ece6-1bdb-4081-a925-f210b751bd46" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

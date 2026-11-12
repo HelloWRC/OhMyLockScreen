@@ -9,6 +9,7 @@
     Unloaded="OnUnloaded">
     <StackPanel Spacing="8">
         <ui:BrushEditControl
+            BlobUriConverter="{x:Bind BlobUriConverter, Mode=OneWay}"
             Brush="{x:Bind Settings.BorderBrush, Mode=TwoWay}"
             TargetElement="{x:Bind TargetElement, Mode=OneWay}" />
         <StackPanel

@@ -45,6 +45,12 @@ public sealed partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (args.Arguments.Contains("scene-blobs", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchSceneBlobPreview();
+            return;
+        }
+
         if (args.Arguments.Contains("spectrum", StringComparison.OrdinalIgnoreCase))
         {
             LaunchSpectrumPreview();

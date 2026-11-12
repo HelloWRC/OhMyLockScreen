@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using OhMyLockScreen.Shared.Helpers.UI;
 using CommunityToolkit.Mvvm.ComponentModel;
 using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Shared.Helpers.Serialization;
@@ -50,7 +51,7 @@ internal static class BrushSerializationTests
                 && acrylic.TintOpacity == 0.4 && acrylic.TintLuminosityOpacity == 0.7 && acrylic.FallbackColor == Red
                 && acrylic.AlwaysUseFallback && acrylic.TintTransitionDuration.Ticks == 1234567, "Acrylic parameters changed.");
             var image = Copy((ImageBrush)Samples()[4]);
-            Check(image.ImageSource is BitmapImage { UriSource.AbsoluteUri: "ms-appx:///Assets/photo.png" }
+            Check(image.ImageSource == null && SceneImageBrush.GetBlobId(image) == ImageBlobId
                 && image.Stretch == Stretch.UniformToFill && image.AlignmentX == AlignmentX.Right && image.AlignmentY == AlignmentY.Bottom,
                 "Image parameters changed.");
             foreach (Brush brush in Samples())
@@ -143,7 +144,7 @@ internal static class BrushSerializationTests
                 """{"$type":"acrylic","AlwaysUseFallback":1}""",
                 """{"$type":"acrylic","TintTransitionDuration":"-00:00:01"}""",
                 """{"$type":"acrylic","TintTransitionDuration":"tomorrow"}""",
-                """{"$type":"image","ImageSource":"Assets/photo.png"}""",
+                """{"$type":"image","BlobId":123}""",
                 """{"$type":"solid","Transform":{"M11":1}}"""
             ];
             foreach (var json in invalid)
@@ -154,6 +155,14 @@ internal static class BrushSerializationTests
 
             Throws<JsonException>(() => Read<SolidColorBrush>("""{"$type":"image"}"""));
             Throws<JsonException>(() => Read<CustomBrush>("""{"$type":"solid"}"""));
+        });
+
+        run("Legacy image URIs are discarded while image brush styling still loads", () =>
+        {
+            var image = Read<ImageBrush>("""{"$type":"image","ImageSource":"ms-appdata:///local/BrushAssets/photo.png","Stretch":"Uniform","Opacity":0.5}""");
+            Check(image.ImageSource == null && SceneImageBrush.GetBlobId(image) == null
+                && image.Stretch == Stretch.Uniform && image.Opacity == 0.5
+                && !Json(image).Contains("ImageSource", StringComparison.Ordinal), "A legacy image path remained in the brush.");
         });
 
         run("Unsupported brush state and invalid output cannot silently lose values", () =>
@@ -269,14 +278,22 @@ internal static class BrushSerializationTests
             AlwaysUseFallback = true,
             TintTransitionDuration = TimeSpan.FromTicks(1234567)
         },
-        new ImageBrush
+        CreateImageSample()
+    ];
+
+    private static string ImageBlobId => new('a', 64);
+
+    private static ImageBrush CreateImageSample()
+    {
+        var brush = new ImageBrush
         {
-            ImageSource = new BitmapImage(new Uri("ms-appx:///Assets/photo.png")),
             Stretch = Stretch.UniformToFill,
             AlignmentX = AlignmentX.Right,
             AlignmentY = AlignmentY.Bottom
-        }
-    ];
+        };
+        SceneImageBrush.SetBlobId(brush, ImageBlobId);
+        return brush;
+    }
 
     private static void VerifyConfig(AppearanceConfig config)
     {

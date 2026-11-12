@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using OhMyLockScreen.Shared.Abstractions.Controls;
+using OhMyLockScreen.Shared.Abstractions.Controls.Scene;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
@@ -12,8 +13,29 @@ using Windows.UI.Xaml.Controls;
 namespace OhMyLockScreen.Shared.Controls.Scene;
 
 /// <summary>根据组件配置创建并显示组件。每个 Presenter 拥有独立控件。</summary>
-public sealed partial class ComponentPresenter : ContentPresenter, IBorderable
+public sealed partial class ComponentPresenter : ContentPresenter, IBorderable, ISceneBlobContext
 {
+    public static readonly DependencyProperty BlobUriConverterProperty = DependencyProperty.Register(
+        nameof(BlobUriConverter), typeof(SceneBlobUriConverter), typeof(ComponentPresenter),
+        new PropertyMetadata(null, OnBlobContextChanged));
+
+    public SceneBlobUriConverter? BlobUriConverter
+    {
+        get => (SceneBlobUriConverter?)GetValue(BlobUriConverterProperty);
+        set => SetValue(BlobUriConverterProperty, value);
+    }
+
+    private static void OnBlobContextChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
+    {
+        var presenter = (ComponentPresenter)sender;
+        if (presenter.Content is ComponentBase component)
+        {
+            component.BlobUriConverter = presenter.BlobUriConverter;
+        }
+
+        presenter._featureAttacher?.Reload();
+    }
+
     public static readonly DependencyProperty SettingsProperty = DependencyProperty.Register(
         nameof(Settings), typeof(ComponentSettings), typeof(ComponentPresenter),
         new PropertyMetadata(null, OnSettingsChanged));
@@ -203,7 +225,12 @@ public sealed partial class ComponentPresenter : ContentPresenter, IBorderable
             Content = null;
             if (Settings != null)
             {
-                Content = IAppHost.GetRequiredService<IComponentsService>().CreateComponent(Settings);
+                var component = IAppHost.GetRequiredService<IComponentsService>().CreateComponent(Settings);
+                if (component != null)
+                {
+                    component.BlobUriConverter = BlobUriConverter;
+                }
+                Content = component;
             }
         }
         catch (Exception exception)

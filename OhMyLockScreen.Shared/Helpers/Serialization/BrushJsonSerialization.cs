@@ -3,12 +3,12 @@ using System.Globalization;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using OhMyLockScreen.Shared.Helpers.UI;
 using Windows.Foundation;
 using Windows.Foundation.Metadata;
 using Windows.UI;
 using Windows.UI.Composition;
 using Windows.UI.Xaml.Media;
-using Windows.UI.Xaml.Media.Imaging;
 using RadialGradientBrush = Microsoft.UI.Xaml.Media.RadialGradientBrush;
 
 namespace OhMyLockScreen.Shared.Helpers.Serialization;
@@ -99,7 +99,10 @@ internal static class BrushJsonSerialization
                 fields.Apply("TintTransitionDuration", value => acrylic.TintTransitionDuration = ReadDuration(value));
                 break;
             case ImageBrush image:
-                fields.Apply("ImageSource", value => image.ImageSource = ReadImage(value));
+                // An old scene can still open with its image brush styling intact.
+                fields.Apply("ImageSource", _ => { });
+                fields.Apply("BlobId", value => SceneImageBrush.SetBlobId(image,
+                    value.ValueKind == JsonValueKind.Null ? null : ReadString(value, "BlobId")));
                 fields.Apply("Stretch", value => image.Stretch = ReadEnum<Stretch>(value, "Stretch"));
                 fields.Apply("AlignmentX", value => image.AlignmentX = ReadEnum<AlignmentX>(value, "AlignmentX"));
                 fields.Apply("AlignmentY", value => image.AlignmentY = ReadEnum<AlignmentY>(value, "AlignmentY"));
@@ -168,7 +171,13 @@ internal static class BrushJsonSerialization
                 json["TintTransitionDuration"] = acrylic.TintTransitionDuration.ToString("c", CultureInfo.InvariantCulture);
                 break;
             case ImageBrush image:
-                json["ImageSource"] = WriteImage(image.ImageSource);
+                var blobId = SceneImageBrush.GetBlobId(image);
+                if (blobId == null && image.ImageSource != null)
+                {
+                    throw new NotSupportedException("图像画刷必须使用场景资产标识。");
+                }
+
+                json["BlobId"] = blobId;
                 json["Stretch"] = WriteEnum(image.Stretch);
                 json["AlignmentX"] = WriteEnum(image.AlignmentX);
                 json["AlignmentY"] = WriteEnum(image.AlignmentY);
@@ -284,32 +293,6 @@ internal static class BrushJsonSerialization
         return TimeSpan.TryParseExact(ReadString(value, "TintTransitionDuration"), "c", CultureInfo.InvariantCulture, out var duration)
                && duration >= TimeSpan.Zero
             ? duration : throw Error("TintTransitionDuration", "必须为非负的 TimeSpan c 格式时间。");
-    }
-
-    private static BitmapImage? ReadImage(JsonElement value)
-    {
-        if (value.ValueKind == JsonValueKind.Null)
-        {
-            return null;
-        }
-
-        var text = ReadString(value, "ImageSource");
-        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri))
-        {
-            throw Error("ImageSource", "必须为绝对 URI。");
-        }
-
-        return new BitmapImage(uri);
-    }
-
-    private static string? WriteImage(ImageSource? source)
-    {
-        return source switch
-        {
-            null => null,
-            BitmapImage { UriSource: { IsAbsoluteUri: true } uri } => uri.AbsoluteUri,
-            _ => throw new NotSupportedException("图像画刷只能保存具有绝对 UriSource 的 BitmapImage；不支持内存图像。")
-        };
     }
 
     private static MatrixTransform? ReadTransform(JsonElement value, string path)

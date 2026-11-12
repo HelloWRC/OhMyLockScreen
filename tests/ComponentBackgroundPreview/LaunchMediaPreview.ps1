@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('media', 'system-status', 'spectrum')]
+    [ValidateSet('media', 'system-status', 'spectrum', 'scene-blobs')]
     [string]$Scenario = 'media'
 )
 

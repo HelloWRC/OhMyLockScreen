@@ -7,7 +7,7 @@ public partial class BackgroundSettings : ObservableObject
     [ObservableProperty]
     private BackgroundMode _mode;
     [ObservableProperty]
-    private string _source = "";
+    private string? _blobId;
     [ObservableProperty]
     private bool _enableSound;
 }

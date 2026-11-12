@@ -6,8 +6,18 @@ using OhMyLockScreen.Shared.FeatureHost;
 namespace OhMyLockScreen.Shared.Controls.Scene;
 
 /// <summary>通过 ItemsControl 模板呈现图层中的组件。</summary>
-public sealed class LayerPresenter : Control
+public sealed class LayerPresenter : Control, ISceneBlobContext
 {
+    public static readonly DependencyProperty BlobUriConverterProperty = DependencyProperty.Register(
+        nameof(BlobUriConverter), typeof(SceneBlobUriConverter), typeof(LayerPresenter),
+        new PropertyMetadata(null, (sender, _) => ((LayerPresenter)sender)._featureAttacher?.Reload()));
+
+    public SceneBlobUriConverter? BlobUriConverter
+    {
+        get => (SceneBlobUriConverter?)GetValue(BlobUriConverterProperty);
+        set => SetValue(BlobUriConverterProperty, value);
+    }
+
     public static readonly DependencyProperty IsEditingProperty = DependencyProperty.Register(
         nameof(IsEditing), typeof(bool), typeof(LayerPresenter), new PropertyMetadata(false));
 

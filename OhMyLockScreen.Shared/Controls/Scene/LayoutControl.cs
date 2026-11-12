@@ -15,9 +15,19 @@ namespace OhMyLockScreen.Shared.Controls.Scene;
 /// <summary>根据布局设置选择原生 ItemsPanel，通过 ComponentPresenter 项目容器呈现组件。</summary>
 public sealed partial class LayoutControl : ItemsControl
 {
+    public static readonly DependencyProperty BlobUriConverterProperty = DependencyProperty.Register(
+        nameof(BlobUriConverter), typeof(SceneBlobUriConverter), typeof(LayoutControl),
+        new PropertyMetadata(null, (sender, _) => ((LayoutControl)sender).UpdatePresenterContext()));
+
+    public SceneBlobUriConverter? BlobUriConverter
+    {
+        get => (SceneBlobUriConverter?)GetValue(BlobUriConverterProperty);
+        set => SetValue(BlobUriConverterProperty, value);
+    }
+
     public static readonly DependencyProperty IsEditingProperty = DependencyProperty.Register(
         nameof(IsEditing), typeof(bool), typeof(LayoutControl),
-        new PropertyMetadata(false, (sender, _) => ((LayoutControl)sender).UpdateEditingContext()));
+        new PropertyMetadata(false, (sender, _) => ((LayoutControl)sender).UpdatePresenterContext()));
 
     public bool IsEditing
     {
@@ -25,12 +35,13 @@ public sealed partial class LayoutControl : ItemsControl
         set => SetValue(IsEditingProperty, value);
     }
 
-    private void UpdateEditingContext()
+    private void UpdatePresenterContext()
     {
         if (ItemsPanelRoot is { } panel)
         {
             foreach (var presenter in panel.Children.OfType<ComponentPresenter>())
             {
+                presenter.BlobUriConverter = BlobUriConverter;
                 presenter.IsEditing = IsEditing;
             }
         }
@@ -76,6 +87,7 @@ public sealed partial class LayoutControl : ItemsControl
 
         // The presenter owns Content; the default preparation would assign the settings object to it.
         var presenter = (ComponentPresenter)element;
+        presenter.BlobUriConverter = BlobUriConverter;
         presenter.IsEditing = IsEditing;
         presenter.DataContext = item;
         presenter.Settings = item as ComponentSettings;
@@ -143,6 +155,7 @@ public sealed partial class LayoutControl : ItemsControl
 
         foreach (var presenter in panel.Children.OfType<ComponentPresenter>())
         {
+            presenter.BlobUriConverter = BlobUriConverter;
             presenter.IsEditing = IsEditing;
             presenter.ActivateFromLayout();
         }

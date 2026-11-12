@@ -9,7 +9,6 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Storage;
 using Windows.UI.Xaml;
-using Windows.UI.Xaml.Media.Imaging;
 
 namespace OhMyLockScreen;
 
@@ -22,6 +21,8 @@ public sealed partial class SceneEditorPage
         if (args.PropertyName is nameof(SceneEditorViewModel.Scene) or nameof(SceneEditorViewModel.IsPreview))
         {
             _mediaImportRevision++;
+            VideoPicker.InvalidateSelection();
+            RefreshFeatureEditorTargets();
         }
     }
 
@@ -62,6 +63,7 @@ public sealed partial class SceneEditorPage
 
         var deferral = args.GetDeferral();
         var revision = ++_mediaImportRevision;
+        VideoPicker.InvalidateSelection();
         bool IsCurrent() => IsCurrentMediaImport(scene, revision);
         try
         {
@@ -89,41 +91,34 @@ public sealed partial class SceneEditorPage
             async Task<bool> ImportImage(StorageFile file)
             {
                 bool CanInsert() => IsCurrent() && ViewModel.FindItem(parentModel) != null;
-                var width = 0;
-                var height = 0;
-                return await BrushImageImport.RunAsync(
-                    () => file.OpenStreamForReadAsync(), file.FileType,
-                    Path.Combine(ApplicationData.Current.LocalFolder.Path, "BrushAssets"),
-                    async path =>
+                if (!CanInsert())
+                {
+                    return false;
+                }
+
+                var blobId = await ImportBlobAsync(file, scene.SceneId);
+                var uri = _blobs.GetBlobUri(scene.SceneId, blobId)
+                    ?? throw new FileNotFoundException("导入的场景图片不存在。");
+                var (width, height) = await SceneImageDecoder.ReadSizeAsync(uri);
+                if (!CanInsert())
+                {
+                    return false;
+                }
+
+                var component = ViewModel.AddImageComponent(file.DisplayName, blobId, width, height, parentModel, index)
+                    ?? throw new InvalidOperationException("图片导入目标已失效。");
+                var parent = ViewModel.FindItem(component)!.Parent!;
+                parentModel = parent.Model;
+                if (dropPoint is { } position)
+                {
+                    var panel = FindLayoutPanel(parent) ?? dropPanel;
+                    if (panel != null)
                     {
-                        var imported = await StorageFile.GetFileFromPathAsync(path);
-                        using var stream = await imported.OpenReadAsync();
-                        var bitmap = new BitmapImage();
-                        await bitmap.SetSourceAsync(stream);
-                        width = bitmap.PixelWidth;
-                        height = bitmap.PixelHeight;
-                        if (width <= 0 || height <= 0)
-                        {
-                            throw new InvalidDataException("无法读取图片尺寸。");
-                        }
-                    },
-                    CanInsert,
-                    uri =>
-                    {
-                        var component = ViewModel.AddImageComponent(file.DisplayName, uri, width, height, parentModel, index)
-                            ?? throw new InvalidOperationException("图片导入目标已失效。");
-                        var parent = ViewModel.FindItem(component)!.Parent!;
-                        parentModel = parent.Model;
-                        if (dropPoint is { } position)
-                        {
-                            var panel = FindLayoutPanel(parent) ?? dropPanel;
-                            if (panel != null)
-                            {
-                                ApplyCanvasDropPosition(component, panel, position);
-                            }
-                        }
-                        index++;
-                    });
+                        ApplyCanvasDropPosition(component, panel, position);
+                    }
+                }
+                index++;
+                return true;
             }
 
             var result = await SceneMediaImport.RunAsync(
@@ -166,15 +161,24 @@ public sealed partial class SceneEditorPage
             : null;
     }
 
-    private Task<bool> ImportVideoBackgroundAsync(StorageFile file, SceneSettings scene, long revision) =>
-        SceneMediaImport.ImportVideoAsync(
-            () => file.OpenStreamForReadAsync(), file.FileType, _scenes.GetSceneDirectory(scene.SceneId),
-            () => IsCurrentMediaImport(scene, revision),
-            source =>
-            {
-                scene.Background.Source = source;
-                scene.Background.Mode = BackgroundMode.Video;
-            });
+    private async Task<bool> ImportVideoBackgroundAsync(StorageFile file, SceneSettings scene, long revision)
+    {
+        var blobId = await ImportBlobAsync(file, scene.SceneId);
+        if (!IsCurrentMediaImport(scene, revision))
+        {
+            return false;
+        }
+
+        scene.Background.BlobId = blobId;
+        scene.Background.Mode = BackgroundMode.Video;
+        return true;
+    }
+
+    private async Task<string> ImportBlobAsync(StorageFile file, Guid sceneId)
+    {
+        using var stream = await file.OpenStreamForReadAsync();
+        return await _blobs.ImportAsync(sceneId, stream);
+    }
 
     private void ShowMediaImportResult(SceneMediaImportResult result)
     {

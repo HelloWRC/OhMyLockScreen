@@ -117,6 +117,11 @@ internal static class BrushEditorOperations
             _ => throw new NotSupportedException()
         };
         result.Opacity = source.Opacity;
+        if (source is ImageBrush image && result is ImageBrush imageCopy)
+        {
+            SceneImageBrush.SetBlobId(imageCopy, SceneImageBrush.GetBlobId(image));
+        }
+
         // Composition brushes reject even assigning null to these inherited properties.
         if (result is not XamlCompositionBrushBase)
         {

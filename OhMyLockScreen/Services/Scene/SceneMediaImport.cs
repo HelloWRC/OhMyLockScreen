@@ -73,54 +73,6 @@ internal static class SceneMediaImport
 
         return result;
     }
-
-    internal static async Task<bool> ImportVideoAsync(
-        Func<Task<Stream>> openSource,
-        string extension,
-        string sceneDirectory,
-        Func<bool> isCurrent,
-        Action<string> publish)
-    {
-        if (!isCurrent())
-        {
-            return false;
-        }
-
-        if (!VideoExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException("不支持的视频格式。", nameof(extension));
-        }
-
-        var directory = Path.Combine(sceneDirectory, "Assets");
-        Directory.CreateDirectory(directory);
-        var name = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
-        var path = Path.Combine(directory, name);
-        var committed = false;
-        try
-        {
-            using (var source = await openSource())
-            using (var destination = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
-            {
-                await source.CopyToAsync(destination);
-            }
-
-            if (!isCurrent())
-            {
-                return false;
-            }
-
-            publish($"Assets/{name}");
-            committed = true;
-            return true;
-        }
-        finally
-        {
-            if (!committed && File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-    }
 }
 
 internal sealed class SceneMediaImportResult

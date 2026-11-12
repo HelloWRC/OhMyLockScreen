@@ -4,10 +4,9 @@ using System.Globalization;
 using System.Reactive.Disposables;
 using LibVLCSharp.Platforms.Windows;
 using LibVLCSharp.Shared;
-using OhMyLockScreen.Shared.Abstractions.Services.Scene;
-using OhMyLockScreen.Shared.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
 using Windows.ApplicationModel;
+using Windows.Storage;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 
@@ -23,11 +22,13 @@ public sealed partial class ScenePresenter
     private MediaPlayer? _backgroundPlayer;
     private IDisposable? _backgroundEvents;
     private string? _backgroundPath;
+    private Uri? _backgroundUri;
     private string[]? _swapChainOptions;
     private bool _backgroundSuspended;
     private bool _resumeBackground;
     private bool _backgroundRestartPending;
     private int _backgroundLifetime;
+    private long _backgroundRequest;
 
     private void AttachBackground()
     {
@@ -47,6 +48,7 @@ public sealed partial class ScenePresenter
     private void DetachBackground()
     {
         _backgroundLifetime++;
+        _backgroundRequest++;
         if (_backgroundApplication != null)
         {
             _backgroundApplication.Suspending -= OnBackgroundSuspending;
@@ -96,23 +98,32 @@ public sealed partial class ScenePresenter
 
         if (Dispatcher.HasThreadAccess)
         {
-            UpdateBackgroundSubscriptions();
-            UpdateBackground();
+            RefreshBackgroundSettings();
         }
         else
         {
-            DispatchBackground(() =>
-            {
-                UpdateBackgroundSubscriptions();
-                UpdateBackground();
-            });
+            DispatchBackground(RefreshBackgroundSettings);
         }
     }
 
-    private void UpdateBackground()
+    private void RefreshBackgroundSettings()
     {
+        var previous = BlobUriConverter;
+        UpdateBlobContext();
+        if (!ReferenceEquals(previous, BlobUriConverter))
+        {
+            _featureAttacher?.Reload();
+        }
+
+        UpdateBackgroundSubscriptions();
+        UpdateBackground();
+    }
+
+    private async void UpdateBackground()
+    {
+        var request = ++_backgroundRequest;
         if (!IsActive || Scene is not { Background.Mode: BackgroundMode.Video } scene
-            || string.IsNullOrWhiteSpace(scene.Background.Source))
+            || string.IsNullOrWhiteSpace(scene.Background.BlobId))
         {
             ReleaseBackground();
             return;
@@ -120,21 +131,10 @@ public sealed partial class ScenePresenter
 
         try
         {
-            var service = IAppHost.GetRequiredService<ISceneService>();
-            var directory = Path.GetFullPath(service.GetSceneDirectory(scene.SceneId));
-            var path = Path.GetFullPath(Path.Combine(directory, scene.Background.Source));
-            if (!path.StartsWith(Path.TrimEndingDirectorySeparator(directory) + Path.DirectorySeparatorChar,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidDataException("背景资源必须位于当前场景目录内。");
-            }
+            var uri = BlobUriConverter?.Resolve(scene.Background.BlobId)
+                ?? throw new FileNotFoundException("背景视频资产不存在。");
 
-            if (!File.Exists(path))
-            {
-                throw new FileNotFoundException("背景视频文件不存在。", path);
-            }
-
-            if (_videoView != null && string.Equals(path, _backgroundPath, StringComparison.OrdinalIgnoreCase))
+            if (_videoView != null && uri == _backgroundUri)
             {
                 if (_backgroundPlayer != null)
                 {
@@ -145,18 +145,52 @@ public sealed partial class ScenePresenter
             }
 
             ReleaseBackground();
-            _backgroundPath = path;
-            _videoView = new BackgroundVideoView { IsHitTestVisible = false };
-            _videoView.Initialized += OnBackgroundInitialized;
-            _videoView.Releasing += OnBackgroundReleasing;
-            _videoView.Failed += OnBackgroundInitializationFailed;
-            BackgroundLayer.Visibility = Visibility.Visible;
-            BackgroundLayer.Children.Add(_videoView);
+            var file = await StorageFile.GetFileFromApplicationUriAsync(uri);
+            await ApplyBackgroundRequestAsync(request, () => ShowBackgroundVideo(uri, file.Path));
         }
         catch (Exception exception)
         {
-            FailBackground($"无法加载背景视频：{exception.Message}");
+            await ApplyBackgroundRequestAsync(request, () => FailBackground($"无法加载背景视频：{exception.Message}"));
         }
+    }
+
+    private async Task ApplyBackgroundRequestAsync(long request, Action apply)
+    {
+        void ApplyIfCurrent()
+        {
+            if (IsActive && request == _backgroundRequest)
+            {
+                apply();
+            }
+        }
+
+        if (Dispatcher.HasThreadAccess)
+        {
+            ApplyIfCurrent();
+        }
+        else
+        {
+            try
+            {
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, ApplyIfCurrent);
+            }
+            catch (Exception exception)
+            {
+                Debug.WriteLine($"无法调度背景视频：{exception}");
+            }
+        }
+    }
+
+    private void ShowBackgroundVideo(Uri uri, string path)
+    {
+        _backgroundUri = uri;
+        _backgroundPath = path;
+        _videoView = new BackgroundVideoView { IsHitTestVisible = false };
+        _videoView.Initialized += OnBackgroundInitialized;
+        _videoView.Releasing += OnBackgroundReleasing;
+        _videoView.Failed += OnBackgroundInitializationFailed;
+        BackgroundLayer.Visibility = Visibility.Visible;
+        BackgroundLayer.Children.Add(_videoView);
     }
 
     private void OnBackgroundInitialized(object? sender, InitializedEventArgs args)
@@ -449,6 +483,7 @@ public sealed partial class ScenePresenter
         {
             _videoView = null;
             _backgroundPath = null;
+            _backgroundUri = null;
             _swapChainOptions = null;
             BackgroundLayer.Visibility = Visibility.Collapsed;
             if (view != null)

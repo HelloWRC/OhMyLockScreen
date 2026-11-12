@@ -74,6 +74,23 @@ namespace Windows.ApplicationModel
 
 namespace Windows.Storage
 {
+    public sealed class StorageFile
+    {
+        public required string Path { get; init; }
+        internal static Func<Uri, Task<StorageFile>>? OpenFromApplicationUri { get; set; }
+
+        public static Task<StorageFile> GetFileFromApplicationUriAsync(Uri uri)
+        {
+            if (OpenFromApplicationUri != null)
+            {
+                return OpenFromApplicationUri(uri);
+            }
+
+            var path = global::System.IO.Path.Combine(ApplicationData.Current.LocalFolder.Path, uri.AbsolutePath["/local/".Length..]);
+            return Task.FromResult(new StorageFile { Path = global::System.IO.Path.GetFullPath(path) });
+        }
+    }
+
     public sealed class StorageFolder
     {
         public string Path { get; set; } = "";
