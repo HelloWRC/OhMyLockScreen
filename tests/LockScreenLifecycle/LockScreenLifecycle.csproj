@@ -9,6 +9,7 @@
     <Compile Include="../../OhMyLockScreen/App.xaml.cs" Link="App.xaml.cs" />
     <Compile Include="../../OhMyLockScreen/App.Hosting.cs" Link="App.Hosting.cs" />
     <Compile Include="../../OhMyLockScreen/App.Services.cs" Link="App.Services.cs" />
+    <Compile Include="../../OhMyLockScreen/Views/SettingsPages/*SettingsPage.xaml.cs" Link="Views/SettingsPages/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen.Shared/**/*.cs" Exclude="../../OhMyLockScreen.Shared/obj/**/*.cs;../../OhMyLockScreen.Shared/bin/**/*.cs;../../OhMyLockScreen.Shared/Controls/Scene/AutoSizedCanvas.cs;../../OhMyLockScreen.Shared/Controls/Scene/AutoSizedGrid.cs" Link="Shared/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Hosting/*.cs" Link="Hosting/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Models/**/*.cs" Link="Models/%(RecursiveDir)%(Filename)%(Extension)" />

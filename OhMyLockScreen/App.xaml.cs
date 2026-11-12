@@ -4,12 +4,14 @@ using Microsoft.Extensions.Hosting;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
 using Windows.ApplicationModel.Activation;
+using Windows.ApplicationModel.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Core;
 using OhMyLockScreen.Shared.Controls.UI;
+using OhMyLockScreen.Views;
 
 namespace OhMyLockScreen;
 /// <summary>
@@ -132,6 +134,11 @@ public sealed partial class App : Application
         {
             WindowTransparency.Enable(window);
         }
+        else
+        {
+            // UWP persists this setting across launches, including builds that used a custom title bar.
+            CoreApplication.GetCurrentView().TitleBar.ExtendViewIntoTitleBar = false;
+        }
 
         // Window.Current belongs to the view activated by the system host.
         if (window.Content is not WindowToastHost toastHost)
@@ -150,7 +157,9 @@ public sealed partial class App : Application
         var rootFrame = toastHost.Frame;
         rootFrame.Background = new SolidColorBrush(Windows.UI.Colors.Transparent);
         var pageType = isLockScreen ? typeof(MainPage) : typeof(SceneEditorPage);
-        var pageChanged = rootFrame.Content?.GetType() != pageType;
+        var pageChanged = isLockScreen
+            ? rootFrame.Content is not MainPage
+            : rootFrame.Content is not (SceneEditorPage or ApplicationSettingsPage);
         if (pageChanged)
         {
             toastHost.Clear();

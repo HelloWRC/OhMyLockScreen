@@ -140,8 +140,6 @@
         x:Name="PageRoot">
         <Grid.RowDefinitions>
             <RowDefinition
-                Height="32" />
-            <RowDefinition
                 Height="48" />
             <RowDefinition
                 Height="*" />
@@ -169,26 +167,7 @@
             RequestedTheme="Dark"
             Content="{Binding DialogMessage, Mode=OneWay}" />
         <Grid
-            x:Name="EditorTitleBar"
-            Background="Transparent"
-            Visibility="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}">
-            <StackPanel
-                Orientation="Horizontal"
-                Spacing="16"
-                Margin="16,0,140,0"
-                VerticalAlignment="Center">
-                <Image
-                    Source="ms-appx:///Assets/Logo@64w.png"
-                    Width="16"
-                    Height="16" />
-                <TextBlock
-                    Text="OhMyLockScreen"
-                    FontSize="12" />
-            </StackPanel>
-        </Grid>
-        <Grid
             x:Name="TopNavigation"
-            Grid.Row="1"
             Padding="4,0,0,0"
             Visibility="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}">
             <Grid.ColumnDefinitions>
@@ -242,9 +221,11 @@
                         FontSize="16" />
                 </Button>
                 <Button
+                    x:Name="SettingsButton"
                     Style="{StaticResource EditorToolbarIconButtonStyle}"
                     ToolTipService.ToolTip="设置"
-                    AutomationProperties.Name="设置">
+                    AutomationProperties.Name="设置"
+                    Click="OnSettingsClick">
                     <FontIcon
                         FontFamily="Segoe Fluent Icons"
                         Glyph="&#xE713;"

@@ -1,0 +1,15 @@
+<settings:SettingsPageBase
+    x:Class="OhMyLockScreen.Views.SettingsPages.AboutSettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+    xmlns:settings="using:OhMyLockScreen.Shared.Abstractions.Controls">
+    <ScrollViewer HorizontalContentAlignment="Stretch">
+        <Grid>
+            <StackPanel Style="{StaticResource SettingsStackPanelStyle}">
+                <toolkit:SettingsExpander />
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</settings:SettingsPageBase>

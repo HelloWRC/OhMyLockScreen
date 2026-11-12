@@ -26,6 +26,8 @@ using OhMyLockScreen.Services.SystemStatus;
 using OhMyLockScreen.Shared.Abstractions.Services.SystemStatus;
 using OhMyLockScreen.Services.Audio;
 using OhMyLockScreen.Shared.Abstractions.Services.Audio;
+using OhMyLockScreen.Shared.Extensions.Registry;
+using OhMyLockScreen.Views.SettingsPages;
 
 namespace OhMyLockScreen;
 
@@ -64,6 +66,8 @@ public sealed partial class App
         services.AddSingleton<FeatureRegistryService>();
         services.AddSingleton<IFeatureService, FeatureService>();
         services.AddSingleton<IComponentsService, ComponentsService>();
+        services.AddSettingsPage<GeneralSettingsPage>();
+        services.AddSettingsPage<AboutSettingsPage>();
         // Components
         services.AddComponent<TextComponent, TextSettingsControl>();
         services.AddComponent<ClockComponent, ClockSettingsControl>();

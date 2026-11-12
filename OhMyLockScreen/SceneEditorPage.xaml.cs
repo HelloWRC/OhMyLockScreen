@@ -17,18 +17,18 @@ using OhMyLockScreen.Shared.Models.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
 using OhMyLockScreen.Shared.Services.FeatureHost;
 using OhMyLockScreen.ViewModels;
+using OhMyLockScreen.Views;
 using Windows.ApplicationModel.DataTransfer;
-using Windows.ApplicationModel.Core;
 using Windows.Foundation;
 using Windows.Storage;
 using Windows.System;
-using Windows.UI;
 using Windows.UI.Core;
 using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Navigation;
 using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers.UI;
 using OhMyLockScreen.Shared.Models.UI;
@@ -48,6 +48,7 @@ public sealed partial class SceneEditorPage : Page
     private readonly FeatureRegistryService _featureRegistry;
     private Window? _window;
     private bool _loaded;
+    private bool _restoringEditor;
     private readonly HashSet<ToastMessage> _pageToasts = [];
     private readonly SceneSaveToastTracker _saveToasts = new();
     private bool _syncingLists;
@@ -94,6 +95,7 @@ public sealed partial class SceneEditorPage : Page
         ViewModel = IAppHost.GetRequiredService<SceneEditorViewModel>();
         _observedTreeItemDragOverHandler = OnObservedTreeItemDragOver;
         InitializeComponent();
+        NavigationCacheMode = NavigationCacheMode.Enabled;
         VideoPicker.FileTypes = SceneMediaImport.VideoExtensions;
         VideoPicker.PickFailed += (_, exception) => ShowError(exception);
         VideoPicker.BlobPicked += OnVideoBlobPicked;
@@ -103,6 +105,12 @@ public sealed partial class SceneEditorPage : Page
         AddHandler(UIElement.DropEvent, new DragEventHandler(OnPageDrop), true);
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+    }
+
+    protected override void OnNavigatedTo(NavigationEventArgs args)
+    {
+        base.OnNavigatedTo(args);
+        _restoringEditor = args.NavigationMode == NavigationMode.Back;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs args)
@@ -115,7 +123,6 @@ public sealed partial class SceneEditorPage : Page
         _loaded = true;
         _window = Window.Current;
         AttachSystemBackground();
-        ConfigureTitleBar();
         ViewModel.SelectionChanged += OnSelectionChanged;
         ViewModel.StructureChanged += OnStructureChanged;
         ViewModel.InspectorChanged += OnInspectorChanged;
@@ -130,10 +137,21 @@ public sealed partial class SceneEditorPage : Page
         _window.CoreWindow.KeyDown += OnEditorKeyDown;
         try
         {
-            var id = _settings.Settings.LastEditedSceneId;
-            ViewModel.Open(id.HasValue && _scenes.GetScenes().Any(scene => scene.Id == id) ? id.Value : _scenes.ActiveSceneId);
+            var scenes = _scenes.GetScenes();
+            if (_restoringEditor && ViewModel.Scene is { } previous && scenes.Any(scene => scene.Id == previous.SceneId))
+            {
+                ViewModel.ResumeSceneObservation();
+                RefreshInspector();
+                InvalidateSelectionGeometry();
+            }
+            else
+            {
+                var id = _settings.Settings.LastEditedSceneId;
+                ViewModel.Open(id.HasValue && scenes.Any(scene => scene.Id == id) ? id.Value : _scenes.ActiveSceneId);
+                ShowTab(SceneEditorTab.Home);
+            }
+
             RefreshSceneLists();
-            ShowTab(SceneEditorTab.Home);
             if (_scenes.LoadErrors.Count > 0)
             {
                 ShowMessage("部分场景未能加载", string.Join(Environment.NewLine, _scenes.LoadErrors), InfoBarSeverity.Warning);
@@ -145,6 +163,11 @@ public sealed partial class SceneEditorPage : Page
         }
 
         UpdatePanelAnimations();
+        if (_restoringEditor)
+        {
+            _restoringEditor = false;
+            SettingsButton.Focus(FocusState.Programmatic);
+        }
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
@@ -182,18 +205,12 @@ public sealed partial class SceneEditorPage : Page
 
         CompositionTarget.Rendering -= OnSelectionRendering;
         ViewModel.Dispose();
-        CoreApplication.GetCurrentView().TitleBar.ExtendViewIntoTitleBar = false;
         _window = null;
     }
 
-    private void ConfigureTitleBar()
+    private void OnSettingsClick(object sender, RoutedEventArgs args)
     {
-        CoreApplication.GetCurrentView().TitleBar.ExtendViewIntoTitleBar = true;
-        _window!.SetTitleBar(EditorTitleBar);
-        var title = ApplicationView.GetForCurrentView().TitleBar;
-        title.ButtonBackgroundColor = Colors.Transparent;
-        title.ButtonInactiveBackgroundColor = Colors.Transparent;
-        title.ButtonForegroundColor = Colors.White;
+        TryAction(() => Frame.Navigate(typeof(ApplicationSettingsPage)));
     }
 
     private void OnSelectionChanged(object? sender, EventArgs args)
@@ -383,7 +400,7 @@ public sealed partial class SceneEditorPage : Page
     private void OnTreeSelectionChanged(Microsoft.UI.Xaml.Controls.TreeView sender, TreeViewSelectionChangedEventArgs args)
     {
         var item = args.AddedItems.OfType<SceneTreeItem>().LastOrDefault();
-        if (item != null)
+        if (_loaded && item != null)
         {
             ViewModel.Select(item.Model);
         }

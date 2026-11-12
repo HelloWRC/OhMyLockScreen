@@ -628,6 +628,28 @@ internal static class SceneTests
             Check(treeChanges == 0 && structures == 0 && selections == 0 && inspectorChanges == 4, "Feature changes rebuilt the tree or refreshed the inspector for a scalar value change.");
             Check(ReferenceEquals(editor.Roots[0], root) && ReferenceEquals(root.Children[0], layer) && ReferenceEquals(layer.Children[0], group) && ReferenceEquals(group.Children[0], clock) && ReferenceEquals(editor.SelectedItem, clock) && !group.IsExpanded, "Feature changes replaced nodes, lost selection or reset expansion state.");
         });
+        run("Resuming a cached editor restores scene observation without replacing its state", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            editor.ActiveTab = SceneEditorTab.Components;
+            var scene = editor.Scene!;
+            var group = editor.Roots[0].Children[0].Children[0];
+            var clock = group.Children[0];
+            group.IsExpanded = false;
+            editor.Select(clock.Model);
+
+            editor.Dispose();
+            editor.ResumeSceneObservation();
+            Check(ReferenceEquals(editor.Scene, scene) && ReferenceEquals(editor.SelectedItem, clock)
+                && !group.IsExpanded && editor.ActiveTab == SceneEditorTab.Components,
+                "Resuming replaced the scene, selection, expansion state, or active tab.");
+
+            scene.Name = "返回后编辑";
+            fixture.Service.FlushPending();
+            Check(fixture.Service.Load(scene.SceneId).Name == scene.Name, "Resuming did not reconnect autosave.");
+        });
         run("Hierarchy updates only reconcile the affected branch and retain existing node identities", () =>
         {
             using var fixture = new Fixture();

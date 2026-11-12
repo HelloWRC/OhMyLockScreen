@@ -503,6 +503,13 @@ namespace Windows.UI.Xaml.Media.Animation
 
 namespace Windows.UI.Xaml.Navigation
 {
+    public enum NavigationCacheMode
+    {
+        Disabled,
+        Required,
+        Enabled
+    }
+
     public sealed class NavigationFailedEventArgs(Type type) : EventArgs
     {
         public Type SourcePageType => type;
@@ -684,6 +691,9 @@ namespace Windows.UI.Xaml.Controls
 
     public class Page : FrameworkElement
     {
+        public Frame? Frame { get; internal set; }
+        public NavigationCacheMode NavigationCacheMode { get; set; }
+
         public Page()
         {
             ActualWidth = 1920;
@@ -694,6 +704,7 @@ namespace Windows.UI.Xaml.Controls
     public sealed class Frame : FrameworkElement
     {
         public List<object> BackStack { get; } = [];
+        public object? Tag { get; set; }
         public Windows.UI.Xaml.Media.SolidColorBrush? Background
         {
             get; set;
@@ -711,6 +722,7 @@ namespace Windows.UI.Xaml.Controls
             {
                 Content = Activator.CreateInstance(pageType);
                 if (Content is DependencyObject child) child.VisualParent = this;
+                if (Content is Page page) page.Frame = this;
                 Navigated?.Invoke(this, new());
                 return true;
             }

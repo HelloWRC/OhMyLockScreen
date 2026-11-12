@@ -12,6 +12,10 @@ using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Hosting;
 using OhMyLockScreen.Models;
 using OhMyLockScreen.Services;
+using OhMyLockScreen.Shared.Extensions.Registry;
+using OhMyLockScreen.Shared.Services.Registry;
+using OhMyLockScreen.Views;
+using OhMyLockScreen.Views.SettingsPages;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Core;
 using Windows.Storage;
@@ -219,6 +223,64 @@ internal static class InfrastructureTests
                 "Suspend or reactivation restarted the host.");
             await app.ExitAsync();
             Check(probe.Stops == 1 && probe.Disposed && IAppHost.Host == null, "Exit did not stop and dispose the host.");
+        });
+
+        await runAsync("Desktop activation restores the system title bar and retains settings on reactivation", async () =>
+        {
+            LockScreenHosting.IsHosted = () => false;
+            var app = new App(() => BuildHost(new HostedProbe()));
+            var titleBar = CoreApplication.GetCurrentView().TitleBar;
+            titleBar.ExtendViewIntoTitleBar = true;
+            app.Launch(new LaunchActivatedEventArgs());
+            var root = ((WindowToastHost)Window.Current.Content!).Frame;
+            Check(root.Content is SceneEditorPage, "Desktop launch did not open the editor.");
+            Check(!titleBar.ExtendViewIntoTitleBar, "Desktop launch kept the persisted custom title bar layout.");
+            Check(root.Navigate(typeof(ApplicationSettingsPage)), "Could not navigate to settings.");
+            var settings = root.Content;
+
+            app.Launch(new LaunchActivatedEventArgs());
+            app.Activate(new ActivatedEventArgs(ActivationKind.Other));
+            Check(ReferenceEquals(root.Content, settings), "Desktop activation replaced the current settings page.");
+
+            titleBar.ExtendViewIntoTitleBar = true;
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
+            Check(root.Content is MainPage, "Lock-screen activation kept the desktop settings page.");
+            Check(titleBar.ExtendViewIntoTitleBar, "Lock-screen activation changed the host's title bar layout.");
+            await app.ExitAsync();
+        });
+
+        run("Settings registration sorts by category and rejects duplicate IDs per host", () =>
+        {
+            var services = new ServiceCollection();
+            services.AddSettingsPage<AboutSettingsPage>();
+            services.AddSettingsPage<GeneralSettingsPage>();
+            Throws<ArgumentException>(() => services.AddSettingsPage<GeneralSettingsPage>());
+            using var host = services.BuildServiceProvider();
+            var registry = host.GetRequiredService<SettingsPageRegistry>();
+            Check(registry.Pages.Select(page => page.Info.Id).SequenceEqual(["general", "about"]),
+                "Settings registration did not sort by category.");
+            Check(registry.Find("general")?.PageType == typeof(GeneralSettingsPage),
+                "General settings did not resolve to its Frame page type.");
+
+            using var secondHost = new ServiceCollection().AddSettingsPage<AboutSettingsPage>().BuildServiceProvider();
+            Check(secondHost.GetRequiredService<SettingsPageRegistry>().Pages.Count == 1,
+                "Page metadata leaked between hosts.");
+        });
+
+        run("Settings registration reads independent title width and visibility markers", () =>
+        {
+            using var host = new ServiceCollection()
+                .AddSettingsPage<GeneralSettingsPage>()
+                .AddSettingsPage<WideTitleSettingsPage>()
+                .AddSettingsPage<HiddenTitleSettingsPage>()
+                .BuildServiceProvider();
+            var registry = host.GetRequiredService<SettingsPageRegistry>();
+            Check(registry.Find(typeof(GeneralSettingsPage))?.Info is { UseFullWidth: false, HidePageTitle: false },
+                "Unmarked pages did not keep the default title layout.");
+            Check(registry.Find(typeof(WideTitleSettingsPage))?.Info is { UseFullWidth: true, HidePageTitle: false },
+                "FullWidthPage did not apply independently.");
+            Check(registry.Find(typeof(HiddenTitleSettingsPage))?.Info is { UseFullWidth: false, HidePageTitle: true },
+                "HidePageTitle did not apply independently.");
         });
 
         await runAsync("Delayed startup shares one task and returns to each owning view", async () =>
