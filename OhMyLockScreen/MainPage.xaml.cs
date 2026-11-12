@@ -1,5 +1,6 @@
 using OhMyLockScreen.Shared;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
+using OhMyLockScreen.Services.LockScreenProvider;
 using OhMyLockScreen.Shared.Models.Scene;
 using System;
 using System.Diagnostics;
@@ -17,15 +18,24 @@ namespace OhMyLockScreen;
 public sealed partial class MainPage : Page
 {
     private readonly ISceneService? _scenes;
+    private readonly ILockScreenUnlockService? _lockScreenUnlockService;
     private CoreDispatcher? viewDispatcher;
     private bool isPageLoaded;
     private bool isDismissing;
-    private bool hasExited;
+    private bool hasCompletedDismissal;
     private int inputGeneration;
-    public MainPage()
+
+    internal bool IsDismissalStarted => isDismissing || hasCompletedDismissal;
+
+    public MainPage() : this(IAppHost.TryGetService<ILockScreenUnlockService>())
+    {
+    }
+
+    internal MainPage(ILockScreenUnlockService? lockScreenUnlockService)
     {
         InitializeComponent();
         _scenes = IAppHost.TryGetService<ISceneService>();
+        _lockScreenUnlockService = lockScreenUnlockService;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -58,7 +68,7 @@ public sealed partial class MainPage : Page
         if (isDismissing)
         {
             // An unloaded view cannot be relied on to finish its storyboard.
-            await ExitAsync();
+            await CompleteDismissalAsync();
         }
     }
 
@@ -206,18 +216,31 @@ public sealed partial class MainPage : Page
             Debug.WriteLine($"无法启动锁屏退出动画: {exception}");
         }
 
-        await ExitAsync();
+        await CompleteDismissalAsync();
     }
 
-    private async Task ExitAsync()
+    private async Task CompleteDismissalAsync()
     {
-        if (hasExited)
+        if (hasCompletedDismissal)
         {
             return;
         }
 
-        hasExited = true;
+        hasCompletedDismissal = true;
         DetachViewEvents();
+        if (_lockScreenUnlockService != null)
+        {
+            try
+            {
+                await _lockScreenUnlockService.TryUnlockAsync();
+            }
+            catch (Exception exception)
+            {
+                Debug.WriteLine($"无法请求系统解锁，将回退退出应用：{exception}");
+            }
+        }
+
+        // End this UWP process after either unlock path so the next lock creates a fresh view.
         if (Application.Current is App app)
         {
             await app.ExitAsync();

@@ -4,8 +4,11 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using OhMyLockScreen.LockScreenHelper;
 using OhMyLockScreen.Models;
+using OhMyLockScreen.Services;
 using OhMyLockScreen.Services.LockScreenProvider;
+using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Shared.Models.LockScreenProvider;
+using Windows.Storage;
 
 internal static class LockScreenReplacementTests
 {
@@ -75,6 +78,71 @@ internal static class LockScreenReplacementTests
 
             Check(view64.Values["LockAppAumId"] == expectedAumId, "64-bit provider was not written.");
             Check(view32.Values["LockAppAumId"] == expectedAumId, "32-bit provider was not written.");
+        });
+
+        run("Compatibility unlock mode defaults off and persists", () =>
+        {
+            var path = Path.Combine(
+                ApplicationData.Current.LocalFolder.Path,
+                "CompatibilityUnlockMode.json");
+            var settings = new Settings();
+            Check(!settings.CompatibilityUnlockMode, "Compatibility unlock mode was enabled by default.");
+
+            settings.CompatibilityUnlockMode = true;
+            ConfigureFileHelper.SaveConfig(path, settings);
+
+            var loaded = ConfigureFileHelper.LoadConfig<Settings>(path);
+            Check(loaded.CompatibilityUnlockMode, "Compatibility unlock mode was not persisted.");
+        });
+
+        run("Lock-screen unlock signal sets a test event without touching the real host event", () =>
+        {
+            Check(
+                LockAppHostGlobalUnlockSignal.DefaultEventName == @"Local\LockAppHostGlobalUnlockEvent",
+                "The production unlock event name changed.");
+            var eventName = $"Local\\OhMyLockScreen.Tests.{Guid.NewGuid():N}";
+            using var expectedEvent = new EventWaitHandle(false, EventResetMode.AutoReset, eventName);
+            var signal = new LockAppHostGlobalUnlockSignal(eventName);
+
+            Check(signal.TrySignal(out var errorCode), $"Test unlock event was not signaled: {errorCode}.");
+            Check(errorCode == 0 && expectedEvent.WaitOne(0), "Test unlock event was not observed.");
+        });
+
+        run("Lock-screen helper maps unlock signals to protocol responses", () =>
+        {
+            var eventName = $"Local\\OhMyLockScreen.Tests.{Guid.NewGuid():N}";
+            using var expectedEvent = new EventWaitHandle(false, EventResetMode.AutoReset, eventName);
+            var request = new LockScreenProviderRequest("unlock", LockScreenProviderOperation.Unlock);
+
+            var success = LockScreenUnlockCommand.Execute(
+                request,
+                new LockAppHostGlobalUnlockSignal(eventName));
+            Check(
+                success is { Success: true, IsEnabled: false, Value: null, Error: null } &&
+                expectedEvent.WaitOne(0),
+                "Successful unlock response or event was incorrect.");
+
+            var missingName = $"Local\\OhMyLockScreen.Tests.{Guid.NewGuid():N}";
+            var failure = LockScreenUnlockCommand.Execute(
+                request,
+                new LockAppHostGlobalUnlockSignal(missingName));
+            Check(
+                failure is { Success: false, IsEnabled: false, Value: null } &&
+                !string.IsNullOrWhiteSpace(failure.Error),
+                "Missing unlock event did not produce a diagnostic failure.");
+        });
+
+        run("Lock-screen unlock protocol round trips", () =>
+        {
+            var request = new LockScreenProviderRequest("unlock", LockScreenProviderOperation.Unlock);
+            var json = JsonSerializer.Serialize(
+                request,
+                LockScreenProviderJsonContext.Default.LockScreenProviderRequest);
+            var parsed = JsonSerializer.Deserialize(
+                json,
+                LockScreenProviderJsonContext.Default.LockScreenProviderRequest);
+
+            Check(parsed == request, "Unlock protocol request did not round trip.");
         });
     }
 
@@ -187,6 +255,63 @@ internal static class LockScreenReplacementTests
                 failure is { Operation: LockScreenProviderOperation.Query },
                 "Refresh failure was not reported.");
         });
+
+        await runAsync("System unlock uses the helper and reports success", async () =>
+        {
+            var client = new FakeClient(operation => Task.FromResult(
+                Response(false, success: operation == LockScreenProviderOperation.Unlock)));
+            using var settings = CreateSettingsService();
+            var service = new LockScreenUnlockService(
+                settings,
+                client,
+                NullLogger<LockScreenUnlockService>.Instance);
+
+            Check(await service.TryUnlockAsync(), "Successful system unlock was not reported.");
+            Check(
+                client.Operations.SequenceEqual([LockScreenProviderOperation.Unlock]),
+                "System unlock did not use the unlock helper operation.");
+        });
+
+        await runAsync("Compatibility unlock bypasses the helper and requests the legacy exit", async () =>
+        {
+            var client = new FakeClient(_ => throw new InvalidOperationException("Helper must not run."));
+            using var settings = CreateSettingsService();
+            settings.Settings.CompatibilityUnlockMode = true;
+            var service = new LockScreenUnlockService(
+                settings,
+                client,
+                NullLogger<LockScreenUnlockService>.Instance);
+
+            Check(!await service.TryUnlockAsync(), "Compatibility mode did not request the legacy exit.");
+            Check(client.Operations.IsEmpty, "Compatibility mode invoked the helper.");
+        });
+
+        await runAsync("Failed system unlock requests the legacy exit", async () =>
+        {
+            var client = new FakeClient(_ => Task.FromResult(Response(false, success: false)));
+            using var settings = CreateSettingsService();
+            var service = new LockScreenUnlockService(
+                settings,
+                client,
+                NullLogger<LockScreenUnlockService>.Instance);
+
+            Check(!await service.TryUnlockAsync(), "Failed system unlock did not request the legacy exit.");
+            Check(
+                client.Operations.SequenceEqual([LockScreenProviderOperation.Unlock]),
+                "Failed system unlock did not attempt the helper operation.");
+        });
+
+        await runAsync("System unlock exceptions request the legacy exit", async () =>
+        {
+            var client = new FakeClient(_ => throw new TimeoutException("simulated timeout"));
+            using var settings = CreateSettingsService();
+            var service = new LockScreenUnlockService(
+                settings,
+                client,
+                NullLogger<LockScreenUnlockService>.Instance);
+
+            Check(!await service.TryUnlockAsync(), "System unlock exception did not request the legacy exit.");
+        });
     }
 
     private sealed class FakeRegistryView(LockScreenRegistryViewKind kind) : ILockScreenRegistryView
@@ -203,6 +328,16 @@ internal static class LockScreenReplacementTests
 
     private static LockScreenReplacementService CreateService(ILockScreenHelperClient client) =>
         new(client, NullLogger<LockScreenReplacementService>.Instance);
+
+    private static SettingsService CreateSettingsService()
+    {
+        var path = Path.Combine(
+            ApplicationData.Current.LocalFolder.Path,
+            $"Settings-{Guid.NewGuid():N}.json");
+        var service = new SettingsService(NullLogger<SettingsService>.Instance, path);
+        service.LoadSettingsAsync().GetAwaiter().GetResult();
+        return service;
+    }
 
     private static LockScreenProviderResponse Response(bool enabled, bool success) =>
         new("request", success, enabled, enabled ? "test-aumid" : null, success ? null : "test failure");

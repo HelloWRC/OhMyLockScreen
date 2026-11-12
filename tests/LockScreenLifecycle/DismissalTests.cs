@@ -1,4 +1,5 @@
 using OhMyLockScreen;
+using OhMyLockScreen.Services.LockScreenProvider;
 using OhMyLockScreen.Shared.Controls.Scene;
 using Windows.ApplicationModel.Core;
 using Windows.Devices.Input;
@@ -142,6 +143,55 @@ internal static class DismissalTests
             });
         }
 
+        await runAsync("System unlock request completes once before exiting the application", async () =>
+        {
+            var unlock = new FakeUnlockService(true);
+            var page = new MainPage(unlock);
+            page.RootScenePresenter.ActualHeight = 720;
+            page.Load();
+
+            page.PressPointer(PointerDeviceType.Mouse);
+            var storyboard = Storyboard.LastCreated!;
+            storyboard.Advance(TimeSpan.FromMilliseconds(333));
+
+            await WaitUntilAsync(() => unlock.Calls == 1 && CoreApplication.ExitCalls == 1);
+            page.Unload();
+            Check(unlock.Calls == 1 && CoreApplication.ExitCalls == 1,
+                "System unlock or application exit ran more than once.");
+        });
+
+        await runAsync("Failed system unlock falls back to exiting exactly once", async () =>
+        {
+            var unlock = new FakeUnlockService(false);
+            var page = new MainPage(unlock);
+            page.RootScenePresenter.ActualHeight = 720;
+            page.Load();
+
+            page.PressPointer(PointerDeviceType.Mouse);
+            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(333));
+
+            await WaitUntilAsync(() => CoreApplication.ExitCalls == 1);
+            Check(unlock.Calls == 1, "Fallback exit did not attempt system unlock exactly once.");
+            page.Unload();
+            Check(CoreApplication.ExitCalls == 1, "Fallback exit ran more than once.");
+        });
+
+        await runAsync("Unloading during dismissal requests system unlock once before exit", async () =>
+        {
+            var unlock = new FakeUnlockService(true);
+            var page = new MainPage(unlock);
+            page.Load();
+            page.PressKey(VirtualKey.A);
+            Window.Current.CoreWindow.Dispatcher.Drain();
+            var storyboard = Storyboard.LastCreated!;
+            storyboard.Advance(TimeSpan.FromMilliseconds(80));
+
+            page.Unload();
+            await WaitUntilAsync(() => unlock.Calls == 1);
+            page.Unload();
+            Check(unlock.Calls == 1 && CoreApplication.ExitCalls == 1,
+                "Interrupted dismissal duplicated unlock or application exit.");
+        });
         run("Keys consumed later in the route or by app accelerators preserve the lock view", () =>
         {
             var page = new MainPage();
@@ -313,6 +363,17 @@ internal static class DismissalTests
             Check(CoreApplication.ExitCalls == 1,
                 "Interrupted unlock animation exited more than once.");
         });
+    }
+
+    private sealed class FakeUnlockService(bool result) : ILockScreenUnlockService
+    {
+        internal int Calls { get; private set; }
+
+        public Task<bool> TryUnlockAsync(CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return Task.FromResult(result);
+        }
     }
 
     private static DoubleAnimationUsingKeyFrames FindAnimation(Storyboard storyboard, object target)

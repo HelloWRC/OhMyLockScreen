@@ -52,10 +52,19 @@ internal static class LockScreenProviderHost
                 $"{Path.GetFileNameWithoutExtension(LockScreenProviderProtocol.RequestFileName)}-{request.RequestId}.processing");
             File.Move(requestPath, processingPath, true);
 
-            registry = CreateRegistryAccess();
-            beforeValues = registry.ReadValues();
-            var response = Execute(request, registry);
-            afterValues = registry.ReadValues();
+            LockScreenProviderResponse response;
+            if (request.Operation == LockScreenProviderOperation.Unlock)
+            {
+                response = LockScreenUnlockCommand.Execute(request, new LockAppHostGlobalUnlockSignal());
+            }
+            else
+            {
+                registry = CreateRegistryAccess();
+                beforeValues = registry.ReadValues();
+                response = Execute(request, registry);
+                afterValues = registry.ReadValues();
+            }
+
             var hostRefresh = request.Operation == LockScreenProviderOperation.Disable && response.Success
                 ? (new LockScreenProcessRefresher().Refresh() ? "Completed" : "Failed")
                 : "NotRequested";

@@ -19,6 +19,8 @@
     <Compile Include="../../OhMyLockScreen/ViewModels/**/*.cs" Link="ViewModels/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/**/*.cs" Link="Services/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen.LockScreenHelper/LockScreenRegistryAccess.cs" Link="LockScreenHelper/LockScreenRegistryAccess.cs" />
+    <Compile Include="../../OhMyLockScreen.LockScreenHelper/LockAppHostGlobalUnlockSignal.cs" Link="LockScreenHelper/LockAppHostGlobalUnlockSignal.cs" />
+    <Compile Include="../../OhMyLockScreen.LockScreenHelper/LockScreenUnlockCommand.cs" Link="LockScreenHelper/LockScreenUnlockCommand.cs" />
     <Compile Include="../../OhMyLockScreen/MainPage.xaml.cs" Link="MainPage.xaml.cs" />
     <Compile Include="../../OhMyLockScreen/SceneEditorPage.SystemBackground.cs" Link="SceneEditorPage.SystemBackground.cs" />
     <Compile Include="../../OhMyLockScreen/SceneEditorPage.Tree.cs" Link="SceneEditorPage.Tree.cs" />

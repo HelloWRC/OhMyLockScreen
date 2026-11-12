@@ -18,7 +18,8 @@ public enum LockScreenProviderOperation
 {
     Query,
     Enable,
-    Disable
+    Disable,
+    Unlock
 }
 
 public sealed record LockScreenProviderRequest(string RequestId, LockScreenProviderOperation Operation);

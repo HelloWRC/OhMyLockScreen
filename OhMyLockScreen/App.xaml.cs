@@ -230,8 +230,11 @@ public sealed partial class App : Application
         var rootFrame = toastHost.Frame;
         rootFrame.Background = new SolidColorBrush(Windows.UI.Colors.Transparent);
         var pageType = isLockScreen ? typeof(MainPage) : typeof(SceneEditorPage);
+        // A retained lock view cannot re-enter after its dismissal animation completed.
+        var lockScreenRequiresFreshPage = isLockScreen &&
+            rootFrame.Content is MainPage { IsDismissalStarted: true };
         var pageChanged = isLockScreen
-            ? rootFrame.Content is not MainPage
+            ? rootFrame.Content is not MainPage || lockScreenRequiresFreshPage
             : rootFrame.Content is not (SceneEditorPage or ApplicationSettingsPage);
         if (pageChanged)
         {

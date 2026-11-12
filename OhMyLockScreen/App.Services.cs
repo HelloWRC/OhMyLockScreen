@@ -45,6 +45,7 @@ public sealed partial class App
     {
         services.AddSingleton<IHostLifetime, UwpHostLifetime>();
         services.AddSingleton<ILockScreenHelperClient, LockScreenHelperClient>();
+        services.AddSingleton<ILockScreenUnlockService, LockScreenUnlockService>();
         services.AddSingleton<LockScreenReplacementService>();
         services.AddSingleton(provider => new SettingsService(provider.GetRequiredService<ILogger<SettingsService>>(), Path.Combine(ApplicationData.Current.LocalFolder.Path, "Settings.json")));
         services.AddSingleton(provider => new SceneService(provider.GetRequiredService<SettingsService>(), provider.GetRequiredService<ILogger<SceneService>>(), ApplicationData.Current.LocalFolder.Path));

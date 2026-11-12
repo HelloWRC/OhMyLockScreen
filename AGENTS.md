@@ -19,6 +19,8 @@
 - 桌面激活显式关闭 ExtendViewIntoTitleBar，以覆盖 UWP 跨启动保存的标题栏扩展状态。
 - 应用在 App 构造时订阅 Application.UnhandledException，将未处理异常标记为已处理并复用当前窗口的 Toast 宿主显示不可自动关闭的错误；Toast 宿主尚未建立时，在窗口内容就绪后补显示。
 - 锁屏退出仅由页面收到的未处理 PointerPressed/KeyDown 冒泡事件触发；按键等待路由和应用快捷键处理完毕后再兜底，不使用 CoreWindow 或全局加速键抢占组件输入。Tab 和修饰键保留给焦点导航与组合键；卸载后丢弃排队的输入。
+- 锁屏退出动画结束后默认通过 LockScreenHelper 向当前会话的 `Local\LockAppHostGlobalUnlockEvent` 发送事件以请求系统解锁，随后仍退出 UWP 进程，确保下次锁定重新创建锁屏视图；事件不可用或处理失败时回退退出应用。通用设置中的“兼容解锁模式”不发送事件，强制使用旧版退出应用方式。
+- 事件解锁后 UWP 进程会保留已退场的 MainPage；锁屏再次激活时必须替换该页面，不能复用已开始退场的视图。
 - 设置通过 SettingsService 统一管理，并通过 MVVM 属性变更通知自动保存。
 - 场景资产按 SHA-256 Blob 存储，场景配置只保存 Blob ID，并在运行时按当前场景解析 URI；复制整个场景目录即可迁移资产，无独立索引或自动清理。
 - 当计划使用 OnPropertyChanged/OnPropertyChanging 实现属性变化监听比较繁复、会产生较多模板代码时，考虑用 ReactiveUI 和 DynamicData 简化。

@@ -16,6 +16,13 @@
                             IsOn="{x:Bind Settings.ReplaceSystemLockScreen, Mode=OneWay}"
                             Toggled="OnReplaceSystemLockScreenToggled" />
                     </toolkit:SettingsCard>
+                    <toolkit:SettingsCard
+                        Header="兼容解锁模式"
+                        Description="开启后，不发送锁屏解锁事件，改用旧版退出应用方式解锁，以兼容无法响应解锁事件的系统。">
+                        <ToggleSwitch
+                            AutomationProperties.Name="兼容解锁模式"
+                            IsOn="{x:Bind Settings.CompatibilityUnlockMode, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
                 </StackPanel>
             </Grid>
         </ScrollViewer>

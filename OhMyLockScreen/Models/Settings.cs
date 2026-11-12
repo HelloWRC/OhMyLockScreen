@@ -11,6 +11,8 @@ public partial class Settings : ObservableObject
     private Guid? _activeSceneId;
     [ObservableProperty]
     private Guid? _lastEditedSceneId;
+    [ObservableProperty]
+    private bool _compatibilityUnlockMode;
 
     [JsonIgnore]
     public bool ReplaceSystemLockScreen
