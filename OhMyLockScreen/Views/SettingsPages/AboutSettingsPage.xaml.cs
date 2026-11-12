@@ -12,4 +12,9 @@ public sealed partial class AboutSettingsPage : SettingsPageBase
     {
         InitializeComponent();
     }
+
+    private void Button_Click(object sender, Windows.UI.Xaml.RoutedEventArgs e)
+    {
+        throw new Exception("Test");
+    }
 }

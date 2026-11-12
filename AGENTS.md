@@ -18,6 +18,7 @@
 - 设置宿主位于 `OhMyLockScreen/Views`，设置子页位于 `OhMyLockScreen/Views/SettingsPages`。宿主的设置 Frame 填满可用内容区，正文宽度、边距和滚动由各子页决定。页面基类、元数据和注册逻辑在 Shared 中按类型归入对应目录。
 - 设置宿主沿用 WinUI 主题资源和控件默认样式；设置内容 Frame 使用内置 `NavigationThemeTransition` 与 `SlideNavigationTransitionInfo`（`FromBottom`）实现滑入和淡出，不自定义 Storyboard。应用资源字典提供 `SettingsContainerWidth` 和 `SettingsStackPanelStyle`。引用该样式的正文在自适应边距内水平拉伸，达到最大宽度后居中。
 - 桌面激活显式关闭 ExtendViewIntoTitleBar，以覆盖 UWP 跨启动保存的标题栏扩展状态。
+- 应用在 `App` 构造时订阅 `Application.UnhandledException`，将未处理异常标记为已处理并复用当前窗口的 Toast 宿主显示不可自动关闭的错误；Toast 宿主尚未建立时，在窗口内容就绪后补显示。
 - 锁屏退出仅由页面收到的未处理 PointerPressed/KeyDown 冒泡事件触发；按键等待路由和应用快捷键处理完毕后再兜底，不使用 CoreWindow 或全局加速键抢占组件输入。Tab 和修饰键保留给焦点导航与组合键；卸载后丢弃排队的输入。
 - 设置通过 SettingsService 管理，使用 ConfigureFileHelper 读写应用 LocalFolder 下的 Settings.json。设置属性使用 CommunityToolkit.Mvvm 的变更通知机制触发自动保存。
 - 场景资产保存在 `Scenes/<场景 ID>/Blobs/<SHA-256 前两位>/<SHA-256>`，文件名使用小写十六进制且无扩展名。场景配置只保存 Blob ID，运行时用当前场景解析 URI。复制整个场景目录可迁移资产，无独立索引或自动清理。

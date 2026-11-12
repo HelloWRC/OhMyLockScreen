@@ -540,6 +540,7 @@ namespace Windows.UI.Xaml
         public Application() => Current = this;
         public event UwpEventHandler<SuspendingEventArgs>? Suspending;
         public event UwpEventHandler<object>? Resuming;
+        public event UwpEventHandler<UnhandledExceptionEventArgs>? UnhandledException;
         public void Resume() => Resuming?.Invoke(this, EventArgs.Empty);
         protected virtual void OnLaunched(LaunchActivatedEventArgs args)
         {
@@ -551,12 +552,26 @@ namespace Windows.UI.Xaml
 
         public void Launch(LaunchActivatedEventArgs args) => OnLaunched(args);
         public void Activate(IActivatedEventArgs args) => OnActivated(args);
+        public UnhandledExceptionEventArgs RaiseUnhandledException(Exception exception)
+        {
+            var args = new UnhandledExceptionEventArgs(exception);
+            UnhandledException?.Invoke(this, args);
+            return args;
+        }
+
         public SuspendingEventArgs Suspend()
         {
             var args = new SuspendingEventArgs();
             Suspending?.Invoke(this, args);
             return args;
         }
+    }
+
+    public sealed class UnhandledExceptionEventArgs(Exception exception) : EventArgs
+    {
+        public Exception Exception { get; } = exception;
+        public bool Handled { get; set; }
+        public string Message => Exception.Message;
     }
 
     public sealed class RoutedEventArgs : EventArgs;

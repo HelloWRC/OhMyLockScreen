@@ -9,6 +9,8 @@
         <Grid>
             <StackPanel Style="{StaticResource SettingsStackPanelStyle}">
                 <toolkit:SettingsExpander />
+                <Button Content="Test crash"
+                        Click="Button_Click"/>
             </StackPanel>
         </Grid>
     </ScrollViewer>

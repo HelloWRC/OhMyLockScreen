@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Windows.ApplicationModel;
 using Microsoft.Extensions.Hosting;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using Windows.UI.Xaml.Navigation;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Core;
 using OhMyLockScreen.Shared.Controls.UI;
+using OhMyLockScreen.Shared.Helpers.UI;
 using OhMyLockScreen.Views;
 
 namespace OhMyLockScreen;
@@ -19,7 +21,10 @@ namespace OhMyLockScreen;
 /// </summary>
 public sealed partial class App : Application
 {
+    private const string UnhandledExceptionToastTitle = "应用发生未处理异常";
     private readonly ConditionalWeakTable<Window, ViewActivation> _viewActivations = new();
+    private readonly ConditionalWeakTable<Window, PendingUnhandledException> _pendingUnhandledExceptions = new();
+
     private sealed class ViewActivation
     {
         internal ActivationKind? Kind
@@ -28,6 +33,11 @@ public sealed partial class App : Application
         }
 
         internal bool IsClosed { get; set; }
+    }
+
+    private sealed class PendingUnhandledException
+    {
+        internal Exception? Exception { get; set; }
     }
 
     /// <summary>
@@ -40,9 +50,72 @@ public sealed partial class App : Application
 
     internal App(Func<IHost> hostFactory)
     {
+        UnhandledException += OnUnhandledException;
         _initializeHost = new Lazy<Task>(() => StartHostAsync(hostFactory));
         InitializeComponent();
         Suspending += OnSuspending;
+    }
+
+    private void OnUnhandledException(object sender, Windows.UI.Xaml.UnhandledExceptionEventArgs args)
+    {
+        // Keep the UI process alive so the user can see and dismiss the failure.
+        args.Handled = true;
+
+        try
+        {
+            LogLifecycleError(args.Exception, UnhandledExceptionToastTitle);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"记录未处理异常失败: {exception}");
+        }
+
+        try
+        {
+            ShowUnhandledExceptionToast(Window.Current, args.Exception);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"显示未处理异常提示失败: {exception}");
+        }
+    }
+
+    private void ShowUnhandledExceptionToast(Window window, Exception exception)
+    {
+        if (window.Content is not WindowToastHost)
+        {
+            var pending = _pendingUnhandledExceptions.GetValue(
+                window,
+                currentWindow =>
+                {
+                    var state = new PendingUnhandledException();
+                    currentWindow.Closed += (_, _) => state.Exception = null;
+                    return state;
+                });
+            pending.Exception = exception;
+            return;
+        }
+
+        window.ShowErrorToast(UnhandledExceptionToastTitle, exception);
+    }
+
+    private void ShowPendingUnhandledException(Window window)
+    {
+        if (!_pendingUnhandledExceptions.TryGetValue(window, out var pending) ||
+            pending.Exception is not { } exception)
+        {
+            return;
+        }
+
+        pending.Exception = null;
+        try
+        {
+            window.ShowErrorToast(UnhandledExceptionToastTitle, exception);
+        }
+        catch (Exception toastException)
+        {
+            Debug.WriteLine($"显示启动阶段未处理异常提示失败: {toastException}");
+        }
     }
 
     /// <inheritdoc/>
@@ -177,6 +250,7 @@ public sealed partial class App : Application
             }
         }
 
+        ShowPendingUnhandledException(window);
         window.Activate();
     }
 

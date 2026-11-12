@@ -225,6 +225,48 @@ internal static class InfrastructureTests
             Check(probe.Stops == 1 && probe.Disposed && IAppHost.Host == null, "Exit did not stop and dispose the host.");
         });
 
+        await runAsync("Unhandled exceptions stay handled and appear in the window Toast host", async () =>
+        {
+            var app = new App(() => BuildHost(new HostedProbe()));
+            var view = new ViewContext();
+            var exception = new InvalidOperationException("模拟未处理异常");
+            Windows.UI.Xaml.UnhandledExceptionEventArgs? startupNotice = null;
+
+            view.Invoke(() =>
+            {
+                app.Launch(new LaunchActivatedEventArgs());
+                startupNotice = app.RaiseUnhandledException(exception);
+            });
+
+            var stopwatch = Stopwatch.StartNew();
+            WindowToastHost? host = null;
+            while (host == null || host.Toasts.Messages.Count == 0)
+            {
+                Check(stopwatch.Elapsed < TimeSpan.FromSeconds(5), "Unhandled exception Toast was not shown after startup.");
+                view.Drain();
+                host = view.Window.Content as WindowToastHost;
+                if (host == null || host.Toasts.Messages.Count == 0)
+                {
+                    await Task.Delay(5);
+                }
+            }
+
+            var startupToast = host.Toasts.Messages[0];
+            Check(startupNotice!.Handled, "The unhandled exception was not marked as handled.");
+            Check(startupToast.Title == "应用发生未处理异常" &&
+                startupToast.Message == exception.Message &&
+                startupToast.Severity == Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error &&
+                !startupToast.AutoClose,
+                "The startup exception did not use the persistent error Toast contract.");
+            Check(CoreApplication.ExitCalls == 0, "An unhandled exception exited the application.");
+
+            Windows.UI.Xaml.UnhandledExceptionEventArgs? activeNotice = null;
+            view.Invoke(() => activeNotice = app.RaiseUnhandledException(new InvalidOperationException("第二个异常")));
+            Check(activeNotice!.Handled && host.Toasts.Messages.Count == 2,
+                "An active-window exception was not added to the Toast host.");
+            await app.ExitAsync();
+        });
+
         await runAsync("Desktop activation restores the system title bar and retains settings on reactivation", async () =>
         {
             LockScreenHosting.IsHosted = () => false;
