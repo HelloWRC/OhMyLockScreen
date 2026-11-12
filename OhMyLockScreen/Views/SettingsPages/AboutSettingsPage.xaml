@@ -8,9 +8,49 @@
     <ScrollViewer HorizontalContentAlignment="Stretch">
         <Grid>
             <StackPanel Style="{StaticResource SettingsStackPanelStyle}">
-                <toolkit:SettingsExpander />
-                <Button Content="Test crash"
-                        Click="Button_Click"/>
+                <toolkit:SettingsExpander
+                    Header="OhMyLockScreen"
+                    Description="你的锁屏，如你所想。"
+                    IsExpanded="True">
+                    <toolkit:SettingsExpander.HeaderIcon>
+                        <muxc:ImageIcon Source="ms-appx:///Assets/Logo.png" />
+                    </toolkit:SettingsExpander.HeaderIcon>
+                    <toolkit:SettingsExpander.Content>
+                        <TextBlock
+                            AutomationProperties.Name="应用版本"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind DisplayVersion}" />
+                    </toolkit:SettingsExpander.Content>
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard
+                            Header="Copyright (c) 2026 HelloWRC"
+                            Description="本项目基于 GNU General Public License v3.0 获得许可。"
+                            ContentAlignment="Right">
+                            <HyperlinkButton
+                                Content="开放源代码许可"
+                                Margin="2"
+                                NavigateUri="https://github.com/HelloWRC/OhMyLockScreen/blob/master/LICENSE"
+                                Padding="4" />
+                        </toolkit:SettingsCard>
+                        <toolkit:SettingsCard
+                            Header="常用链接"
+                            ContentAlignment="Right">
+                            <StackPanel Orientation="Horizontal">
+                                <HyperlinkButton
+                                    Content="项目主页"
+                                    Margin="2"
+                                    NavigateUri="https://github.com/HelloWRC/OhMyLockScreen"
+                                    Padding="4" />
+                                <HyperlinkButton
+                                    Content="问题反馈"
+                                    Margin="2"
+                                    NavigateUri="https://github.com/HelloWRC/OhMyLockScreen/issues"
+                                    Padding="4" />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
             </StackPanel>
         </Grid>
     </ScrollViewer>
