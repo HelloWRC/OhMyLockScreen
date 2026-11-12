@@ -177,10 +177,10 @@
                 Spacing="16"
                 Margin="16,0,140,0"
                 VerticalAlignment="Center">
-                <FontIcon
-                    FontFamily="Segoe Fluent Icons"
-                    Glyph="&#xEA3A;"
-                    FontSize="16" />
+                <Image
+                    Source="ms-appx:///Assets/Logo@64w.png"
+                    Width="16"
+                    Height="16" />
                 <TextBlock
                     Text="OhMyLockScreen"
                     FontSize="12" />
@@ -193,11 +193,11 @@
             Visibility="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition
-                    Width="89" />
+                    Width="Auto" />
                 <ColumnDefinition
                     Width="*" />
                 <ColumnDefinition
-                    Width="80" />
+                    Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock
                 Text="场景编辑器"
