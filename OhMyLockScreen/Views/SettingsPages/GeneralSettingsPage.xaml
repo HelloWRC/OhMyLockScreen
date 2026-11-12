@@ -2,4 +2,29 @@
     x:Class="OhMyLockScreen.Views.SettingsPages.GeneralSettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:settings="using:OhMyLockScreen.Shared.Abstractions.Controls" />
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+    xmlns:settings="using:OhMyLockScreen.Shared.Abstractions.Controls">
+    <Grid>
+        <ScrollViewer HorizontalContentAlignment="Stretch">
+            <Grid>
+                <StackPanel Style="{StaticResource SettingsStackPanelStyle}">
+                    <toolkit:SettingsCard
+                        Header="替换系统锁屏实现"
+                        Description="开启后，将替换系统锁屏实现为 OhMyLockScreen。要应用在本应用内设置的锁屏外观，必须启用此选项。">
+                        <ToggleSwitch
+                            AutomationProperties.Name="替换系统锁屏实现"
+                            IsOn="{x:Bind Settings.ReplaceSystemLockScreen, Mode=OneWay}"
+                            Toggled="OnReplaceSystemLockScreenToggled" />
+                    </toolkit:SettingsCard>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+        <ContentDialog
+            x:Name="RestartExplorerDialog"
+            Title="恢复默认锁屏？"
+            Content="关闭替换后，将立即重启资源管理器（explorer.exe）以清除 Windows 锁屏缓存。任务栏和桌面会短暂消失，已打开的文件夹窗口会被关闭。"
+            PrimaryButtonText="恢复并重启"
+            CloseButtonText="取消"
+            DefaultButton="Close" />
+    </Grid>
+</settings:SettingsPageBase>

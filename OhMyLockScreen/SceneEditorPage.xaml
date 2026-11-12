@@ -142,6 +142,8 @@
             <RowDefinition
                 Height="48" />
             <RowDefinition
+                Height="Auto" />
+            <RowDefinition
                 Height="*" />
         </Grid.RowDefinitions>
         <ContentDialog
@@ -728,5 +730,21 @@
                 </ContentControl>
             </Border>
         </Grid>
+        <muxc:InfoBar
+            x:Name="LockScreenReplacementInfoBar"
+            Grid.Row="1"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top"
+            IsOpen="False"
+            Severity="Warning"
+            Title="未启用替换系统锁屏"
+            Message="启用“替换系统锁屏实现”后，OhMyLockScreen 才能接管并显示当前锁屏场景。"
+            Visibility="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}">
+            <muxc:InfoBar.ActionButton>
+                <Button
+                    Content="前往开启"
+                    Click="OnSettingsClick" />
+            </muxc:InfoBar.ActionButton>
+        </muxc:InfoBar>
     </Grid>
 </Page>

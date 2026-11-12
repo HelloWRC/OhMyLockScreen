@@ -25,6 +25,7 @@ using OhMyLockScreen.Shared.Abstractions.Services.Media;
 using OhMyLockScreen.Services.SystemStatus;
 using OhMyLockScreen.Shared.Abstractions.Services.SystemStatus;
 using OhMyLockScreen.Services.Audio;
+using OhMyLockScreen.Services.LockScreenProvider;
 using OhMyLockScreen.Shared.Abstractions.Services.Audio;
 using OhMyLockScreen.Shared.Extensions.Registry;
 using OhMyLockScreen.Views.SettingsPages;
@@ -43,6 +44,8 @@ public sealed partial class App
     private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
     {
         services.AddSingleton<IHostLifetime, UwpHostLifetime>();
+        services.AddSingleton<ILockScreenHelperClient, LockScreenHelperClient>();
+        services.AddSingleton<LockScreenReplacementService>();
         services.AddSingleton(provider => new SettingsService(provider.GetRequiredService<ILogger<SettingsService>>(), Path.Combine(ApplicationData.Current.LocalFolder.Path, "Settings.json")));
         services.AddSingleton(provider => new SceneService(provider.GetRequiredService<SettingsService>(), provider.GetRequiredService<ILogger<SceneService>>(), ApplicationData.Current.LocalFolder.Path));
         services.AddSingleton<ISceneService>(provider => provider.GetRequiredService<SceneService>());

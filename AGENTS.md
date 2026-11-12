@@ -28,7 +28,9 @@
 - 视频呈现使用自有 BackgroundVideoView/VideoSwapChain 管理生命周期，避免 LibVLCSharp VideoView 的全局匿名事件引用；释放时先停止并销毁播放器，再解绑面板与交换链，执行 D3D ClearState/Flush 后释放上下文和设备。
 - 视频交换链的宽高私有数据 GUID 必须匹配 VLC WinRT 输出协议；原生检查使用独立协议常量，实际播放需在隔离 UWP 预览包中验证解码帧与输出像素。
 - VLC 3 不将负数 input-repeat 视为无限循环；背景通过 EndReached 调度到所属 UI 线程后 Stop/Play 重播，并在有效视频输出建立后重新应用裁剪比例。LibVLCSharp 回调的 sender 是内部事件管理器，订阅时需捕获对应播放器，不能用 sender 识别播放器。
-- 锁屏选择通过 windows.lockScreen 扩展和当前用户的 LockAppAumId 配置实现。启用前备份原设置，移除应用包前恢复原设置。
+- 锁屏选择通过 windows.lockScreen 扩展和当前用户的 LockAppAumId 配置实现。运行时由独立 NativeAOT full-trust Helper 直接读写该值；关闭替换前通过 ContentDialog 提示资源管理器将重启，用户确认后才向 32 位和 64 位注册表视图写入 Microsoft.LockApp_cw5n1h2txyewy!WindowsDefaultLockScreen，并重启当前会话中缓存锁屏扩展的 LockAppHost/LockApp 与桌面 Explorer，让 Windows 丢弃锁屏扩展缓存并回退到默认锁屏，不保留原值备份。
+- 同一 Application 只能声明一个 windows.fullTrustProcess；独立锁屏 Helper 使用单独 Application Id 和参数组启动。
+- 包清单必须通过 desktop6:RegistryWriteVirtualization 禁用 MSIX 注册表写入虚拟化；否则 Helper 的 HKCU 写入不会落到用户真实注册表。
 - Figma 设计稿中呈现的 Fluent System Icon 等字体图标版本可能与项目当前安装的不符，此时按字体位点名称的语义匹配，而不是位点本身或外观。
 - 特性按目标类型应用原生属性，不递归修改子元素；卸载时恢复目标原绑定或本地值。组件默认特性仅在新建配置时生成，加载或重建视图时不补齐。
 - WinUI 2 TreeView 不处理集合的 Move 通知；组件树排序使用移除再插入并保留节点实例，协调期间忽略临时选择回调，完成后重新同步选中项。

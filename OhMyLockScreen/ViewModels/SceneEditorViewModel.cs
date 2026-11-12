@@ -77,8 +77,8 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     public bool ShowHome => !IsPreview && ActiveTab == SceneEditorTab.Home;
     public bool ShowComponents => !IsPreview && ActiveTab == SceneEditorTab.Components;
     public bool ShowBackground => !IsPreview && ActiveTab == SceneEditorTab.Background;
-    public int ContentRow => IsPreview ? 0 : 1;
-    public int ContentRowSpan => IsPreview ? 2 : 1;
+    public int ContentRow => IsPreview ? 0 : 2;
+    public int ContentRowSpan => IsPreview ? 3 : 1;
     public GridLength PanelWidth => new(SidePanelWidth, GridUnitType.Pixel);
     public Thickness ViewportMargin => ShowComponents ? new Thickness(SidePanelWidth, 0, SidePanelWidth, 0) : default;
     public bool ShowSelection => ShowComponents && HasSelectionBounds;

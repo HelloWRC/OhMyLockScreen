@@ -49,6 +49,12 @@ namespace Windows.ApplicationModel
         public Windows.Storage.StorageFolder InstalledLocation { get; } = new();
     }
 
+    public static class FullTrustProcessLauncher
+    {
+        public static Task LaunchFullTrustProcessForAppAsync(string appId, string parameterGroupId) =>
+            Task.CompletedTask;
+    }
+
     public sealed class SuspendingEventArgs : EventArgs
     {
         public SuspendingOperation SuspendingOperation { get; } = new();

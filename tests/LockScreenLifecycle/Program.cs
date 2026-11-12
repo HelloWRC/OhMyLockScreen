@@ -62,6 +62,14 @@ if (args.Contains("--toast-only"))
     return;
 }
 
+if (args.Contains("--lock-screen-provider-only"))
+{
+    LockScreenReplacementTests.Run(Run);
+    await LockScreenReplacementTests.RunAsync(RunAsync);
+    Console.WriteLine($"All {passed} lock-screen replacement checks passed using a fake helper client.");
+    return;
+}
+
 if (args.Contains("--scene-only"))
 {
     await SceneTests.RunAsync(Run, RunAsync);
@@ -133,6 +141,8 @@ if (args.Contains("--layout-only"))
 }
 
 await InfrastructureTests.RunAsync(Run, RunAsync);
+LockScreenReplacementTests.Run(Run);
+await LockScreenReplacementTests.RunAsync(RunAsync);
 AudioSpectrumTests.Run(Run);
 await AudioSpectrumTests.RunAsync(RunAsync);
 SystemStatusTests.Run(Run);

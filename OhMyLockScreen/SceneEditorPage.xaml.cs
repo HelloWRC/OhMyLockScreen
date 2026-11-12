@@ -4,6 +4,7 @@ using OhMyLockScreen.Controls.Editor;
 using OhMyLockScreen.Models.Features.Layout;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Services.Scene;
+using OhMyLockScreen.Services.LockScreenProvider;
 using OhMyLockScreen.Services.Features.Appearance;
 using OhMyLockScreen.Shared.Abstractions.Models.Scene;
 using OhMyLockScreen.Services;
@@ -14,6 +15,7 @@ using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Controls.Scene;
 using OhMyLockScreen.Shared.Models.FeatureHost;
+using OhMyLockScreen.Shared.Models.LockScreenProvider;
 using OhMyLockScreen.Shared.Models.Scene;
 using OhMyLockScreen.Shared.Services.FeatureHost;
 using OhMyLockScreen.ViewModels;
@@ -46,6 +48,7 @@ public sealed partial class SceneEditorPage : Page
     private readonly IComponentsService _components;
     private readonly IFeatureService _features;
     private readonly FeatureRegistryService _featureRegistry;
+    private readonly LockScreenReplacementService _lockScreenReplacement;
     private Window? _window;
     private bool _loaded;
     private bool _restoringEditor;
@@ -92,6 +95,7 @@ public sealed partial class SceneEditorPage : Page
         _components = IAppHost.GetRequiredService<IComponentsService>();
         _features = IAppHost.GetRequiredService<IFeatureService>();
         _featureRegistry = IAppHost.GetRequiredService<FeatureRegistryService>();
+        _lockScreenReplacement = IAppHost.GetRequiredService<LockScreenReplacementService>();
         ViewModel = IAppHost.GetRequiredService<SceneEditorViewModel>();
         _observedTreeItemDragOverHandler = OnObservedTreeItemDragOver;
         InitializeComponent();
@@ -113,7 +117,7 @@ public sealed partial class SceneEditorPage : Page
         _restoringEditor = args.NavigationMode == NavigationMode.Back;
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs args)
+    private async void OnLoaded(object sender, RoutedEventArgs args)
     {
         if (_loaded)
         {
@@ -122,6 +126,8 @@ public sealed partial class SceneEditorPage : Page
 
         _loaded = true;
         _window = Window.Current;
+        _lockScreenReplacement.StateChanged += OnLockScreenReplacementStateChanged;
+        _lockScreenReplacement.OperationFailed += OnLockScreenReplacementFailed;
         AttachSystemBackground();
         ViewModel.SelectionChanged += OnSelectionChanged;
         ViewModel.StructureChanged += OnStructureChanged;
@@ -168,6 +174,9 @@ public sealed partial class SceneEditorPage : Page
             _restoringEditor = false;
             SettingsButton.Focus(FocusState.Programmatic);
         }
+
+        await _lockScreenReplacement.EnsureInitializedAsync();
+        await OnViewAsync(UpdateLockScreenReplacementInfoBar);
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
@@ -178,6 +187,8 @@ public sealed partial class SceneEditorPage : Page
         }
 
         EndDrag();
+        _lockScreenReplacement.StateChanged -= OnLockScreenReplacementStateChanged;
+        _lockScreenReplacement.OperationFailed -= OnLockScreenReplacementFailed;
         ViewModel.PropertyChanged -= OnPanelViewModelPropertyChanged;
         StopPanelAnimations();
         ExitPreview();
@@ -212,6 +223,25 @@ public sealed partial class SceneEditorPage : Page
     {
         TryAction(() => Frame.Navigate(typeof(ApplicationSettingsPage)));
     }
+
+    private async void OnLockScreenReplacementStateChanged(
+        object? sender,
+        LockScreenReplacementStateChangedEventArgs args) =>
+        await OnViewAsync(UpdateLockScreenReplacementInfoBar);
+
+    private async void OnLockScreenReplacementFailed(
+        object? sender,
+        LockScreenReplacementFailedEventArgs args)
+    {
+        var title = args.Operation == LockScreenProviderOperation.Query
+            ? "无法读取系统锁屏设置"
+            : "无法更改系统锁屏设置";
+        await OnViewAsync(() => ShowMessage(title, args.Exception.Message));
+    }
+
+    private void UpdateLockScreenReplacementInfoBar() =>
+        LockScreenReplacementInfoBar.IsOpen =
+            _lockScreenReplacement.IsInitialized && !_lockScreenReplacement.CurrentValue;
 
     private void OnSelectionChanged(object? sender, EventArgs args)
     {
