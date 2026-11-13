@@ -28,6 +28,7 @@
 - 场景资产按 SHA-256 Blob 存储，场景配置只保存 Blob ID，并在运行时按当前场景解析 URI；复制整个场景目录即可迁移资产，无独立索引或自动清理。
 - 当计划使用 OnPropertyChanged/OnPropertyChanging 实现属性变化监听比较繁复、会产生较多模板代码时，考虑用 ReactiveUI 和 DynamicData 简化。
 - 构建需要 UWP/XAML 构建工具、对应 Windows SDK 和 VC++ 14 UWP 运行库 SDK，沿用项目现有签名配置。
+- 正式项目默认从当前 HEAD 可达的最近本地 Git 标签设置程序集版本，主项目同时设置 MSIX 版本。标签必须是四段无前导零的十进制数字，每段为 0 至 65534，无可达标签时使用 `0.0.0.0`。
 - 开发锁屏实际运行已注册包的 AppX 布局；命令行 Build 不会同步该布局，实机复测前需部署或按构建 recipe 同步，并核对运行目录中的程序集版本。
 - 动态背景固定使用 GPL 维护版 LibVLC.UWP；不得换回旧 VideoLAN.LibVLC.UWP，其内含的 VLC 3.0.16 存在 WinRT D3D11 设备重复 AddRef 泄漏。
 - 视频呈现使用自有 BackgroundVideoView/VideoSwapChain 管理生命周期，避免 LibVLCSharp VideoView 的全局匿名事件引用；释放时先停止并销毁播放器，再解绑面板与交换链，执行 D3D ClearState/Flush 后释放上下文和设备。

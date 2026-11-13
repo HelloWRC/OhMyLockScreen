@@ -19,7 +19,7 @@
     <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
     <PackageCertificateKeyFile>OhMyLockScreen_TemporaryKey.pfx</PackageCertificateKeyFile>
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
-    <AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
+    <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
     <AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
     <GenerateTestArtifacts>False</GenerateTestArtifacts>
     <AppxBundle>Never</AppxBundle>
@@ -49,6 +49,34 @@
     <Folder Include="Helpers\" />
     <Folder Include="Models\Scene\" />
   </ItemGroup>
+  <Target Name="WriteAppxManifestVersionInput" DependsOnTargets="ResolveGitBuildVersion">
+    <PropertyGroup>
+      <_AppxManifestVersionInput>$(IntermediateOutputPath)PackageVersion.txt</_AppxManifestVersionInput>
+      <_VersionedAppxManifest>$(IntermediateOutputPath)Package.appxmanifest</_VersionedAppxManifest>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_AppxManifestVersionInput)" Lines="$(GitBuildVersion)"
+                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
+  <Target Name="GenerateVersionedAppxManifest"
+          DependsOnTargets="WriteAppxManifestVersionInput"
+          Inputs="$(MSBuildAllProjects);@(AppxManifest);$(_AppxManifestVersionInput)"
+          Outputs="$(_VersionedAppxManifest)">
+    <Copy SourceFiles="@(AppxManifest)" DestinationFiles="$(_VersionedAppxManifest)" />
+    <XmlPoke XmlInputPath="$(_VersionedAppxManifest)" Query="/appx:Package/appx:Identity/@Version"
+             Namespaces="&lt;Namespace Prefix='appx' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10' /&gt;"
+             Value="$(GitBuildVersion)" />
+  </Target>
+  <Target Name="UseVersionedAppxManifest"
+          BeforeTargets="_ValidatePresenceOfAppxManifestItems;BeforeGenerateAppxManifest"
+          DependsOnTargets="GenerateVersionedAppxManifest"
+          Condition="'$(DesignTimeBuild)' != 'true' And '@(AppxManifest)' != ''">
+    <ItemGroup>
+      <_VersionedAppxManifestItem Include="@(AppxManifest->'$(_VersionedAppxManifest)')" />
+      <AppxManifest Remove="@(AppxManifest)" />
+      <AppxManifest Include="@(_VersionedAppxManifestItem)" />
+      <FileWrites Include="$(_AppxManifestVersionInput);$(_VersionedAppxManifest)" />
+    </ItemGroup>
+  </Target>
   <Target Name="PublishLockScreenHelper"
           BeforeTargets="PrepareForBuild"
           Condition="'$(DesignTimeBuild)' != 'true'">

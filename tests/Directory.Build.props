@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <UseGitBuildVersion>false</UseGitBuildVersion>
+  </PropertyGroup>
+</Project>

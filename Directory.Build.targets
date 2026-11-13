@@ -1,0 +1,55 @@
+<Project>
+  <PropertyGroup>
+    <UseGitBuildVersion Condition="'$(UseGitBuildVersion)' == ''">true</UseGitBuildVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(UseGitBuildVersion)' == 'true'">
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- A tag can change without touching any of the files checked by Visual Studio. -->
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseGitBuildVersion)' == 'true'">
+    <PackageReference Include="ClassIsland.SimpleGitInfoGenerator" Version="1.0.0.1"
+                      IncludeAssets="build;buildTransitive" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="ResolveGitBuildVersion"
+          BeforeTargets="PrepareForBuild;GetAssemblyVersion"
+          DependsOnTargets="GetGitInfoForSourceGenerator"
+          Condition="'$(UseGitBuildVersion)' == 'true' And '$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_GitVersionPart>0|[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-4]</_GitVersionPart>
+      <_GitVersionPattern>\A(?:$(_GitVersionPart))(?:\.(?:$(_GitVersionPart))){3}\z</_GitVersionPattern>
+      <GitBuildVersion Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(GitTag)', '$(_GitVersionPattern)'))">$(GitTag)</GitBuildVersion>
+    </PropertyGroup>
+
+    <!-- The package can return Git's stderr in GitTag instead of an empty value. -->
+    <Exec Condition="'$(GitBuildVersion)' == ''"
+          Command="git tag --merged HEAD"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="low"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_ReachableGitTags" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitTagQueryExitCode" />
+    </Exec>
+    <Error Condition="'$(_GitTagQueryExitCode)' != '' And '$(_GitTagQueryExitCode)' != '0'"
+           Text="Could not query Git tags reachable from HEAD. Git reported: @(_ReachableGitTags)" />
+    <ItemGroup Condition="'$(GitBuildVersion)' == ''">
+      <_InvalidGitVersionTag Include="@(_ReachableGitTags)" Condition="'%(_ReachableGitTags.Identity)' == '$(GitTag)'" />
+    </ItemGroup>
+    <Error Condition="'@(_InvalidGitVersionTag)' != ''"
+           Text="Git tag '$(GitTag)' must use x.x.x.x with decimal components from 0 to 65534 and no leading zeros." />
+    <Error Condition="'$(GitBuildVersion)' == '' And '@(_ReachableGitTags)' != ''"
+           Text="Could not determine the nearest Git tag reachable from HEAD. Git reported: $(GitTag)" />
+
+    <PropertyGroup>
+      <GitBuildVersion Condition="'$(GitBuildVersion)' == ''">0.0.0.0</GitBuildVersion>
+      <Version>$(GitBuildVersion)</Version>
+      <AssemblyVersion>$(GitBuildVersion)</AssemblyVersion>
+      <FileVersion>$(GitBuildVersion)</FileVersion>
+      <InformationalVersion>$(GitBuildVersion)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>
