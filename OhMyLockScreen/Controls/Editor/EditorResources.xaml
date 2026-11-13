@@ -61,7 +61,7 @@
             Value="2" />
         <Setter
             Property="Background"
-            Value="#60CDFF" />
+            Value="{ThemeResource AccentFillColorDefaultBrush}" />
         <Setter
             Property="HorizontalAlignment"
             Value="Left" />

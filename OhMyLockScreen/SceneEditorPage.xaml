@@ -9,8 +9,8 @@
     xmlns:editor="using:OhMyLockScreen.Controls.Editor"
     xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
     RequestedTheme="Dark"
-    Background="#202020"
-    Foreground="White"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+    Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
     FontFamily="Microsoft YaHei UI">
     <Page.Resources>
         <DataTemplate x:Key="AddFeatureMenuItemTemplate">
@@ -67,7 +67,7 @@
                 Value="2" />
             <Setter
                 Property="Background"
-                Value="#60CDFF" />
+                Value="{ThemeResource AccentFillColorDefaultBrush}" />
             <Setter
                 Property="HorizontalAlignment"
                 Value="Left" />
@@ -83,7 +83,7 @@
                 Value="24" />
             <Setter
                 Property="Background"
-                Value="Transparent" />
+                Value="{ThemeResource SystemControlTransparentBrush}" />
             <Setter
                 Property="Visibility"
                 Value="Collapsed" />
@@ -99,7 +99,7 @@
                 Value="7" />
             <Setter
                 Property="BorderBrush"
-                Value="#66757575" />
+                Value="{ThemeResource SystemControlForegroundBaseMediumLowBrush}" />
             <Setter
                 Property="BorderThickness"
                 Value="1" />
@@ -110,15 +110,8 @@
                 Property="VerticalAlignment"
                 Value="Top" />
             <Setter
-                Property="Background">
-                <Setter.Value>
-                    <AcrylicBrush
-                        BackgroundSource="Backdrop"
-                        TintColor="#202020"
-                        TintOpacity="0.96"
-                        FallbackColor="#ED202020" />
-                </Setter.Value>
-            </Setter>
+                Property="Background"
+                Value="{ThemeResource SystemControlAcrylicWindowBrush}" />
         </Style>
     </Page.Resources>
     <Grid
@@ -224,11 +217,11 @@
             x:Name="MainContent"
             Grid.Row="{x:Bind ViewModel.ContentRow, Mode=OneWay}"
             Grid.RowSpan="{x:Bind ViewModel.ContentRowSpan, Mode=OneWay}"
-            Background="Transparent"
+            Background="{ThemeResource SystemControlTransparentBrush}"
             SizeChanged="OnContentSizeChanged">
             <Grid
                 x:Name="SceneViewport"
-                Background="Transparent"
+                Background="{ThemeResource SystemControlTransparentBrush}"
                 AllowDrop="True"
                 PointerPressed="OnCanvasPointerPressed"
                 PointerMoved="OnCanvasPointerMoved"
@@ -247,7 +240,7 @@
                 <Canvas
                     IsHitTestVisible="False">
                     <Border
-                        BorderBrush="#60CDFF"
+                        BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                         BorderThickness="1"
                         Canvas.Left="{x:Bind ViewModel.HoverGeometry.X, Mode=OneWay}"
                         Canvas.Top="{x:Bind ViewModel.HoverGeometry.Y, Mode=OneWay}"
@@ -259,7 +252,7 @@
                     x:Name="SelectionOverlay"
                     IsHitTestVisible="False">
                     <Border
-                        BorderBrush="#60CDFF"
+                        BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                         BorderThickness="2"
                         Canvas.Left="{x:Bind ViewModel.SelectionGeometry.X, Mode=OneWay}"
                         Canvas.Top="{x:Bind ViewModel.SelectionGeometry.Y, Mode=OneWay}"
@@ -270,7 +263,7 @@
                 <!-- 编辑态由透明层接管输入，避免组件内容参与命中测试。 -->
                 <Border
                     x:Name="EditorInteractionLayer"
-                    Background="Transparent"
+                    Background="{ThemeResource SystemControlTransparentBrush}"
                     Visibility="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}" />
                 <Canvas
                     x:Name="ResizeOverlay"
@@ -287,7 +280,7 @@
                         <Ellipse
                             Width="8"
                             Height="8"
-                            Fill="#60CDFF" />
+                            Fill="{ThemeResource AccentFillColorDefaultBrush}" />
                     </Border>
                     <Border
                         x:Name="ResizeTopRight"
@@ -301,7 +294,7 @@
                         <Ellipse
                             Width="8"
                             Height="8"
-                            Fill="#60CDFF" />
+                            Fill="{ThemeResource AccentFillColorDefaultBrush}" />
                     </Border>
                     <Border
                         x:Name="ResizeBottomLeft"
@@ -315,7 +308,7 @@
                         <Ellipse
                             Width="8"
                             Height="8"
-                            Fill="#60CDFF" />
+                            Fill="{ThemeResource AccentFillColorDefaultBrush}" />
                     </Border>
                     <Border
                         x:Name="ResizeBottomRight"
@@ -329,7 +322,7 @@
                         <Ellipse
                             Width="8"
                             Height="8"
-                            Fill="#60CDFF" />
+                            Fill="{ThemeResource AccentFillColorDefaultBrush}" />
                     </Border>
                 </Canvas>
             </Grid>
@@ -423,7 +416,7 @@
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="vm:SceneListItem">
-                                    <Grid Background="Transparent">
+                                    <Grid Background="{ThemeResource SystemControlTransparentBrush}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="32" />
                                             <ColumnDefinition Width="*" />
@@ -504,7 +497,7 @@
                     </Grid.ColumnDefinitions>
                     <Grid
                         x:Name="ComponentLeftPanel"
-                        Background="#262626"
+                        Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}"
                         Padding="8,0,8,0">
                         <Grid.RenderTransform>
                             <TranslateTransform x:Name="ComponentLeftTransform" />
@@ -567,7 +560,7 @@
                                             <Grid
                                                 MinHeight="32"
                                                 Padding="0,4"
-                                                Background="Transparent">
+                                                Background="{ThemeResource SystemControlTransparentBrush}">
                                                 <StackPanel
                                                     Orientation="Horizontal"
                                                     Spacing="8">
@@ -662,7 +655,7 @@
                     <Border
                         x:Name="ComponentRightPanel"
                         Grid.Column="2"
-                        Background="#262626"
+                        Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}"
                         Padding="8,0">
                         <Border.RenderTransform>
                             <TranslateTransform x:Name="ComponentRightTransform" />
@@ -812,7 +805,7 @@
             AutomationProperties.AccessibilityView="Raw">
             <Border
                 x:Name="TreeDropIndicator"
-                BorderBrush="{ThemeResource TreeViewItemSelectionIndicatorForeground}"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                 CornerRadius="2"
                 Visibility="Collapsed" />
         </Canvas>
