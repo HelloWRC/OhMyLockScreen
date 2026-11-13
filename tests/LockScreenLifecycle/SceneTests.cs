@@ -921,7 +921,10 @@ internal static class SceneTests
             var clock = group.Children[0];
             editor.Select(clock.Model);
             Check(editor.MoveItem(clock, group, 1), "Same-parent dragging did not reorder the component.");
-            Check(ReferenceEquals(group.Children[1], clock) && ReferenceEquals(editor.SelectedItem, clock), "Same-parent dragging replaced the tree node or lost selection.");
+            Check(ReferenceEquals(group.Children[1], clock) && ReferenceEquals(editor.SelectedItem, clock)
+                && ReferenceEquals(editor.FindItem(clock.Model), clock), "Same-parent dragging replaced the tree node or lost selection.");
+            Check(editor.MoveItem(clock, group, 0) && ReferenceEquals(editor.FindItem(clock.Model), clock),
+                "A second same-parent drag replaced the node or rejected the move.");
 
             var component = (ComponentSettings)clock.Model;
             var settings = component.Settings;
@@ -954,24 +957,67 @@ internal static class SceneTests
             var page = new SceneEditorPage();
             page.LoadTree(editor);
 
-            var before = page.ResolveTreeDrop(source, group, 0);
+            var before = page.ResolveTreeDrop(source, group, 0.1);
             Check(before is { } first && ReferenceEquals(first.Parent, layer) && first.Index == 0,
                 "The top edge of a container was resolved as a child drop.");
-            var inside = page.ResolveTreeDrop(source, group, 1);
+            var inside = page.ResolveTreeDrop(source, group, 0.5);
             Check(inside is { } middle && ReferenceEquals(middle.Parent, group) && middle.Index == group.Children.Count,
                 "The middle of a container did not accept a child drop.");
 
             Check(editor.MoveItem(source, before!.Value.Parent, before.Value.Index), "The sibling drop was rejected.");
             source = editor.FindItem(component)!;
-            var after = page.ResolveTreeDrop(source, group, 2);
+            var after = page.ResolveTreeDrop(source, group, 0.9);
             Check(after is { } last && ReferenceEquals(last.Parent, layer) && last.Index == 1,
                 "The bottom edge of a container was resolved as a child drop or used the wrong adjusted index.");
             var child = group.Children[0];
-            var outOfContainer = page.ResolveTreeDrop(child, group, 0);
+            var outOfContainer = page.ResolveTreeDrop(child, group, 0.1);
             Check(outOfContainer is { } outside && ReferenceEquals(outside.Parent, layer) && outside.Index == 1,
                 "Dropping a child above its container did not move it to the container's sibling level.");
-            Check(page.ResolveTreeDrop(source, group, 0) == null,
+            Check(page.ResolveTreeDrop(source, group, 0.1) == null,
                 "An unchanged sibling insertion slot unexpectedly became a child drop.");
+        });
+        run("Tree leaf halves reorder siblings and preserve container foreground", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var layer = editor.Roots[0].Children[0];
+            var group = layer.Children[0];
+            var groupModel = (ComponentSettings)group.Model;
+            var children = ((IComponentContainerSettings)groupModel.Settings!).Children;
+            var source = group.Children[0];
+            var leaf = group.Children[1];
+            var foregroundColor = Windows.UI.Color.FromArgb(255, 20, 40, 60);
+            var foreground = new SolidColorBrush(foregroundColor);
+            groupModel.Features.Add(new FeatureInfo
+            {
+                Id = "omls.features.appearance.foreground",
+                Settings = new ForegroundFeatureSettings { Foreground = foreground }
+            });
+            var page = new SceneEditorPage();
+            page.LoadTree(editor);
+
+            Check(page.ResolveTreeDrop(source, leaf, 0.4) == null, "The leaf's upper half changed an unchanged sibling slot.");
+            Check(page.ResolveTreeDrop(group, leaf, 0.1) == null, "A container could be moved into its own subtree.");
+
+            var after = page.ResolveTreeDrop(source, leaf, 0.6);
+            Check(after is { } destination && ReferenceEquals(destination.Parent, group)
+                && editor.MoveItem(source, destination.Parent, destination.Index),
+                "The leaf's lower half did not move its sibling.");
+            Check(ReferenceEquals(children[1], source.Model) && ReferenceEquals(group.Children[1], source),
+                "The drop did not update both the model and the tree.");
+            Check(ReferenceEquals(groupModel.Features.Last().GetSettings<ForegroundFeatureSettings>().Foreground, foreground),
+                "The reorder replaced the container's foreground brush.");
+            Check(page.ResolveTreeDrop(source, leaf, 0.4) is { } before && ReferenceEquals(before.Parent, group)
+                && before.Index == 0, "The leaf's upper half did not resolve to a sibling slot.");
+
+            fixture.Service.FlushPending();
+            var saved = fixture.Service.Load(editor.Scene!.SceneId).Layers[0].Children[0];
+            var savedChildren = ((IComponentContainerSettings)saved.Settings!).Children;
+            Check(savedChildren[1].Id == ((ComponentSettings)source.Model).Id
+                && saved.Features.Last().GetSettings<ForegroundFeatureSettings>().Foreground is SolidColorBrush brush
+                && brush.Color == foregroundColor,
+                "The saved scene lost the sibling order or the foreground brush.");
         });
         run("Moving into and within a container keeps the component under that container", () =>
         {
@@ -1066,6 +1112,12 @@ internal static class SceneTests
         });
         run("Drag axis and insertion helpers cover ordered, two-dimensional and empty targets", () =>
         {
+            Check(SceneLayoutEditing.ReordersChildrenOnCanvasDrop(new StackPanel())
+                && SceneLayoutEditing.ReordersChildrenOnCanvasDrop(new CommunityToolkit.WinUI.Controls.WrapPanel())
+                && !SceneLayoutEditing.ReordersChildrenOnCanvasDrop(new Canvas())
+                && !SceneLayoutEditing.ReordersChildrenOnCanvasDrop(new Grid()),
+                "Canvas drop ordering did not distinguish flow layouts from z-ordered layouts.");
+
             var horizontal = SceneLayoutEditing.ConstrainToDominantAxis(10, 10, 30, 16);
             var vertical = SceneLayoutEditing.ConstrainToDominantAxis(10, 10, 14, 40);
             Check(horizontal == (30, 10) && vertical == (10, 40), "Shift did not lock movement to its dominant axis.");

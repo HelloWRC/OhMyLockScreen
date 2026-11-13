@@ -74,12 +74,7 @@ public sealed partial class SceneEditorPage
     {
         SceneTreeItem? parent = null;
         var index = 0;
-        if (target.Model is SceneSettings)
-        {
-            parent = target;
-            index = SceneHierarchyEditing.GetChildren(parent.Model)?.Count ?? 0;
-        }
-        else if (region == TreeDropRegion.Inside && SceneHierarchyEditing.CanAccept(target.Model, model))
+        if (target.Model is SceneSettings || region == TreeDropRegion.Inside)
         {
             parent = target;
             index = SceneHierarchyEditing.GetChildren(parent.Model)?.Count ?? 0;
@@ -103,7 +98,8 @@ public sealed partial class SceneEditorPage
             return null;
         }
 
-        if (_draggedTreeItem is { } source && ReferenceEquals(source.Parent, parent))
+        if (_draggedTreeItem is { } source && ReferenceEquals(source.Model, model)
+            && ReferenceEquals(source.Parent, parent))
         {
             var sourceIndex = children.IndexOf(source.Model);
             if (sourceIndex < 0)
@@ -121,6 +117,16 @@ public sealed partial class SceneEditorPage
         }
 
         return (parent, Math.Clamp(index, 0, children.Count));
+    }
+
+    private static TreeDropRegion GetTreeDropRegion(SceneTreeItem target, double ratio)
+    {
+        if (SceneHierarchyEditing.GetChildren(target.Model) == null)
+        {
+            return ratio < 0.5 ? TreeDropRegion.Before : TreeDropRegion.After;
+        }
+
+        return ratio < 0.2 ? TreeDropRegion.Before : ratio > 0.8 ? TreeDropRegion.After : TreeDropRegion.Inside;
     }
 
     private enum TreeDropRegion

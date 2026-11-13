@@ -10,6 +10,9 @@ namespace OhMyLockScreen.Services.Scene;
 /// <summary>直接修改原生布局参数，不引入与布局分离的位置状态。</summary>
 internal static class SceneLayoutEditing
 {
+    internal static bool ReordersChildrenOnCanvasDrop(Panel panel) =>
+        panel is StackPanel or CommunityToolkit.WinUI.Controls.WrapPanel;
+
     internal static LayoutFeatureSettings? GetLayout(IFeatureContainer? container, bool create)
     {
         if (container == null)

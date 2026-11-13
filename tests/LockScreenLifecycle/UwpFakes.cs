@@ -46,7 +46,21 @@ namespace Windows.ApplicationModel
     public sealed class Package
     {
         public static Package Current { get; } = new();
+        public PackageId Id { get; } = new();
         public Windows.Storage.StorageFolder InstalledLocation { get; } = new();
+    }
+
+    public sealed class PackageId
+    {
+        public PackageVersion Version { get; } = new();
+    }
+
+    public sealed class PackageVersion
+    {
+        public ushort Major => 1;
+        public ushort Minor => 0;
+        public ushort Build => 0;
+        public ushort Revision => 0;
     }
 
     public static class FullTrustProcessLauncher

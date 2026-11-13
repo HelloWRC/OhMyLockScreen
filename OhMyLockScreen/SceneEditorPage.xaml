@@ -257,6 +257,7 @@
                 <scene:ScenePresenter
                     x:Name="EditorPresenter"
                     IsEditing="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
+                    IsHitTestVisible="{x:Bind ViewModel.IsPreview, Mode=OneWay}"
                     Scene="{x:Bind ViewModel.Scene, Mode=OneWay}" />
                 <Canvas
                     IsHitTestVisible="False">
@@ -281,6 +282,11 @@
                         Height="{x:Bind ViewModel.SelectionGeometry.Height, Mode=OneWay}"
                         Visibility="{x:Bind ViewModel.ShowSelection, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
                 </Canvas>
+                <!-- 编辑态由透明层接管输入，避免组件内容参与命中测试。 -->
+                <Border
+                    x:Name="EditorInteractionLayer"
+                    Background="Transparent"
+                    Visibility="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}" />
                 <Canvas
                     x:Name="ResizeOverlay"
                     Background="{x:Null}">
@@ -485,14 +491,12 @@
                                 Grid.Row="1"
                                 SelectionMode="Single"
                                 AllowDrop="True"
-                                CanDragItems="True"
+                                CanDragItems="False"
                                 ItemsSource="{x:Bind ViewModel.Roots}"
                                 SelectedItem="{x:Bind ViewModel.SelectedItem, Mode=OneWay}"
-                                CanReorderItems="True"
+                                CanReorderItems="False"
                                 PreviewKeyDown="OnTreePreviewKeyDown"
-                                DragItemsStarting="OnTreeDragItemsStarting"
-                                DragItemsCompleted="OnDragItemsCompleted"
-                                DragOver="OnTreeDragOver"
+                                ItemInvoked="OnTreeItemInvoked"
                                 SelectionChanged="OnTreeSelectionChanged"
                                 RightTapped="OnTreeRightTapped">
                                 <muxc:TreeView.ItemTemplate>
@@ -500,11 +504,8 @@
                                         x:DataType="vm:SceneTreeItem">
                                         <muxc:TreeViewItem
                                             ItemsSource="{x:Bind Children}"
-                                            IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
-                                            Loaded="OnTreeItemLoaded"
-                                            Unloaded="OnTreeItemUnloaded">
+                                            IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
                                             <Grid
-                                                x:Name="TreeRow"
                                                 MinHeight="32"
                                                 Padding="0,4"
                                                 Background="Transparent">
@@ -746,5 +747,22 @@
                     Click="OnSettingsClick" />
             </muxc:InfoBar.ActionButton>
         </muxc:InfoBar>
+        <Canvas
+            Grid.RowSpan="3"
+            IsHitTestVisible="False"
+            AutomationProperties.AccessibilityView="Raw">
+            <Border
+                x:Name="TreeDropIndicator"
+                BorderBrush="{ThemeResource TreeViewItemSelectionIndicatorForeground}"
+                CornerRadius="2"
+                Visibility="Collapsed" />
+        </Canvas>
+        <Popup
+            x:Name="TreeDragHintPopup"
+            IsHitTestVisible="False">
+            <ToolTip
+                x:Name="TreeDragHint"
+                MaxWidth="280" />
+        </Popup>
     </Grid>
 </Page>

@@ -20,6 +20,7 @@ public sealed partial class SceneEditorPage
     {
         if (args.PropertyName is nameof(SceneEditorViewModel.Scene) or nameof(SceneEditorViewModel.IsPreview))
         {
+            ClearTreePointer();
             _mediaImportRevision++;
             VideoPicker.InvalidateSelection();
             RefreshFeatureEditorTargets();
@@ -149,10 +150,7 @@ public sealed partial class SceneEditorPage
     {
         if (tree)
         {
-            var point = args.GetPosition(SceneTree);
-            return FindTreeTargetAtPoint(point) is { } hit
-                ? ResolveTreeDropTarget(hit.Target, LibraryDragPlaceholder, GetTreeDropRegion(hit.Target, hit.Row, point))
-                : null;
+            return ResolveTreeDropTarget(args.GetPosition(SceneTree), LibraryDragPlaceholder);
         }
 
         var canvasPoint = args.GetPosition(SceneViewport);

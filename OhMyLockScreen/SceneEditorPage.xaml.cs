@@ -21,6 +21,7 @@ using OhMyLockScreen.Shared.Services.FeatureHost;
 using OhMyLockScreen.ViewModels;
 using OhMyLockScreen.Views;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Devices.Input;
 using Windows.Foundation;
 using Windows.Storage;
 using Windows.System;
@@ -28,6 +29,7 @@ using Windows.UI.Core;
 using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
@@ -35,6 +37,8 @@ using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers.UI;
 using OhMyLockScreen.Shared.Models.UI;
 using OhMyLockScreen.Helpers.UI;
+using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
+using TreeViewItemInvokedEventArgs = Microsoft.UI.Xaml.Controls.TreeViewItemInvokedEventArgs;
 using TreeViewSelectionChangedEventArgs = Microsoft.UI.Xaml.Controls.TreeViewSelectionChangedEventArgs;
 using TreeViewItem = Microsoft.UI.Xaml.Controls.TreeViewItem;
 
@@ -75,11 +79,11 @@ public sealed partial class SceneEditorPage : Page
     private Rect _layoutArea;
     private ResizeCorner _resizeCorner;
     private SceneTreeItem? _draggedTreeItem;
+    private SceneTreeItem? _pressedTreeItem;
+    private Pointer? _treePointer;
+    private Point _treePressPoint;
     private ComponentRegisterInfo? _draggedLibraryItem;
-    private (SceneTreeItem Parent, int Index)? _treeDropTarget;
     private readonly Dictionary<ComponentSettings, object> _pendingDropAlignments = [];
-    private readonly HashSet<TreeViewItem> _observedTreeItems = [];
-    private readonly DragEventHandler _observedTreeItemDragOverHandler;
     private static readonly ComponentSettings LibraryDragPlaceholder = new();
     private const string SceneDragDataFormat = "OhMyLockScreen.SceneEditor.Drag";
     public SceneEditorViewModel ViewModel
@@ -97,7 +101,6 @@ public sealed partial class SceneEditorPage : Page
         _featureRegistry = IAppHost.GetRequiredService<FeatureRegistryService>();
         _lockScreenReplacement = IAppHost.GetRequiredService<LockScreenReplacementService>();
         ViewModel = IAppHost.GetRequiredService<SceneEditorViewModel>();
-        _observedTreeItemDragOverHandler = OnObservedTreeItemDragOver;
         InitializeComponent();
         NavigationCacheMode = NavigationCacheMode.Enabled;
         VideoPicker.FileTypes = SceneMediaImport.VideoExtensions;
@@ -106,6 +109,13 @@ public sealed partial class SceneEditorPage : Page
         InitializePanelAnimations();
         SceneTree.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnTreeDragOver), true);
         SceneTree.AddHandler(UIElement.DropEvent, new DragEventHandler(OnTreeDrop), true);
+        SceneTree.AddHandler(UIElement.DragLeaveEvent, new DragEventHandler(OnTreeDragLeave), true);
+        SceneTree.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnTreePointerPressed), true);
+        AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(OnTreePointerMoved), true);
+        AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(OnTreePointerReleased), true);
+        AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(OnTreePointerCanceled), true);
+        AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(OnTreePointerCaptureLost), true);
+        PointerExited += OnEditorPointerExited;
         AddHandler(UIElement.DropEvent, new DragEventHandler(OnPageDrop), true);
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -187,6 +197,7 @@ public sealed partial class SceneEditorPage : Page
         }
 
         EndDrag();
+        ClearTreePointer();
         _lockScreenReplacement.StateChanged -= OnLockScreenReplacementStateChanged;
         _lockScreenReplacement.OperationFailed -= OnLockScreenReplacementFailed;
         ViewModel.PropertyChanged -= OnPanelViewModelPropertyChanged;
@@ -414,6 +425,7 @@ public sealed partial class SceneEditorPage : Page
     private void ShowTab(SceneEditorTab tab)
     {
         EndDrag();
+        ClearTreePointer();
         ClearHover();
         ViewModel.ActiveTab = tab;
         RefreshFeatureEditorTargets();
@@ -427,12 +439,20 @@ public sealed partial class SceneEditorPage : Page
         UpdatePanelViewport();
     }
 
-    private void OnTreeSelectionChanged(Microsoft.UI.Xaml.Controls.TreeView sender, TreeViewSelectionChangedEventArgs args)
+    private void OnTreeSelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
     {
         var item = args.AddedItems.OfType<SceneTreeItem>().LastOrDefault();
         if (_loaded && item != null)
         {
             ViewModel.Select(item.Model);
+        }
+    }
+
+    private void OnTreeItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+    {
+        if (_loaded && args.InvokedItem is SceneTreeItem item)
+        {
+            QueueEditorAction(() => ViewModel.Select(item.Model));
         }
     }
 
@@ -443,58 +463,22 @@ public sealed partial class SceneEditorPage : Page
             return;
         }
 
-        var target = ResolveTreeDropTarget(args);
-        _treeDropTarget = target;
-        if (target == null)
-        {
-            return;
-        }
-
-        if (_draggedTreeItem != null)
-        {
-            return;
-        }
-
-        args.AcceptedOperation = _draggedLibraryItem == null ? DataPackageOperation.Move : DataPackageOperation.Copy;
-        args.DragUIOverride.Caption = $"放入 {target.Value.Parent.Title}";
-    }
-
-    private void OnTreeItemLoaded(object sender, RoutedEventArgs args)
-    {
-        if (sender is TreeViewItem item && _observedTreeItems.Add(item))
-        {
-            item.AddHandler(UIElement.DragOverEvent, _observedTreeItemDragOverHandler, true);
-        }
-    }
-
-    private void OnTreeItemUnloaded(object sender, RoutedEventArgs args)
-    {
-        if (sender is TreeViewItem item && _observedTreeItems.Remove(item))
-        {
-            item.RemoveHandler(UIElement.DragOverEvent, _observedTreeItemDragOverHandler);
-        }
-    }
-
-    private void OnObservedTreeItemDragOver(object sender, DragEventArgs args)
-    {
-        if (HandleFileDragOver(args))
-        {
-            return;
-        }
-
-        var target = ResolveTreeDropTarget(args);
-        _treeDropTarget = target;
-        if (target == null)
-        {
-            return;
-        }
-
-        if (_draggedLibraryItem != null)
+        var location = TryGetDraggedModel(out var model) && _loaded && !ViewModel.IsPreview
+            ? ResolveTreeDropLocation(args.GetPosition(SceneTree), model)
+            : null;
+        args.AcceptedOperation = DataPackageOperation.None;
+        args.Handled = true;
+        TreeDropIndicator.Visibility = Visibility.Collapsed;
+        if (location is { } target)
         {
             args.AcceptedOperation = DataPackageOperation.Copy;
-            args.DragUIOverride.Caption = $"放入 {target.Value.Parent.Title}";
+            ShowTreeDropIndicator(target);
+            args.DragUIOverride.Caption = GetTreeDropCaption(target);
         }
     }
+
+    private void OnTreeDragLeave(object sender, DragEventArgs args) =>
+        TreeDropIndicator.Visibility = Visibility.Collapsed;
 
     private void OnTreeDrop(object sender, DragEventArgs args)
     {
@@ -504,53 +488,31 @@ public sealed partial class SceneEditorPage : Page
             return;
         }
 
-        if (_draggedTreeItem != null)
-        {
-            return;
-        }
-
         var target = ResolveTreeDropTarget(args);
-        if (target == null)
+        args.Handled = true;
+        if (target is not { } destination)
         {
+            args.AcceptedOperation = DataPackageOperation.None;
             return;
         }
 
-        CommitTreeDrop(target.Value);
-        args.Handled = true;
+        args.AcceptedOperation = DataPackageOperation.Copy;
+        CommitTreeDrop(destination);
     }
 
     private void OnPageDrop(object sender, DragEventArgs args)
     {
-        if (IsFileDrag(args))
-        {
-            var treePoint = args.GetPosition(SceneTree);
-            if (!args.Handled && treePoint.X >= 0 && treePoint.Y >= 0
-                && treePoint.X <= SceneTree.ActualWidth && treePoint.Y <= SceneTree.ActualHeight)
-            {
-                OnMediaFileDrop(SceneTree, args);
-            }
-
-            return;
-        }
-
-        if (_draggedLibraryItem == null)
+        if (args.Handled || ViewModel.ActiveTab != SceneEditorTab.Components
+            || (!TryGetDraggedModel(out _) && !IsFileDrag(args)))
         {
             return;
         }
 
-        var point = args.GetPosition(SceneTree);
-        if (point.X < 0 || point.Y < 0 || point.X > SceneTree.ActualWidth || point.Y > SceneTree.ActualHeight)
+        var bounds = new Rect(0, 0, SceneTree.ActualWidth, SceneTree.ActualHeight);
+        if (bounds.Contains(args.GetPosition(SceneTree)))
         {
-            return;
+            OnTreeDrop(SceneTree, args);
         }
-
-        var target = ResolveTreeDropTarget(args);
-        if (target != null)
-        {
-            CommitTreeDrop(target.Value);
-        }
-
-        args.Handled = true;
     }
 
     private void CommitTreeDrop((SceneTreeItem Parent, int Index) target)
@@ -572,70 +534,58 @@ public sealed partial class SceneEditorPage : Page
             else if (treeItem != null)
             {
                 ViewModel.MoveItem(treeItem, target.Parent, target.Index);
-                ViewModel.RebuildTree();
             }
-        });
-    }
-
-    private void CommitNativeTreeDrop(SceneTreeItem source, (SceneTreeItem Parent, int Index)? target)
-    {
-        QueueEditorAction(() =>
-        {
-            if (target != null)
-            {
-                ViewModel.MoveItem(source, target.Value.Parent, target.Value.Index);
-            }
-
-            ViewModel.RebuildTree();
         });
     }
 
     private (SceneTreeItem Parent, int Index)? ResolveTreeDropTarget(DragEventArgs args)
     {
-        if (!TryGetDraggedModel(out var model))
+        if (!_loaded || ViewModel.IsPreview || !TryGetDraggedModel(out var model))
         {
             return null;
         }
 
-        var point = args.GetPosition(SceneTree);
-        if (FindTreeTargetAtPoint(point) is not { } hit)
+        return ResolveTreeDropTarget(args.GetPosition(SceneTree), model);
+    }
+
+    private (SceneTreeItem Parent, int Index)? ResolveTreeDropTarget(Point point, object model) =>
+        ResolveTreeDropLocation(point, model)?.Destination;
+
+    private TreeDropLocation? ResolveTreeDropLocation(Point point, object model)
+    {
+        if (!new Rect(0, 0, SceneTree.ActualWidth, SceneTree.ActualHeight).Contains(point))
         {
             return null;
         }
 
-        return ResolveTreeDropTarget(hit.Target, model, GetTreeDropRegion(hit.Target, hit.Row, point));
-    }
-
-    private TreeDropRegion GetTreeDropRegion(SceneTreeItem target, FrameworkElement? row, Point point)
-    {
-        if (target.Model is SceneSettings || row is not { ActualHeight: > 0 })
+        foreach (var row in FindVisuals(SceneTree).OfType<TreeViewItem>())
         {
-            return TreeDropRegion.Inside;
-        }
-
-        var ratio = (point.Y - row.TransformToVisual(SceneTree).TransformPoint(new Point(0, 0)).Y) / row.ActualHeight;
-        return ratio < 0.2 ? TreeDropRegion.Before : ratio > 0.8 ? TreeDropRegion.After : TreeDropRegion.Inside;
-    }
-
-    private (SceneTreeItem Target, FrameworkElement Row)? FindTreeTargetAtPoint(Point point)
-    {
-        var hit = FindVisuals(SceneTree)
-            .Where(row => row.Name == "TreeRow"
-                && row.DataContext is SceneTreeItem
-                && row.ActualWidth > 0
-                && row.ActualHeight > 0)
-            .Select(row =>
+            if (row.ActualWidth <= 0 || row.ActualHeight <= 0
+                || SceneTree.ItemFromContainer(row) is not SceneTreeItem target)
             {
-                var bounds = row.TransformToVisual(SceneTree)
-                    .TransformBounds(new Rect(0, 0, row.ActualWidth, row.ActualHeight));
-                return (Row: row, Item: (SceneTreeItem)row.DataContext, Bounds: bounds);
-            })
-            .Where(candidate => candidate.Bounds.Contains(point))
-            .OrderByDescending(candidate => candidate.Item.Depth)
-            .ThenBy(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
-            .FirstOrDefault();
-        return hit.Row == null ? null : (hit.Item, hit.Row);
+                continue;
+            }
+
+            var bounds = row.TransformToVisual(SceneTree)
+                .TransformBounds(new Rect(0, 0, row.ActualWidth, row.ActualHeight));
+            if (bounds.Contains(point))
+            {
+                var ratio = (point.Y - bounds.Y) / bounds.Height;
+                var region = target.Model is SceneSettings ? TreeDropRegion.Inside : GetTreeDropRegion(target, ratio);
+                return ResolveTreeDropTarget(target, model, region) is { } destination
+                    ? new TreeDropLocation(destination, target, region, bounds)
+                    : null;
+            }
+        }
+
+        return null;
     }
+
+    private readonly record struct TreeDropLocation(
+        (SceneTreeItem Parent, int Index) Destination,
+        SceneTreeItem Target,
+        TreeDropRegion Region,
+        Rect Bounds);
 
     private static IEnumerable<FrameworkElement> FindVisuals(DependencyObject parent)
     {
@@ -668,7 +618,6 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnLibraryDragItemsStarting(object sender, DragItemsStartingEventArgs args)
     {
-        _treeDropTarget = null;
         var info = args.Items.OfType<ComponentRegisterInfo>().FirstOrDefault();
         if (info == null)
         {
@@ -682,51 +631,183 @@ public sealed partial class SceneEditorPage : Page
         args.Data.RequestedOperation = DataPackageOperation.Copy;
     }
 
-    private void OnTreeDragItemsStarting(Microsoft.UI.Xaml.Controls.TreeView sender, Microsoft.UI.Xaml.Controls.TreeViewDragItemsStartingEventArgs args)
+    private void OnTreePointerPressed(object sender, PointerRoutedEventArgs args)
     {
-        var item = args.Items.OfType<SceneTreeItem>().SingleOrDefault();
-        if (item?.Model is not ComponentSettings and not LayerSettings)
+        var point = args.GetCurrentPoint(SceneTree);
+        if (!_loaded || ViewModel.IsPreview
+            || args.Pointer.PointerDeviceType == PointerDeviceType.Touch
+            || !point.Properties.IsLeftButtonPressed
+            || FindParent<ButtonBase>(args.OriginalSource as DependencyObject) != null
+            || FindParent<TreeViewItem>(args.OriginalSource as DependencyObject) is not { } row
+            || SceneTree.ItemFromContainer(row) is not SceneTreeItem { Model: ComponentSettings or LayerSettings } item)
         {
-            args.Cancel = true;
             return;
         }
 
-        _draggedTreeItem = item;
-        _draggedLibraryItem = null;
-        _treeDropTarget = null;
-        ViewModel.Select(item.Model);
-        args.Data.SetText(SceneDragDataFormat);
-        args.Data.RequestedOperation = DataPackageOperation.Move;
+        _pressedTreeItem = item;
+        _treePointer = args.Pointer;
+        _treePressPoint = point.Position;
     }
 
-    private void OnDragItemsCompleted(Microsoft.UI.Xaml.Controls.TreeView sender, Microsoft.UI.Xaml.Controls.TreeViewDragItemsCompletedEventArgs args)
+    private void OnTreePointerMoved(object sender, PointerRoutedEventArgs args)
     {
-        var source = _draggedTreeItem;
-        var target = _treeDropTarget;
-        ClearDragPayload();
-        if (source != null && args.DropResult == DataPackageOperation.Move)
+        if (_treePointer?.PointerId != args.Pointer.PointerId || _pressedTreeItem is not { } item)
         {
-            CommitNativeTreeDrop(source, target);
-        }
-    }
-
-    private void OnDragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
-    {
-        if (args.DropResult == DataPackageOperation.Copy
-            && _draggedLibraryItem != null && _treeDropTarget is { } target)
-        {
-            CommitTreeDrop(target);
             return;
         }
 
-        ClearDragPayload();
+        var point = args.GetCurrentPoint(SceneTree);
+        if (!point.Properties.IsLeftButtonPressed)
+        {
+            ClearTreePointer();
+            return;
+        }
+
+        const double dragThreshold = 4;
+        if (_draggedTreeItem == null)
+        {
+            if (Math.Abs(point.Position.X - _treePressPoint.X) < dragThreshold
+                && Math.Abs(point.Position.Y - _treePressPoint.Y) < dragThreshold)
+            {
+                return;
+            }
+
+            _draggedTreeItem = item;
+            ViewModel.Select(item.Model);
+            CapturePointer(args.Pointer);
+        }
+
+        var target = ResolveTreeDropLocation(point.Position, item.Model);
+        TreeDropIndicator.Visibility = Visibility.Collapsed;
+        var caption = "无法放置";
+        if (target is { } location)
+        {
+            ShowTreeDropIndicator(location);
+            caption = GetTreeDropCaption(location);
+        }
+        else if (!new Rect(0, 0, SceneTree.ActualWidth, SceneTree.ActualHeight).Contains(point.Position)
+            && ResolveCanvasDrop(args.GetCurrentPoint(SceneViewport).Position, item.Model) is { } canvasTarget)
+        {
+            caption = $"放入 {canvasTarget.Parent.Title}";
+        }
+
+        var pointer = args.GetCurrentPoint(PageRoot).Position;
+        const double offset = 14;
+        TreeDragHint.Content = caption;
+        TreeDragHint.Measure(new Size(PageRoot.ActualWidth, PageRoot.ActualHeight));
+        var size = TreeDragHint.DesiredSize;
+        var left = pointer.X + offset + size.Width <= PageRoot.ActualWidth
+            ? pointer.X + offset : pointer.X - offset - size.Width;
+        var top = pointer.Y + offset + size.Height <= PageRoot.ActualHeight
+            ? pointer.Y + offset : pointer.Y - offset - size.Height;
+        TreeDragHintPopup.HorizontalOffset = Math.Max(0, left);
+        TreeDragHintPopup.VerticalOffset = Math.Max(0, top);
+        TreeDragHintPopup.IsOpen = true;
     }
+
+    private static string GetTreeDropCaption(TreeDropLocation location) => location.Region switch
+    {
+        TreeDropRegion.Before => $"移到 {location.Target.Title} 前面",
+        TreeDropRegion.After => $"移到 {location.Target.Title} 后面",
+        _ => $"放入 {location.Destination.Parent.Title}"
+    };
+
+    private void ShowTreeDropIndicator(TreeDropLocation location)
+    {
+        var transform = SceneTree.TransformToVisual(PageRoot);
+        var row = transform.TransformBounds(location.Bounds);
+        var viewport = transform.TransformBounds(new Rect(0, 0, SceneTree.ActualWidth, SceneTree.ActualHeight));
+        var top = Math.Max(row.Top, viewport.Top);
+        var bottom = Math.Min(row.Bottom, viewport.Bottom);
+        var inside = location.Region == TreeDropRegion.Inside;
+        TreeDropIndicator.BorderThickness = inside ? new Thickness(2) : new Thickness(0, 2, 0, 0);
+        TreeDropIndicator.Width = row.Width;
+        TreeDropIndicator.Height = inside ? bottom - top : 2;
+        Canvas.SetLeft(TreeDropIndicator, row.X);
+        Canvas.SetTop(TreeDropIndicator, location.Region == TreeDropRegion.After ? bottom - 2 : top);
+        TreeDropIndicator.Visibility = Visibility.Visible;
+    }
+
+    private void OnTreePointerReleased(object sender, PointerRoutedEventArgs args)
+    {
+        if (_treePointer?.PointerId != args.Pointer.PointerId)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_draggedTreeItem is not { } item || ViewModel.IsPreview)
+            {
+                return;
+            }
+
+            args.Handled = true;
+            var point = args.GetCurrentPoint(SceneTree).Position;
+            if (new Rect(0, 0, SceneTree.ActualWidth, SceneTree.ActualHeight).Contains(point))
+            {
+                if (ResolveTreeDropTarget(point, item.Model) is { } target)
+                {
+                    CommitTreeDrop(target);
+                }
+            }
+            else
+            {
+                DropOnCanvas(args.GetCurrentPoint(SceneViewport).Position, item.Model);
+            }
+        }
+        finally
+        {
+            ClearTreePointer();
+        }
+    }
+
+    private void OnTreePointerCanceled(object sender, PointerRoutedEventArgs args)
+    {
+        if (_treePointer?.PointerId == args.Pointer.PointerId)
+        {
+            ClearTreePointer();
+        }
+    }
+
+    private void OnEditorPointerExited(object sender, PointerRoutedEventArgs args)
+    {
+        var point = args.GetCurrentPoint(this).Position;
+        if (!new Rect(0, 0, ActualWidth, ActualHeight).Contains(point))
+        {
+            OnTreePointerCanceled(sender, args);
+        }
+    }
+
+    private void OnTreePointerCaptureLost(object sender, PointerRoutedEventArgs args)
+    {
+        if (ReferenceEquals(args.OriginalSource, this))
+        {
+            OnTreePointerCanceled(sender, args);
+        }
+    }
+
+    private void ClearTreePointer()
+    {
+        var pointer = _treePointer;
+        _treePointer = null;
+        _pressedTreeItem = null;
+        _draggedTreeItem = null;
+        TreeDropIndicator.Visibility = Visibility.Collapsed;
+        TreeDragHintPopup.IsOpen = false;
+        if (pointer != null)
+        {
+            ReleasePointerCapture(pointer);
+        }
+    }
+
+    private void OnDragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args) => ClearDragPayload();
 
     private void ClearDragPayload()
     {
         _draggedTreeItem = null;
+        TreeDropIndicator.Visibility = Visibility.Collapsed;
         _draggedLibraryItem = null;
-        _treeDropTarget = null;
     }
 
     private void OnAddLayerClick(object sender, RoutedEventArgs args) => TryAction(ViewModel.AddLayer);
@@ -1160,7 +1241,9 @@ public sealed partial class SceneEditorPage : Page
             return;
         }
 
-        var presenter = ResolveComponentPresenter(args.OriginalSource as DependencyObject, IsControlPressed(args));
+        var presenter = ResolveComponentPresenterAtPoint(
+            args.GetCurrentPoint(SceneViewport).Position,
+            IsControlPressed(args));
         if (presenter?.Settings is not { } settings)
         {
             return;
@@ -1210,7 +1293,7 @@ public sealed partial class SceneEditorPage : Page
             Canvas => LayoutKind.Canvas,
             _ => LayoutKind.Grid
         };
-        var stackMove = !resizing && _dragKind is LayoutKind.StackPanel or LayoutKind.WrapPanel;
+        var stackMove = !resizing && SceneLayoutEditing.ReordersChildrenOnCanvasDrop(panel);
         _dragLayout = stackMove ? null : ViewModel.GetLayout(create: true);
         _layoutArea = GetLayoutArea(panel, target);
         var bounds = target.TransformToVisual(panel).TransformBounds(new Rect(0, 0, target.ActualWidth, target.ActualHeight));
@@ -1324,14 +1407,16 @@ public sealed partial class SceneEditorPage : Page
             return;
         }
 
-        var presenter = ResolveComponentPresenter(args.OriginalSource as DependencyObject, IsControlPressed(args));
+        var presenter = ResolveComponentPresenterAtPoint(
+            args.GetCurrentPoint(SceneViewport).Position,
+            IsControlPressed(args));
         if (presenter?.Settings == null || ReferenceEquals(presenter.Settings, ViewModel.SelectedModel))
         {
             ClearHover();
             return;
         }
 
-        var bounds = presenter.TransformToVisual(SceneViewport).TransformBounds(new Rect(0, 0, presenter.ActualWidth, presenter.ActualHeight));
+        var bounds = GetSceneViewportBounds(presenter);
         ViewModel.HoverGeometry = new SceneSelectionGeometry(bounds.X, bounds.Y, bounds.Width, bounds.Height);
         ViewModel.ShowHover = true;
     }
@@ -1352,22 +1437,28 @@ public sealed partial class SceneEditorPage : Page
         }
     }
 
-    private ComponentPresenter? ResolveComponentPresenter(DependencyObject? source, bool deep)
+    private ComponentPresenter? ResolveComponentPresenterAtPoint(Point point, bool deep)
+    {
+        var source = FindVisuals(EditorPresenter)
+            .OfType<ComponentPresenter>()
+            .Where(presenter => presenter.Settings is not null
+                && presenter.Visibility == Visibility.Visible
+                && presenter.ActualWidth > 0
+                && presenter.ActualHeight > 0
+                && GetSceneViewportBounds(presenter).Contains(point))
+            .LastOrDefault();
+        return source == null ? null : ResolveComponentPresenter(source, deep);
+    }
+
+    private ComponentPresenter? ResolveComponentPresenter(ComponentPresenter source, bool deep)
     {
         List<ComponentPresenter> presenters = [];
-        while (source != null)
+        for (DependencyObject? current = source; current != null && current is not LayerPresenter; current = VisualTreeHelper.GetParent(current))
         {
-            if (source is ComponentPresenter { Settings: not null } presenter)
+            if (current is ComponentPresenter { Settings: not null } presenter)
             {
                 presenters.Add(presenter);
             }
-
-            if (source is LayerPresenter)
-            {
-                break;
-            }
-
-            source = VisualTreeHelper.GetParent(source);
         }
 
         if (deep)
@@ -1411,7 +1502,7 @@ public sealed partial class SceneEditorPage : Page
 
         var control = _window != null
             && (_window.CoreWindow.GetKeyState(VirtualKey.Control) & CoreVirtualKeyStates.Down) != 0;
-        var presenter = ResolveComponentPresenter(args.OriginalSource as DependencyObject, control);
+        var presenter = ResolveComponentPresenterAtPoint(args.GetPosition(SceneViewport), control);
         if (presenter?.Settings is not { } settings)
         {
             return;
@@ -1440,7 +1531,7 @@ public sealed partial class SceneEditorPage : Page
             return;
         }
 
-        args.AcceptedOperation = _draggedLibraryItem == null ? DataPackageOperation.Move : DataPackageOperation.Copy;
+        args.AcceptedOperation = DataPackageOperation.Copy;
         args.DragUIOverride.Caption = _draggedLibraryItem?.Name ?? _draggedTreeItem?.Title ?? "";
         args.Handled = true;
     }
@@ -1458,10 +1549,18 @@ public sealed partial class SceneEditorPage : Page
             return;
         }
 
-        var point = args.GetPosition(SceneViewport);
+        if (DropOnCanvas(args.GetPosition(SceneViewport), model))
+        {
+            ClearDragPayload();
+            args.Handled = true;
+        }
+    }
+
+    private bool DropOnCanvas(Point point, object model)
+    {
         if (ResolveCanvasDrop(point, model) is not { } target)
         {
-            return;
+            return false;
         }
 
         var excluded = ReferenceEquals(_draggedTreeItem?.Parent, target.Parent) ? _draggedTreeItem?.Model : null;
@@ -1476,8 +1575,7 @@ public sealed partial class SceneEditorPage : Page
             }
             else if (_draggedTreeItem is { } item)
             {
-                var sameParent = ReferenceEquals(item.Parent, target.Parent);
-                if (ViewModel.MoveItem(item, target.Parent, index) || sameParent)
+                if (MoveItemToCanvas(item, target, index))
                 {
                     component = item.Model as ComponentSettings;
                 }
@@ -1488,8 +1586,7 @@ public sealed partial class SceneEditorPage : Page
                 ApplyCanvasDropPosition(component, target.Panel, panelPoint);
             }
         });
-        ClearDragPayload();
-        args.Handled = true;
+        return true;
     }
 
     private void ApplyCanvasDropPosition(ComponentSettings component, Panel panel, Point point)
@@ -1559,11 +1656,35 @@ public sealed partial class SceneEditorPage : Page
         }
 
         var excluded = ReferenceEquals(item.Parent, target.Parent) ? item.Model : null;
-        ViewModel.MoveItem(item, target.Parent, GetInsertionIndex(target.Panel, point, excluded));
+        MoveItemToCanvas(item, target, GetInsertionIndex(target.Panel, point, excluded));
+    }
+
+    private bool MoveItemToCanvas(
+        SceneTreeItem item,
+        (SceneTreeItem Parent, Panel Panel) target,
+        int index)
+    {
+        if (ViewModel.IsPreview || !ReferenceEquals(ViewModel.FindItem(item.Model), item))
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(item.Parent, target.Parent)
+            && !SceneLayoutEditing.ReordersChildrenOnCanvasDrop(target.Panel))
+        {
+            return true;
+        }
+
+        return ViewModel.MoveItem(item, target.Parent, index);
     }
 
     private (SceneTreeItem Parent, Panel Panel)? ResolveCanvasDrop(Point point, object movingModel)
     {
+        if (!new Rect(0, 0, SceneViewport.ActualWidth, SceneViewport.ActualHeight).Contains(point))
+        {
+            return null;
+        }
+
         var layer = ViewModel.GetCanvasLayer(movingModel);
         if (layer == null)
         {
@@ -1740,11 +1861,14 @@ public sealed partial class SceneEditorPage : Page
             return;
         }
 
-        var bounds = target.TransformToVisual(SceneViewport).TransformBounds(new Rect(0, 0, target.ActualWidth, target.ActualHeight));
+        var bounds = GetSceneViewportBounds(target);
         ViewModel.SelectionGeometry = new SceneSelectionGeometry(bounds.X, bounds.Y, bounds.Width, bounds.Height);
         ViewModel.CanResizeSelection = ViewModel.SelectedModel is ComponentSettings;
         ViewModel.HasSelectionBounds = true;
     }
+
+    private Rect GetSceneViewportBounds(FrameworkElement element)
+        => element.TransformToVisual(SceneViewport).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
 
     private FrameworkElement? FindSelectedPresenter() => FindVisual(
         EditorPresenter,
@@ -1817,6 +1941,13 @@ public sealed partial class SceneEditorPage : Page
     {
         if (!_loaded || ViewModel.IsPreview)
         {
+            return;
+        }
+
+        if (args.VirtualKey == VirtualKey.Escape && _treePointer != null)
+        {
+            ClearTreePointer();
+            args.Handled = true;
             return;
         }
 

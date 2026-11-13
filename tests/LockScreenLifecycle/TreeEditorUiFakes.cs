@@ -113,10 +113,10 @@ namespace OhMyLockScreen
 
         internal void QueueTreeAction(Action action) => QueueEditorAction(action);
 
-        internal (SceneTreeItem Parent, int Index)? ResolveTreeDrop(SceneTreeItem source, SceneTreeItem target, int region)
+        internal (SceneTreeItem Parent, int Index)? ResolveTreeDrop(SceneTreeItem source, SceneTreeItem target, double rowPosition)
         {
             _draggedTreeItem = source;
-            return ResolveTreeDropTarget(target, source.Model, (TreeDropRegion)region);
+            return ResolveTreeDropTarget(target, source.Model, GetTreeDropRegion(target, rowPosition));
         }
     }
 }
