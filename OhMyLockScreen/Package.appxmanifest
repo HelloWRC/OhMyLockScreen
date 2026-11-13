@@ -51,6 +51,7 @@
           <desktop:FullTrustProcess>
             <desktop:ParameterGroup GroupId="AudioSpectrum" Parameters="--audio-spectrum" />
             <desktop:ParameterGroup GroupId="LockScreenProvider" Parameters="--lock-screen-provider" />
+            <desktop:ParameterGroup GroupId="EditorWindowRecovery" Parameters="--editor-window-recovery" />
           </desktop:FullTrustProcess>
         </desktop:Extension>
       </Extensions>

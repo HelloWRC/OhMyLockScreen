@@ -24,5 +24,6 @@
     <Compile Include="../OhMyLockScreen.Shared/Abstractions/Services/Audio/*.cs" Link="Abstractions/%(Filename)%(Extension)" />
     <Compile Include="../OhMyLockScreen.Shared/Models/LockScreenProvider/LockScreenProviderProtocol.cs"
              Link="LockScreenProviderProtocol.cs" />
+    <Compile Include="../OhMyLockScreen.Shared/Models/EditorWindowRecoveryProtocol.cs" Link="EditorWindowRecoveryProtocol.cs" />
   </ItemGroup>
 </Project>

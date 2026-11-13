@@ -18,7 +18,7 @@
 - 本项目是 Windows UWP 自定义锁屏应用，负责锁屏页面与系统解锁请求；账户凭据验证由 Windows 完成。
 - 应用使用 Microsoft.Extensions.Hosting 和 UWP 生命周期。服务统一在 App.Services.cs 中注册，业务服务优先使用构造函数注入；重复激活和多视图共用应用主机。
 - 激活时先捕获目标窗口的 Dispatcher；异步初始化后显式返回该窗口的 UI 线程显示页面，不依赖 SynchronizationContext，窗口关闭或应用退出后跳过显示。
-- 主包以 `App` 同时承接开始菜单和锁屏激活。按激活类型和当前窗口宿主识别锁屏视图，应用 AUMID 仅用于注册锁屏选择。
+- 主包以 `App` 同时承接开始菜单和锁屏激活。按激活类型和当前窗口宿主识别锁屏视图。
 - 应用设置页通过 SettingsPageInfoAttribute 与 AddSettingsPage<T> 注册，由 UWP Frame 创建具有公开无参构造函数的 SettingsPageBase 子类；系统标题栏返回优先处理设置内容 Frame，再返回根 Frame。
 - 桌面激活显式关闭 ExtendViewIntoTitleBar，以覆盖 UWP 跨启动保存的标题栏扩展状态。
 - 应用在 App 构造时订阅 Application.UnhandledException，将未处理异常标记为已处理并复用当前窗口的 Toast 宿主显示不可自动关闭的错误；Toast 宿主尚未建立时，在窗口内容就绪后补显示。
@@ -37,7 +37,8 @@
 - 视频交换链的宽高私有数据 GUID 必须匹配 VLC WinRT 输出协议；原生检查使用独立协议常量，实际播放需在隔离 UWP 预览包中验证解码帧与输出像素。
 - VLC 3 不将负数 input-repeat 视为无限循环；背景通过 EndReached 调度到所属 UI 线程后 Stop/Play 重播，并在有效视频输出建立后重新应用裁剪比例。LibVLCSharp 回调的 sender 是内部事件管理器，订阅时需捕获对应播放器，不能用 sender 识别播放器。
 - 锁屏选择通过 windows.lockScreen 扩展和当前用户的 LockAppAumId 配置实现。运行时由 NativeHost 直接读写该值；关闭替换前通过 ContentDialog 提示资源管理器将重启，用户确认后才向 32 位和 64 位注册表视图写入 Microsoft.LockApp_cw5n1h2txyewy!WindowsDefaultLockScreen，并重启当前会话中缓存锁屏扩展的 LockAppHost/LockApp 与桌面 Explorer，让 Windows 丢弃锁屏扩展缓存并回退到默认锁屏，不保留原值备份。
-- NativeHost 由同一 full-trust 扩展的两个参数组启动，音频采集与一次性锁屏命令各自管理进程生命周期。
+- NativeHost 由同一 full-trust 扩展的参数组启动，音频采集、一次性锁屏命令和桌面编辑器恢复各自管理进程生命周期。
+- 桌面场景编辑器激活后在所属 UI 线程检查 CoreWindow 的根窗口类；超时后由 NativeHost 提示用户。窗口恢复时撤销提示；用户确认后等待旧实例保存并退出，重启当前会话的 Explorer，通过进程外系统激活启动应用，并等待可见编辑器窗口确认就绪。
 - 包清单必须通过 desktop6:RegistryWriteVirtualization 禁用 MSIX 注册表写入虚拟化；否则 Helper 的 HKCU 写入不会落到用户真实注册表。
 - Figma 设计稿中呈现的 Fluent System Icon 等字体图标版本可能与项目当前安装的不符，此时按字体位点名称的语义匹配，而不是位点本身或外观。
 - 特性按目标类型应用原生属性，不递归修改子元素；卸载时恢复目标原绑定或本地值。组件默认特性仅在新建配置时生成，加载或重建视图时不补齐。

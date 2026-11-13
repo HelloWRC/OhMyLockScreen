@@ -20,27 +20,35 @@ internal sealed partial class LockScreenProcessRefresher
         return succeeded;
     }
 
-    private static bool RestartShell(int currentSessionId)
+    internal static bool RestartExplorer()
+    {
+        using var currentProcess = Process.GetCurrentProcess();
+        return RestartShell(currentProcess.SessionId, allowMissingShell: false);
+    }
+
+    private static bool RestartShell(int currentSessionId, bool allowMissingShell = true)
     {
         using var shell = FindShellProcess(currentSessionId);
-        if (shell is null)
+        if (shell is null && allowMissingShell)
         {
             return true;
         }
 
-        var shellProcessId = shell.Id;
-        try
+        var shellProcessId = shell?.Id ?? 0;
+        if (shell is not null)
         {
-            shell.Kill();
-
-            if (!shell.WaitForExit(ProcessExitTimeout))
+            try
+            {
+                shell.Kill();
+                if (!shell.WaitForExit(ProcessExitTimeout))
+                {
+                    return false;
+                }
+            }
+            catch (Exception)
             {
                 return false;
             }
-        }
-        catch (Exception)
-        {
-            return false;
         }
 
         if (WaitForShellRestart(currentSessionId, shellProcessId, ShellRestartTimeout))

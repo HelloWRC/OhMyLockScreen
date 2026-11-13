@@ -33,6 +33,8 @@ public sealed partial class App : Application
         }
 
         internal bool IsClosed { get; set; }
+        internal DispatcherTimer? EditorWindowProbe { get; set; }
+        internal string? EditorRecoveryRequest { get; set; }
     }
 
     private sealed class PendingUnhandledException
@@ -145,7 +147,11 @@ public sealed partial class App : Application
         var activation = _viewActivations.GetValue(window, currentWindow =>
         {
             var state = new ViewActivation();
-            currentWindow.Closed += (_, _) => state.IsClosed = true;
+            currentWindow.Closed += (_, _) =>
+            {
+                state.IsClosed = true;
+                StopEditorWindowProbe(state);
+            };
             return state;
         });
         activation.Kind = activationKind;
@@ -191,7 +197,7 @@ public sealed partial class App : Application
 
             try
             {
-                ShowMainPage(window, activation.Kind);
+                ShowMainPage(window, activation);
             }
             catch (Exception exception)
             {
@@ -200,11 +206,12 @@ public sealed partial class App : Application
         }
     }
 
-    private void ShowMainPage(Window window, ActivationKind? activationKind)
+    private void ShowMainPage(Window window, ViewActivation activation)
     {
-        var isLockScreen = activationKind is ActivationKind.LockScreen or ActivationKind.LockScreenComponent || LockScreenHosting.IsWindowHostedByLockScreen();
+        var isLockScreen = activation.Kind is ActivationKind.LockScreen or ActivationKind.LockScreenComponent || LockScreenHosting.IsWindowHostedByLockScreen();
         if (isLockScreen)
         {
+            StopEditorWindowProbe(activation);
             WindowTransparency.Enable(window);
         }
         else
@@ -255,6 +262,10 @@ public sealed partial class App : Application
 
         ShowPendingUnhandledException(window);
         window.Activate();
+        if (!isLockScreen && !_isExiting && !activation.IsClosed)
+        {
+            StartEditorWindowProbe(window, activation);
+        }
     }
 
     /// <summary>

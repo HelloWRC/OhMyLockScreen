@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../OhMyLockScreen/App.xaml.cs" Link="App.xaml.cs" />
+    <Compile Include="../../OhMyLockScreen/App.EditorWindow.cs" Link="App.EditorWindow.cs" />
     <Compile Include="../../OhMyLockScreen/App.Hosting.cs" Link="App.Hosting.cs" />
     <Compile Include="../../OhMyLockScreen/App.Services.cs" Link="App.Services.cs" />
     <Compile Include="../../OhMyLockScreen/Views/SettingsPages/*SettingsPage.xaml.cs" Link="Views/SettingsPages/%(Filename)%(Extension)" />

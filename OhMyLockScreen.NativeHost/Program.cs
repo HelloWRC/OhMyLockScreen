@@ -11,6 +11,8 @@ internal static class Program
                 return 0;
             case "--lock-screen-provider":
                 return await LockScreenProviderHost.RunAsync();
+            case "--editor-window-recovery":
+                return await EditorWindowRecovery.RunAsync();
             default:
                 return 2;
         }
@@ -25,6 +27,6 @@ internal static class Program
             parameters = parameters[2..];
         }
 
-        return parameters is ["--audio-spectrum"] or ["--lock-screen-provider"] ? parameters[0] : null;
+        return parameters is [var mode] ? mode : null;
     }
 }

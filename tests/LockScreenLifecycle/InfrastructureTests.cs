@@ -9,6 +9,7 @@ using OhMyLockScreen;
 using OhMyLockScreen.Shared;
 using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers;
+using OhMyLockScreen.Shared.Models;
 using OhMyLockScreen.Hosting;
 using OhMyLockScreen.Models;
 using OhMyLockScreen.Services;
@@ -77,6 +78,136 @@ internal static class InfrastructureTests
             app.Launch(new LaunchActivatedEventArgs());
             Check(ReferenceEquals(editorFrame.Content, settingsPage), "Desktop relaunch lost the current settings page.");
             Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(333));
+            await app.ExitAsync();
+        });
+
+    internal static Task RunEditorWindowRecoveryAsync(Func<string, Func<Task>, Task> runAsync) =>
+        runAsync("Only an unframed desktop editor starts recovery after the probe times out", async () =>
+        {
+            var app = new App(() => BuildHost(new HostedProbe()));
+            var launches = new List<string>();
+            Windows.ApplicationModel.FullTrustProcessLauncher.Launch = parameterGroup =>
+            {
+                launches.Add(parameterGroup);
+                return Task.CompletedTask;
+            };
+
+            app.Launch(new LaunchActivatedEventArgs());
+            Check(DispatcherTimer.Created.Count == 0, "Lock-screen launch started an editor probe.");
+
+            LockScreenHosting.IsHosted = () => false;
+            var editorWindow = Window.Current = new Window();
+            (string RootClass, int Cloaked) shape = ("Windows.UI.Core.CoreWindow", 1);
+            WindowShapeProbe.GetShape = window =>
+            {
+                Check(ReferenceEquals(window, editorWindow.CoreWindow), "Probe sampled the wrong window.");
+                return shape;
+            };
+            app.Launch(new LaunchActivatedEventArgs());
+            var probe = DispatcherTimer.LastCreated!;
+            app.Launch(new LaunchActivatedEventArgs());
+            Check(ReferenceEquals(probe, DispatcherTimer.LastCreated), "Repeated activation started a second probe.");
+            probe.Advance();
+            Check(probe.IsEnabled && launches.Count == 0, "Recovery started before the frame could attach.");
+
+            shape = (WindowShapeProbe.ApplicationFrameClass, 0);
+            probe.Advance();
+            Check(!probe.IsEnabled && launches.Count == 0, "A normal frame started recovery.");
+
+            shape = (WindowShapeProbe.HostBridgeClass, 1);
+            app.Launch(new LaunchActivatedEventArgs());
+            probe = DispatcherTimer.LastCreated!;
+            probe.Advance();
+            Check(!probe.IsEnabled && launches.Count == 0, "A host bridge started recovery.");
+
+            shape = ("Windows.UI.Core.CoreWindow", 1);
+            app.Launch(new LaunchActivatedEventArgs());
+            probe = DispatcherTimer.LastCreated!;
+            await Task.Delay(TimeSpan.FromMilliseconds(2100));
+            Window.Current = editorWindow;
+            probe.Advance();
+            probe.Advance();
+            Check(probe.IsEnabled && launches.SequenceEqual(["EditorWindowRecovery"]), "Timed-out probe did not start recovery once.");
+
+            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, EditorWindowRecoveryProtocol.DirectoryName);
+            var request = Directory.GetFiles(directory, "*" + EditorWindowRecoveryProtocol.RequestExtension).Single();
+            var confirmed = Path.ChangeExtension(request, EditorWindowRecoveryProtocol.ConfirmedExtension);
+            File.Move(request, confirmed);
+            shape = (WindowShapeProbe.ApplicationFrameClass, 0);
+            probe.Advance();
+            Check(!File.Exists(confirmed) && !probe.IsEnabled && CoreApplication.ExitCalls == 0,
+                "A restored frame did not cancel the pending recovery.");
+
+            shape = ("Windows.UI.Core.CoreWindow", 1);
+            app.Launch(new LaunchActivatedEventArgs());
+            probe = DispatcherTimer.LastCreated!;
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
+            Check(!probe.IsEnabled, "Switching to a lock-screen activation left the editor probe running.");
+            await app.ExitAsync();
+        });
+
+    internal static Task RunConfirmedEditorRecoveryAsync(Func<string, Func<Task>, Task> runAsync) =>
+        runAsync("Confirmed editor recovery exits through the normal app lifecycle", async () =>
+        {
+            LockScreenHosting.IsHosted = () => false;
+            WindowShapeProbe.GetShape = _ => ("Windows.UI.Core.CoreWindow", 1);
+            var app = new App(() => BuildHost(new HostedProbe()));
+            var editorWindow = Window.Current;
+            app.Launch(new LaunchActivatedEventArgs());
+            var probe = DispatcherTimer.LastCreated!;
+            await Task.Delay(TimeSpan.FromMilliseconds(2100));
+            Window.Current = editorWindow;
+            probe.Advance();
+
+            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, EditorWindowRecoveryProtocol.DirectoryName);
+            var request = Directory.GetFiles(directory, "*" + EditorWindowRecoveryProtocol.RequestExtension).Single();
+            var confirmed = Path.ChangeExtension(request, EditorWindowRecoveryProtocol.ConfirmedExtension);
+            File.Move(request, confirmed);
+            probe.Advance();
+
+            Check(File.Exists(Path.ChangeExtension(request, EditorWindowRecoveryProtocol.ExitingExtension)), "The app did not acknowledge the confirmed request.");
+            Check(!probe.IsEnabled && CoreApplication.ExitCalls == 1 && IAppHost.Host is null, "Confirmed recovery did not stop the app host and exit.");
+        });
+
+    internal static Task RunEditorRelaunchAsync(Func<string, Func<Task>, Task> runAsync) =>
+        runAsync("Editor relaunch reports readiness only after the desktop window is visible", async () =>
+        {
+            LockScreenHosting.IsHosted = () => false;
+            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, EditorWindowRecoveryProtocol.DirectoryName);
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(Path.Combine(directory, EditorWindowRecoveryProtocol.LaunchRequestName), string.Empty);
+            var ready = Path.Combine(directory, EditorWindowRecoveryProtocol.LaunchReadyName);
+            var helperLaunches = 0;
+            Windows.ApplicationModel.FullTrustProcessLauncher.Launch = _ =>
+            {
+                helperLaunches++;
+                return Task.CompletedTask;
+            };
+
+            var app = new App(() => BuildHost(new HostedProbe()));
+            var window = Window.Current;
+            (string RootClass, int Cloaked) shape = ("Windows.UI.Core.CoreWindow", 1);
+            WindowShapeProbe.GetShape = _ => shape;
+            app.Launch(new LaunchActivatedEventArgs());
+            var probe = DispatcherTimer.LastCreated!;
+            await Task.Delay(TimeSpan.FromMilliseconds(2100));
+            Window.Current = window;
+            probe.Advance();
+            Check(helperLaunches == 0 && !File.Exists(ready), "Relaunch started a second recovery or reported an unframed window.");
+
+            shape = (WindowShapeProbe.ApplicationFrameClass, 1);
+            window.SetVisible(true);
+            probe.Advance();
+            Check(!File.Exists(ready), "A cloaked window was reported as ready.");
+
+            shape = (WindowShapeProbe.ApplicationFrameClass, 0);
+            window.SetVisible(false);
+            probe.Advance();
+            Check(!File.Exists(ready), "A hidden window was reported as ready.");
+
+            window.SetVisible(true);
+            probe.Advance();
+            Check(File.Exists(ready) && !probe.IsEnabled, "A visible desktop window did not acknowledge relaunch.");
             await app.ExitAsync();
         });
 

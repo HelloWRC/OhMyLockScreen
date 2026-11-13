@@ -65,8 +65,10 @@ namespace Windows.ApplicationModel
 
     public static class FullTrustProcessLauncher
     {
+        internal static Func<string, Task> Launch { get; set; } = _ => Task.CompletedTask;
+
         public static Task LaunchFullTrustProcessForCurrentAppAsync(string parameterGroupId) =>
-            Task.CompletedTask;
+            Launch(parameterGroupId);
     }
 
     public sealed class SuspendingEventArgs : EventArgs
@@ -654,9 +656,14 @@ namespace Windows.UI.Xaml
         public event UwpEventHandler<VisibilityChangedEventArgs>? VisibilityChanged;
         public int ActivationSubscribers => Activated?.GetInvocationList().Length ?? 0;
         public int VisibilitySubscribers => VisibilityChanged?.GetInvocationList().Length ?? 0;
+        public bool Visible { get; private set; }
 
         public void Activate() => Activated?.Invoke(this, new(CoreWindowActivationState.CodeActivated));
-        public void SetVisible(bool visible) => VisibilityChanged?.Invoke(this, new(visible));
+        public void SetVisible(bool visible)
+        {
+            Visible = visible;
+            VisibilityChanged?.Invoke(this, new(visible));
+        }
         public void Deactivate() => Activated?.Invoke(this, new(CoreWindowActivationState.Deactivated));
     }
 
@@ -884,6 +891,7 @@ namespace Windows.UI.Xaml.Controls
 
 namespace OhMyLockScreen
 {
+    using Windows.UI.Core;
     using Windows.UI.Xaml;
     using Windows.UI.Xaml.Controls;
 
@@ -899,6 +907,17 @@ namespace OhMyLockScreen
         internal static Func<bool> IsHosted { get; set; } = () => true;
 
         internal static bool IsWindowHostedByLockScreen() => IsHosted();
+    }
+
+    internal static class WindowShapeProbe
+    {
+        internal const string ApplicationFrameClass = "ApplicationFrameWindow";
+        internal const string HostBridgeClass = "ApplicationHostBridgeWindow";
+
+        internal static Func<CoreWindow?, (string RootClass, int Cloaked)?> GetShape { get; set; } =
+            _ => (ApplicationFrameClass, 0);
+
+        internal static (string RootClass, int Cloaked)? Describe(CoreWindow? coreWindow) => GetShape(coreWindow);
     }
 
     public partial class App
