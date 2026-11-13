@@ -1,5 +1,6 @@
 using System.Diagnostics;
-using OhMyLockScreen.Services.Audio;
+
+namespace OhMyLockScreen.NativeHost;
 
 internal static class AudioHostPipe
 {

@@ -43,8 +43,7 @@ public sealed class LockScreenHelperClient : ILockScreenHelperClient, IDisposabl
                         LockScreenProviderJsonContext.Default.LockScreenProviderRequest),
                     cancellationToken).ConfigureAwait(false);
 
-                await FullTrustProcessLauncher.LaunchFullTrustProcessForAppAsync(
-                    LockScreenProviderProtocol.HelperApplicationId,
+                await FullTrustProcessLauncher.LaunchFullTrustProcessForCurrentAppAsync(
                     LockScreenProviderProtocol.HelperParameterGroupId);
 
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

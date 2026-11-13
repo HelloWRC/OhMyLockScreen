@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <_NativeHostProject>$(MSBuildThisFileDirectory)OhMyLockScreen.NativeHost.csproj</_NativeHostProject>
+    <_NativeHostPublishDir>$(MSBuildThisFileDirectory)bin\$(Platform)\$(Configuration)\net10.0-windows10.0.26100.0\win-$(Platform)\publish\</_NativeHostPublishDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(_NativeHostProject)" ReferenceOutputAssembly="false" Private="false" />
+    <Content Include="$(_NativeHostPublishDir)OhMyLockScreen.NativeHost.exe"
+             Link="OhMyLockScreen.NativeHost.exe"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="PublishNativeHost"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="$(_NativeHostProject)"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);Platform=$(Platform);RuntimeIdentifier=win-$(Platform);PublishDir=$(_NativeHostPublishDir)"
+             RemoveProperties="PublishProfile;PublishSelfContained" />
+  </Target>
+</Project>

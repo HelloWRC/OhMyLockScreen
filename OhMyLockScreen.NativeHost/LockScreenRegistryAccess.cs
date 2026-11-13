@@ -1,4 +1,4 @@
-namespace OhMyLockScreen.LockScreenHelper;
+namespace OhMyLockScreen.NativeHost;
 
 internal enum LockScreenRegistryViewKind
 {

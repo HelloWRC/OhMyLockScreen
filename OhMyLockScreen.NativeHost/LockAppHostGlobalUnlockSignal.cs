@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
 
-namespace OhMyLockScreen.LockScreenHelper;
+namespace OhMyLockScreen.NativeHost;
 
-internal sealed class LockAppHostGlobalUnlockSignal
+internal sealed partial class LockAppHostGlobalUnlockSignal
 {
     internal const string DefaultEventName = @"Local\LockAppHostGlobalUnlockEvent";
     private const uint EventModifyState = 0x0002;
@@ -21,7 +21,7 @@ internal sealed class LockAppHostGlobalUnlockSignal
     internal bool TrySignal(out int errorCode)
     {
         // LockAppHost publishes this session-local event and treats a signal as RequestUnlock.
-        var handle = OpenEvent(EventModifyState, false, _eventName);
+        var handle = OpenEvent(EventModifyState, 0, _eventName);
         if (handle == nint.Zero)
         {
             errorCode = Marshal.GetLastWin32Error();
@@ -30,7 +30,7 @@ internal sealed class LockAppHostGlobalUnlockSignal
 
         try
         {
-            if (!SetEvent(handle))
+            if (SetEvent(handle) == 0)
             {
                 errorCode = Marshal.GetLastWin32Error();
                 return false;
@@ -45,17 +45,15 @@ internal sealed class LockAppHostGlobalUnlockSignal
         }
     }
 
-    [DllImport("kernel32.dll", EntryPoint = "OpenEventW", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern nint OpenEvent(
+    [LibraryImport("kernel32.dll", EntryPoint = "OpenEventW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    private static partial nint OpenEvent(
         uint desiredAccess,
-        [MarshalAs(UnmanagedType.Bool)] bool inheritHandle,
+        int inheritHandle,
         string name);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetEvent(nint handle);
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial int SetEvent(nint handle);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(nint handle);
+    [LibraryImport("kernel32.dll")]
+    private static partial int CloseHandle(nint handle);
 }

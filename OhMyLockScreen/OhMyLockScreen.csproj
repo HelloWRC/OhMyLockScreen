@@ -25,25 +25,13 @@
     <AppxBundle>Never</AppxBundle>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AudioHostOutput>$(MSBuildProjectDirectory)\..\OhMyLockScreen.AudioHost\bin\$(Platform)\$(Configuration)\net10.0-windows10.0.26100.0\win-$(Platform)</AudioHostOutput>
-    <LockScreenHelperProject>$(MSBuildProjectDirectory)\..\OhMyLockScreen.LockScreenHelper\OhMyLockScreen.LockScreenHelper.csproj</LockScreenHelperProject>
-    <LockScreenHelperOutput>$(MSBuildProjectDirectory)\..\OhMyLockScreen.LockScreenHelper\bin\$(Platform)\$(Configuration)\net10.0-windows10.0.26100.0\win-$(Platform)\publish</LockScreenHelperOutput>
+    <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Uwp.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="LibVLC.UWP" Version="3.0.23-2608082208" />
     <ProjectReference Include="..\OhMyLockScreen.Shared\OhMyLockScreen.Shared.csproj" />
-    <ProjectReference Include="..\OhMyLockScreen.AudioHost\OhMyLockScreen.AudioHost.csproj" ReferenceOutputAssembly="false" Private="false" />
-    <ProjectReference Include="..\OhMyLockScreen.LockScreenHelper\OhMyLockScreen.LockScreenHelper.csproj" ReferenceOutputAssembly="false" Private="false" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- The helper shares this package's self-contained runtime and existing dependencies. -->
-    <Content Include="$(AudioHostOutput)\OhMyLockScreen.AudioHost.exe" Link="OhMyLockScreen.AudioHost.exe" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="$(AudioHostOutput)\OhMyLockScreen.AudioHost.dll" Link="OhMyLockScreen.AudioHost.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="$(AudioHostOutput)\OhMyLockScreen.AudioHost.deps.json" Link="OhMyLockScreen.AudioHost.deps.json" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="$(AudioHostOutput)\OhMyLockScreen.AudioHost.runtimeconfig.json" Link="OhMyLockScreen.AudioHost.runtimeconfig.json" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="$(LockScreenHelperOutput)\OhMyLockScreen.LockScreenHelper.exe" Link="OhMyLockScreen.LockScreenHelper.exe" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Helpers\" />
@@ -54,22 +42,13 @@
       <_AppxManifestVersionInput>$(IntermediateOutputPath)PackageVersion.txt</_AppxManifestVersionInput>
       <_VersionedAppxManifest>$(IntermediateOutputPath)Package.appxmanifest</_VersionedAppxManifest>
     </PropertyGroup>
-    <WriteLinesToFile File="$(_AppxManifestVersionInput)" Lines="$(GitBuildVersion)"
-                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <WriteLinesToFile File="$(_AppxManifestVersionInput)" Lines="$(GitBuildVersion)" Overwrite="true" WriteOnlyWhenDifferent="true" />
   </Target>
-  <Target Name="GenerateVersionedAppxManifest"
-          DependsOnTargets="WriteAppxManifestVersionInput"
-          Inputs="$(MSBuildAllProjects);@(AppxManifest);$(_AppxManifestVersionInput)"
-          Outputs="$(_VersionedAppxManifest)">
+  <Target Name="GenerateVersionedAppxManifest" DependsOnTargets="WriteAppxManifestVersionInput" Inputs="$(MSBuildAllProjects);@(AppxManifest);$(_AppxManifestVersionInput)" Outputs="$(_VersionedAppxManifest)">
     <Copy SourceFiles="@(AppxManifest)" DestinationFiles="$(_VersionedAppxManifest)" />
-    <XmlPoke XmlInputPath="$(_VersionedAppxManifest)" Query="/appx:Package/appx:Identity/@Version"
-             Namespaces="&lt;Namespace Prefix='appx' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10' /&gt;"
-             Value="$(GitBuildVersion)" />
+    <XmlPoke XmlInputPath="$(_VersionedAppxManifest)" Query="/appx:Package/appx:Identity/@Version" Namespaces="&lt;Namespace Prefix='appx' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10' /&gt;" Value="$(GitBuildVersion)" />
   </Target>
-  <Target Name="UseVersionedAppxManifest"
-          BeforeTargets="_ValidatePresenceOfAppxManifestItems;BeforeGenerateAppxManifest"
-          DependsOnTargets="GenerateVersionedAppxManifest"
-          Condition="'$(DesignTimeBuild)' != 'true' And '@(AppxManifest)' != ''">
+  <Target Name="UseVersionedAppxManifest" BeforeTargets="_ValidatePresenceOfAppxManifestItems;BeforeGenerateAppxManifest" DependsOnTargets="GenerateVersionedAppxManifest" Condition="'$(DesignTimeBuild)' != 'true' And '@(AppxManifest)' != ''">
     <ItemGroup>
       <_VersionedAppxManifestItem Include="@(AppxManifest->'$(_VersionedAppxManifest)')" />
       <AppxManifest Remove="@(AppxManifest)" />
@@ -77,12 +56,5 @@
       <FileWrites Include="$(_AppxManifestVersionInput);$(_VersionedAppxManifest)" />
     </ItemGroup>
   </Target>
-  <Target Name="PublishLockScreenHelper"
-          BeforeTargets="PrepareForBuild"
-          Condition="'$(DesignTimeBuild)' != 'true'">
-    <MSBuild Projects="$(LockScreenHelperProject)"
-             Targets="Publish"
-             BuildInParallel="false"
-             Properties="Configuration=$(Configuration);Platform=$(Platform);RuntimeIdentifier=win-$(Platform);SelfContained=true;PublishAot=true;PublishDir=$(LockScreenHelperOutput)\;NuGetAudit=false" />
-  </Target>
+  <Import Project="..\OhMyLockScreen.NativeHost\PackageNativeHost.targets" />
 </Project>

@@ -25,7 +25,7 @@
         <uap:SplashScreen Image="Assets/SplashScreen.png" />
       </uap:VisualElements>
       <Extensions>
-        <desktop:Extension Category="windows.fullTrustProcess" Executable="OhMyLockScreen.AudioHost.exe">
+        <desktop:Extension Category="windows.fullTrustProcess" Executable="OhMyLockScreen.NativeHost.exe">
           <desktop:FullTrustProcess>
             <desktop:ParameterGroup GroupId="AudioSpectrum" Parameters="--audio-spectrum" />
           </desktop:FullTrustProcess>

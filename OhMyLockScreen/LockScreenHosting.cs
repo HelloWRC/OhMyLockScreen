@@ -1,39 +1,14 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using Windows.ApplicationModel;
 using Windows.ApplicationModel.Core;
 
 namespace OhMyLockScreen;
 
 internal static unsafe class LockScreenHosting
 {
-    private const string LockScreenApplicationId = "App";
-    private const string LockScreenAumIdSuffix = "!App";
-
-    /// <summary>
-    /// True when the current process is running as the lock-screen application or
-    /// its view has been hosted by Windows.
-    /// </summary>
     internal static bool IsWindowHostedByLockScreen()
     {
-        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
-        {
-            try
-            {
-                var appInfo = AppInfo.Current;
-                if (string.Equals(appInfo.Id, LockScreenApplicationId, StringComparison.OrdinalIgnoreCase)
-                    || appInfo.AppUserModelId.EndsWith(LockScreenAumIdSuffix, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-            catch (Exception exception)
-            {
-                Debug.WriteLine($"Could not query the current application identity: {exception}");
-            }
-        }
-
         try
         {
             if (CoreApplication.GetCurrentView().IsHosted)
@@ -63,14 +38,14 @@ internal static unsafe class LockScreenHosting
             using var interop = ((WinRT.IWinRTObject)coreWindow).NativeObject.As<WinRT.Interop.IUnknownVftbl>(
                 new Guid("45D64A29-A63E-4CB6-B498-5781D298CB4F"));
             var pointer = interop.ThisPtr;
-            var getWindowHandle = (delegate* unmanaged[Stdcall]<nint, ulong*, int>)(*(nint**)pointer)[3];
-            ulong windowHandle = 0;
+            var getWindowHandle = (delegate* unmanaged[Stdcall]<nint, nint*, int>)(*(nint**)pointer)[3];
+            nint windowHandle = 0;
             if (getWindowHandle(pointer, &windowHandle) < 0 || windowHandle == 0)
             {
                 return false;
             }
 
-            var parent = GetParent((nint)(long)windowHandle);
+            var parent = GetParent(windowHandle);
             if (parent == 0)
             {
                 return false;

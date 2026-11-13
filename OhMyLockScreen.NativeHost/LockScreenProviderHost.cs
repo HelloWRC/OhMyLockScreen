@@ -4,9 +4,9 @@ using System.Text;
 using System.Text.Json;
 using OhMyLockScreen.Shared.Models.LockScreenProvider;
 
-namespace OhMyLockScreen.LockScreenHelper;
+namespace OhMyLockScreen.NativeHost;
 
-internal static class LockScreenProviderHost
+internal static partial class LockScreenProviderHost
 {
     private const int ErrorInsufficientBuffer = 122;
     private const string LockScreenKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Lock Screen";
@@ -210,7 +210,7 @@ internal static class LockScreenProviderHost
             LockScreenProviderProtocol.RequestDirectoryName);
     }
 
-    private static string GetPackageFamilyName()
+    private static unsafe string GetPackageFamilyName()
     {
         uint length = 0;
         var result = GetCurrentPackageFamilyName(ref length, null);
@@ -219,14 +219,18 @@ internal static class LockScreenProviderHost
             throw new Win32Exception(result, "无法读取当前包的 Package Family Name。");
         }
 
-        var packageFamilyName = new StringBuilder((int)length);
-        result = GetCurrentPackageFamilyName(ref length, packageFamilyName);
+        var packageFamilyName = new char[checked((int)length)];
+        fixed (char* buffer = packageFamilyName)
+        {
+            result = GetCurrentPackageFamilyName(ref length, buffer);
+        }
+
         if (result != 0)
         {
             throw new Win32Exception(result, "无法读取当前包的 Package Family Name。");
         }
 
-        return packageFamilyName.ToString();
+        return new string(packageFamilyName, 0, checked((int)length - 1));
     }
 
     private static void TryDelete(string? path)
@@ -245,8 +249,8 @@ internal static class LockScreenProviderHost
         }
     }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetCurrentPackageFamilyName(
+    [LibraryImport("kernel32.dll")]
+    private static unsafe partial int GetCurrentPackageFamilyName(
         ref uint packageFamilyNameLength,
-        StringBuilder? packageFamilyName);
+        char* packageFamilyName);
 }

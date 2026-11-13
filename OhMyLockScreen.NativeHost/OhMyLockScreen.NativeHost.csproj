@@ -7,6 +7,8 @@
     <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
     <RuntimeIdentifier>win-$(Platform)</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -20,5 +22,7 @@
     <Compile Include="../OhMyLockScreen/Services/Audio/*.cs" Exclude="../OhMyLockScreen/Services/Audio/AudioHostSpectrumClient.cs" Link="Audio/%(Filename)%(Extension)" />
     <Compile Include="../OhMyLockScreen.Shared/Models/Audio/*.cs" Link="Models/%(Filename)%(Extension)" />
     <Compile Include="../OhMyLockScreen.Shared/Abstractions/Services/Audio/*.cs" Link="Abstractions/%(Filename)%(Extension)" />
+    <Compile Include="../OhMyLockScreen.Shared/Models/LockScreenProvider/LockScreenProviderProtocol.cs"
+             Link="LockScreenProviderProtocol.cs" />
   </ItemGroup>
 </Project>

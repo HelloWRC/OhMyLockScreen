@@ -1,6 +1,6 @@
 using Microsoft.Win32;
 
-namespace OhMyLockScreen.LockScreenHelper;
+namespace OhMyLockScreen.NativeHost;
 
 internal sealed class LockScreenRegistryView(LockScreenRegistryViewKind kind) : ILockScreenRegistryView
 {

@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace OhMyLockScreen.LockScreenHelper;
+namespace OhMyLockScreen.NativeHost;
 
-internal sealed class LockScreenProcessRefresher
+internal sealed partial class LockScreenProcessRefresher
 {
     private const string ShellProcessName = "explorer";
     private const string LockScreenHostModuleName = "AboveLockAppHost.dll";
@@ -210,9 +210,9 @@ internal sealed class LockScreenProcessRefresher
         return succeeded;
     }
 
-    [DllImport("user32.dll")]
-    private static extern nint GetShellWindow();
+    [LibraryImport("user32.dll")]
+    private static partial nint GetShellWindow();
 
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(nint windowHandle, out uint processId);
+    [LibraryImport("user32.dll")]
+    private static partial uint GetWindowThreadProcessId(nint windowHandle, out uint processId);
 }

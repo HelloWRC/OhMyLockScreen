@@ -40,6 +40,46 @@ internal static class InfrastructureTests
         throw new Exception($"Expected {typeof(T).Name}.");
     }
 
+    internal static Task RunActivationRoutingAsync(Func<string, Func<Task>, Task> runAsync) =>
+        runAsync("The shared entry routes desktop and lock-screen activations to their own windows", async () =>
+        {
+            var app = new App(() => BuildHost(new HostedProbe()));
+            var editorWindow = Window.Current;
+            var lockWindow = new Window();
+            LockScreenHosting.IsHosted = () => ReferenceEquals(Window.Current, lockWindow);
+
+            app.Launch(new LaunchActivatedEventArgs());
+            var editorFrame = ((WindowToastHost)editorWindow.Content!).Frame;
+            Check(editorFrame.Content is SceneEditorPage, "Ordinary launch did not open the editor.");
+            Check(editorFrame.Navigate(typeof(ApplicationSettingsPage)), "Could not navigate to settings.");
+            var settingsPage = editorFrame.Content;
+
+            Window.Current = lockWindow;
+            app.Launch(new LaunchActivatedEventArgs());
+            var lockFrame = ((WindowToastHost)lockWindow.Content!).Frame;
+            Check(lockFrame.Content is MainPage, "Hosted launch did not open the lock-screen page.");
+            var firstLockPage = (MainPage)lockFrame.Content!;
+
+            LockScreenHosting.IsHosted = () => false;
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreenComponent));
+            Check(ReferenceEquals(lockFrame.Content, firstLockPage), "Explicit lock-screen activation did not retain the active page.");
+
+            firstLockPage.RootScenePresenter.ActualHeight = 720;
+            firstLockPage.Load();
+            firstLockPage.PressPointer(PointerDeviceType.Mouse);
+            Check(firstLockPage.IsDismissalStarted, "The lock-screen page did not start dismissing.");
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
+            Check(lockFrame.Content is MainPage && !ReferenceEquals(lockFrame.Content, firstLockPage),
+                "Reactivation reused a dismissing lock-screen page.");
+
+            Window.Current = editorWindow;
+            app.Launch(new LaunchActivatedEventArgs());
+            Check(ReferenceEquals(editorFrame.Content, settingsPage), "Desktop relaunch lost the current settings page.");
+            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(333));
+            await app.ExitAsync();
+        });
+
     internal static async Task RunAsync(Action<string, Action> run, Func<string, Func<Task>, Task> runAsync)
     {
         run("Missing configuration creates defaults and supports JSON round trips", () =>

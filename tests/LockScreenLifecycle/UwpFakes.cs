@@ -65,7 +65,7 @@ namespace Windows.ApplicationModel
 
     public static class FullTrustProcessLauncher
     {
-        public static Task LaunchFullTrustProcessForAppAsync(string appId, string parameterGroupId) =>
+        public static Task LaunchFullTrustProcessForCurrentAppAsync(string parameterGroupId) =>
             Task.CompletedTask;
     }
 

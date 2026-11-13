@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
-using OhMyLockScreen.LockScreenHelper;
+using OhMyLockScreen.NativeHost;
 using OhMyLockScreen.Models;
 using OhMyLockScreen.Services;
 using OhMyLockScreen.Services.LockScreenProvider;

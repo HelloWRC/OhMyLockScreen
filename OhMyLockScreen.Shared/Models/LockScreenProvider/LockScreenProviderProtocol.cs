@@ -10,7 +10,6 @@ public static class LockScreenProviderProtocol
     public const string DiagnosticFileName = "last-operation.txt";
     public const string ClientDiagnosticFileName = "last-client-operation.txt";
     public const string DefaultLockAppAumId = "Microsoft.LockApp_cw5n1h2txyewy!WindowsDefaultLockScreen";
-    public const string HelperApplicationId = "LockScreenHelper";
     public const string HelperParameterGroupId = "LockScreenProvider";
 }
 

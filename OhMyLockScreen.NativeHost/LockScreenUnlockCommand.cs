@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using OhMyLockScreen.Shared.Models.LockScreenProvider;
 
-namespace OhMyLockScreen.LockScreenHelper;
+namespace OhMyLockScreen.NativeHost;
 
 internal static class LockScreenUnlockCommand
 {

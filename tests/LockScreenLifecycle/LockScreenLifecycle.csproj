@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../OhMyLockScreen/App.xaml.cs" Link="App.xaml.cs" />
@@ -18,9 +19,9 @@
     <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorViewBases.cs" Link="Controls/Editor/EditorViewBases.cs" />
     <Compile Include="../../OhMyLockScreen/ViewModels/**/*.cs" Link="ViewModels/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/**/*.cs" Link="Services/%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="../../OhMyLockScreen.LockScreenHelper/LockScreenRegistryAccess.cs" Link="LockScreenHelper/LockScreenRegistryAccess.cs" />
-    <Compile Include="../../OhMyLockScreen.LockScreenHelper/LockAppHostGlobalUnlockSignal.cs" Link="LockScreenHelper/LockAppHostGlobalUnlockSignal.cs" />
-    <Compile Include="../../OhMyLockScreen.LockScreenHelper/LockScreenUnlockCommand.cs" Link="LockScreenHelper/LockScreenUnlockCommand.cs" />
+    <Compile Include="../../OhMyLockScreen.NativeHost/LockScreenRegistryAccess.cs" Link="NativeHost/LockScreenRegistryAccess.cs" />
+    <Compile Include="../../OhMyLockScreen.NativeHost/LockAppHostGlobalUnlockSignal.cs" Link="NativeHost/LockAppHostGlobalUnlockSignal.cs" />
+    <Compile Include="../../OhMyLockScreen.NativeHost/LockScreenUnlockCommand.cs" Link="NativeHost/LockScreenUnlockCommand.cs" />
     <Compile Include="../../OhMyLockScreen/MainPage.xaml.cs" Link="MainPage.xaml.cs" />
     <Compile Include="../../OhMyLockScreen/SceneEditorPage.SystemBackground.cs" Link="SceneEditorPage.SystemBackground.cs" />
     <Compile Include="../../OhMyLockScreen/SceneEditorPage.Tree.cs" Link="SceneEditorPage.Tree.cs" />

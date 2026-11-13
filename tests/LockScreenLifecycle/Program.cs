@@ -70,6 +70,12 @@ if (args.Contains("--lock-screen-provider-only"))
     return;
 }
 
+if (args.Contains("--activation-only"))
+{
+    await InfrastructureTests.RunActivationRoutingAsync(RunAsync);
+    return;
+}
+
 if (args.Contains("--scene-management-only"))
 {
     await SceneTests.RunManagementAsync(RunAsync);
@@ -147,6 +153,7 @@ if (args.Contains("--layout-only"))
     return;
 }
 
+await InfrastructureTests.RunActivationRoutingAsync(RunAsync);
 await InfrastructureTests.RunAsync(Run, RunAsync);
 LockScreenReplacementTests.Run(Run);
 await LockScreenReplacementTests.RunAsync(RunAsync);
