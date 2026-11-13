@@ -70,8 +70,15 @@ if (args.Contains("--lock-screen-provider-only"))
     return;
 }
 
+if (args.Contains("--scene-management-only"))
+{
+    await SceneTests.RunManagementAsync(RunAsync);
+    return;
+}
+
 if (args.Contains("--scene-only"))
 {
+    await SceneTests.RunManagementAsync(RunAsync);
     await SceneTests.RunAsync(Run, RunAsync);
     await SceneMediaImportTests.RunAsync(RunAsync);
     await SceneBlobStorageTests.RunAsync(RunAsync);
@@ -162,6 +169,7 @@ TypographyFeatureTests.Run(Run);
 FeatureTests.Run(Run);
 LayoutTests.Run(Run);
 EditorConverterTests.Run(Run);
+await SceneTests.RunManagementAsync(RunAsync);
 await SceneTests.RunAsync(Run, RunAsync);
 await SceneMediaImportTests.RunAsync(RunAsync);
 await SceneBlobStorageTests.RunAsync(RunAsync);

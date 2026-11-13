@@ -45,7 +45,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private double _sidePanelWidth = 341;
     [ObservableProperty]
-    private SceneInfo? _selectedScene;
+    private SceneListItem? _selectedScene;
     [ObservableProperty]
     private string _dialogTitle = "";
     [ObservableProperty]
@@ -64,7 +64,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     private SceneSelectionGeometry _hoverGeometry;
     [ObservableProperty]
     private bool _showHover;
-    public ObservableCollection<SceneInfo> Scenes { get; } = [];
+    public ObservableCollection<SceneListItem> Scenes { get; } = [];
     public ObservableCollection<SceneTreeItem> Roots { get; } = [];
     public ObservableCollection<InspectorSection> InspectorSections { get; } = [];
     public IReadOnlyList<ComponentRegisterInfo> Library => _components.Registered;
@@ -129,8 +129,19 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
     public void RefreshScenes()
     {
-        var desired = _scenes.GetScenes().Select(info => Scenes.FirstOrDefault(existing => existing == info) ?? info).ToArray();
-        foreach (var removed in Scenes.Where(info => !desired.Contains(info)).ToArray())
+        var activeId = _scenes.ActiveSceneId;
+        var editingId = Scene?.SceneId;
+        var existing = Scenes.ToDictionary(item => item.Id);
+        var desired = _scenes.GetScenes().Select(info =>
+        {
+            var item = existing.GetValueOrDefault(info.Id) ?? new SceneListItem(info.Id);
+            item.Name = info.Name;
+            item.IsActive = info.Id == activeId;
+            item.IsEditing = info.Id == editingId;
+            return item;
+        }).ToArray();
+
+        foreach (var removed in Scenes.Except(desired).ToArray())
         {
             Scenes.Remove(removed);
         }
@@ -148,7 +159,15 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             }
         }
 
-        SelectedScene = Scenes.FirstOrDefault(info => info.Id == Scene?.SceneId);
+        SelectedScene = Scenes.FirstOrDefault(item => item.Id == editingId);
+    }
+
+    internal void RestoreSceneIfDeleted()
+    {
+        if (Scene is { } current && _scenes.GetScenes().All(info => info.Id != current.SceneId))
+        {
+            Open(_scenes.ActiveSceneId);
+        }
     }
 
     partial void OnSelectedItemChanged(SceneTreeItem? value)

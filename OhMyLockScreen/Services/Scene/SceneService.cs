@@ -236,13 +236,13 @@ public sealed class SceneService : ISceneService, IDisposable
 
     public void Delete(Guid id)
     {
-        Guid activeId;
         lock (_sync)
         {
             RequireScene(id);
-            if (_scenes.Count == 1)
+            var activeId = ActiveSceneId;
+            if (id == activeId)
             {
-                throw new InvalidOperationException("请至少保留一个场景。");
+                throw new InvalidOperationException("请先启用另一个锁屏场景，再删除此场景。");
             }
 
             var directory = GetSceneDirectory(id);
@@ -257,23 +257,12 @@ public sealed class SceneService : ISceneService, IDisposable
             _savedSnapshots.Remove(id);
             _saveErrors.Remove(id);
             _scenes.Remove(id);
-            activeId = _scenes.Keys.First();
-            if (ActiveSceneId == id)
-            {
-                _settings.Settings.ActiveSceneId = activeId;
-            }
-            else
-            {
-                activeId = ActiveSceneId;
-            }
-
             if (_settings.Settings.LastEditedSceneId == id)
             {
                 _settings.Settings.LastEditedSceneId = activeId;
             }
         }
 
-        ActiveSceneChanged?.Invoke(this, new SceneChangedEventArgs(activeId));
         SceneSaved?.Invoke(this, new SceneChangedEventArgs(id));
     }
 

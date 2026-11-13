@@ -63,7 +63,6 @@ public sealed partial class SceneEditorPage : Page
     private bool _updatingInspector;
     private bool _inspectorAgain;
     private bool _selectionPending;
-    private SceneInfo? _contextScene;
     private IFeatureContainer? _featureTarget;
     private IBorderable? _featureBorderHost;
     private uint? _dragPointer;
@@ -163,7 +162,7 @@ public sealed partial class SceneEditorPage : Page
             else
             {
                 var id = _settings.Settings.LastEditedSceneId;
-                ViewModel.Open(id.HasValue && scenes.Any(scene => scene.Id == id) ? id.Value : _scenes.ActiveSceneId);
+                OpenScene(id.HasValue && scenes.Any(scene => scene.Id == id) ? id.Value : _scenes.ActiveSceneId);
                 ShowTab(SceneEditorTab.Home);
             }
 
@@ -280,12 +279,10 @@ public sealed partial class SceneEditorPage : Page
                 _saveToasts.Close(args.SceneId);
             }
 
-            if (ViewModel.Scene is { } current && _scenes.GetScenes().All(scene => scene.Id != current.SceneId))
+            if (!_syncingLists)
             {
-                ViewModel.Open(_scenes.ActiveSceneId);
+                RefreshSceneLists(ViewModel.RestoreSceneIfDeleted);
             }
-
-            RefreshSceneLists();
         });
     }
 
@@ -333,23 +330,106 @@ public sealed partial class SceneEditorPage : Page
         }
     }
 
-    private void RefreshSceneLists()
+    private void OpenScene(Guid id) => RefreshSceneLists(() => ViewModel.Open(id));
+
+    private void RefreshSceneLists(Action? update = null)
     {
+        var wasSyncing = _syncingLists;
         _syncingLists = true;
         try
         {
-            ViewModel.RefreshScenes();
+            update?.Invoke();
         }
         finally
         {
-            _syncingLists = false;
+            try
+            {
+                ViewModel.RefreshScenes();
+                SceneList.SelectedItem = ViewModel.SelectedScene;
+            }
+            finally
+            {
+                _syncingLists = wasSyncing;
+            }
+        }
+    }
+
+    private void OnSceneRowContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.ItemContainer is not ListViewItem container)
+        {
+            return;
+        }
+
+        if (container.Tag is SceneListItem previous)
+        {
+            previous.IsPointerOver = false;
+            previous.HasFocus = false;
+            container.PointerEntered -= OnSceneRowPointerEntered;
+            container.PointerExited -= OnSceneRowPointerExited;
+            container.GotFocus -= OnSceneRowGotFocus;
+            container.LosingFocus -= OnSceneRowLosingFocus;
+            container.Tag = null;
+        }
+
+        if (!args.InRecycleQueue && args.Item is SceneListItem item)
+        {
+            container.Tag = item;
+            container.PointerEntered += OnSceneRowPointerEntered;
+            container.PointerExited += OnSceneRowPointerExited;
+            container.GotFocus += OnSceneRowGotFocus;
+            container.LosingFocus += OnSceneRowLosingFocus;
+            item.HasFocus = FindParent<ListViewItem>(FocusManager.GetFocusedElement() as DependencyObject) == container;
+        }
+    }
+
+    private void OnSceneRowPointerEntered(object sender, PointerRoutedEventArgs args)
+    {
+        if (sender is ListViewItem { Tag: SceneListItem item })
+        {
+            item.IsPointerOver = true;
+        }
+    }
+
+    private void OnSceneRowPointerExited(object sender, PointerRoutedEventArgs args)
+    {
+        if (sender is ListViewItem { Tag: SceneListItem item })
+        {
+            item.IsPointerOver = false;
+        }
+    }
+
+    private void OnSceneRowGotFocus(object sender, RoutedEventArgs args)
+    {
+        if (sender is ListViewItem { Tag: SceneListItem item })
+        {
+            item.HasFocus = true;
+        }
+    }
+
+    private void OnSceneRowLosingFocus(UIElement sender, LosingFocusEventArgs args)
+    {
+        if (sender is ListViewItem { Tag: SceneListItem item } container
+            && FindParent<ListViewItem>(args.NewFocusedElement as DependencyObject) != container)
+        {
+            item.HasFocus = false;
         }
     }
 
     private void OnSceneSelectionChanged(object sender, SelectionChangedEventArgs args)
     {
-        var info = args.AddedItems.OfType<SceneInfo>().LastOrDefault();
-        if (_syncingLists || info == null || info.Id == ViewModel.Scene?.SceneId)
+        if (!_loaded || _syncingLists)
+        {
+            return;
+        }
+
+        if (SceneList.SelectedItem is not SceneListItem item)
+        {
+            SceneList.SelectedItem = ViewModel.SelectedScene;
+            return;
+        }
+
+        if (item.Id == ViewModel.Scene?.SceneId)
         {
             return;
         }
@@ -357,17 +437,18 @@ public sealed partial class SceneEditorPage : Page
         TryAction(() =>
         {
             EndDrag();
-            ViewModel.Open(info.Id);
-            RefreshSceneLists();
+            OpenScene(item.Id);
         });
     }
 
     private void OnRefreshScenesClick(object sender, RoutedEventArgs args) => TryAction(() =>
     {
         var id = ViewModel.Scene?.SceneId;
-        _scenes.Reload();
-        ViewModel.Open(id.HasValue && _scenes.GetScenes().Any(scene => scene.Id == id) ? id.Value : _scenes.ActiveSceneId);
-        RefreshSceneLists();
+        RefreshSceneLists(() =>
+        {
+            _scenes.Reload();
+            ViewModel.Open(id.HasValue && _scenes.GetScenes().Any(scene => scene.Id == id) ? id.Value : _scenes.ActiveSceneId);
+        });
         if (_scenes.LoadErrors.Count > 0)
         {
             ShowMessage("部分场景未能加载", string.Join(Environment.NewLine, _scenes.LoadErrors), InfoBarSeverity.Warning);
@@ -377,8 +458,11 @@ public sealed partial class SceneEditorPage : Page
     {
         try
         {
-            var path = ViewModel.Scene is { } scene ? _scenes.GetSceneDirectory(scene.SceneId) : _scenes.ScenesPath;
-            await Launcher.LaunchFolderAsync(await StorageFolder.GetFolderFromPathAsync(path));
+            var folder = await StorageFolder.GetFolderFromPathAsync(_scenes.ScenesPath);
+            if (!await Launcher.LaunchFolderAsync(folder))
+            {
+                ShowMessage("无法打开场景文件夹", folder.Path);
+            }
         }
         catch (Exception exception)
         {
@@ -388,18 +472,17 @@ public sealed partial class SceneEditorPage : Page
 
     private async void OnCreateSceneClick(object sender, RoutedEventArgs args)
     {
-        var name = await AskNameAsync("新建场景", "新场景");
-        if (name == null)
+        try
         {
-            return;
+            if (await AskNameAsync("新建场景", "新场景") is { } name && _loaded)
+            {
+                RefreshSceneLists(() => ViewModel.Open(_scenes.Create(name).SceneId));
+            }
         }
-
-        TryAction(() =>
+        catch (Exception exception)
         {
-            var scene = _scenes.Create(name);
-            ViewModel.Open(scene.SceneId);
-            RefreshSceneLists();
-        });
+            ShowError(exception);
+        }
     }
 
     private void OnNavigationChanged(object sender, SelectionChangedEventArgs args)
@@ -1045,18 +1128,6 @@ public sealed partial class SceneEditorPage : Page
         }
     }
 
-    private void OnSceneRightTapped(object sender, RightTappedRoutedEventArgs args)
-    {
-        _contextScene = FindData<SceneInfo>(args.OriginalSource as DependencyObject) ?? ViewModel.SelectedScene;
-        if (_contextScene == null)
-        {
-            return;
-        }
-
-        GetContextMenu("SceneContextMenu").ShowAt(SceneList, args.GetPosition(SceneList));
-        args.Handled = true;
-    }
-
     private void OnTreeRightTapped(object sender, RightTappedRoutedEventArgs args)
     {
         var item = FindData<SceneTreeItem>(args.OriginalSource as DependencyObject);
@@ -1069,36 +1140,39 @@ public sealed partial class SceneEditorPage : Page
         args.Handled = true;
     }
 
-    private void OnSetContextSceneActiveClick(object sender, RoutedEventArgs args)
+    private void OnSceneActionTapped(object sender, TappedRoutedEventArgs args) => args.Handled = true;
+
+    private void OnEnableSceneClick(object sender, RoutedEventArgs args)
     {
-        if (_contextScene is { } info)
+        if (sender is RadioButton { DataContext: SceneListItem item } radio)
         {
-            TryAction(() => _scenes.SetActive(info.Id));
+            TryAction(() => RefreshSceneLists(() => _scenes.SetActive(item.Id)));
+            radio.IsChecked = item.Id == _scenes.ActiveSceneId;
         }
     }
 
     private async void OnRenameSceneClick(object sender, RoutedEventArgs args)
     {
-        if (_contextScene is not { } info)
+        if (sender is not FrameworkElement { DataContext: SceneListItem item })
         {
             return;
         }
 
         try
         {
-            var name = await AskNameAsync("重命名场景", info.Name);
-            if (name == null)
+            var name = await AskNameAsync("重命名场景", item.Name);
+            if (name == null || !_loaded)
             {
                 return;
             }
 
-            if (ViewModel.Scene?.SceneId == info.Id)
+            if (ViewModel.Scene?.SceneId == item.Id)
             {
                 ViewModel.Scene.Name = name;
             }
             else
             {
-                var scene = _scenes.Load(info.Id);
+                var scene = _scenes.Load(item.Id);
                 scene.Name = name;
                 _scenes.QueueSave(scene);
             }
@@ -1113,42 +1187,33 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnDuplicateSceneClick(object sender, RoutedEventArgs args)
     {
-        if (_contextScene is not { } info)
+        if (sender is FrameworkElement { DataContext: SceneListItem item })
         {
-            return;
+            TryAction(() => RefreshSceneLists(() => ViewModel.Open(_scenes.Duplicate(item.Id).SceneId)));
         }
-
-        TryAction(() =>
-        {
-            var scene = _scenes.Duplicate(info.Id);
-            ViewModel.Open(scene.SceneId);
-            RefreshSceneLists();
-        });
     }
 
     private async void OnDeleteSceneClick(object sender, RoutedEventArgs args)
     {
-        if (_contextScene is not { } info)
+        if (sender is not FrameworkElement { DataContext: SceneListItem { CanDelete: true } item })
         {
             return;
         }
 
         try
         {
-            ViewModel.DialogMessage = $"将删除“{info.Name}”及其专有资源。";
+            ViewModel.DialogMessage = $"将删除“{item.Name}”及其专有资源。此操作无法撤销。";
             PrepareDialog(DeleteSceneDialog);
-            if (await DeleteSceneDialog.ShowAsync() != ContentDialogResult.Primary)
+            if (await DeleteSceneDialog.ShowAsync() != ContentDialogResult.Primary || !_loaded)
             {
                 return;
             }
 
-            _scenes.Delete(info.Id);
-            if (ViewModel.Scene?.SceneId == info.Id)
+            RefreshSceneLists(() =>
             {
-                ViewModel.Open(_scenes.ActiveSceneId);
-            }
-
-            RefreshSceneLists();
+                _scenes.Delete(item.Id);
+                ViewModel.RestoreSceneIfDeleted();
+            });
         }
         catch (Exception exception)
         {

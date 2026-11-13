@@ -29,6 +29,76 @@ using OhMyLockScreen.Shared.Helpers.UI;
 
 internal static class SceneTests
 {
+    internal static Task RunManagementAsync(Func<string, Func<Task>, Task> runAsync) =>
+        runAsync("Scene management keeps editing and activation independent and protects the active scene", async () =>
+        {
+            var packageFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
+            var previousPackagePath = packageFolder.Path;
+            packageFolder.Path = Path.Combine(ApplicationData.Current.LocalFolder.Path, "Package");
+            try
+            {
+                var assets = Directory.CreateDirectory(Path.Combine(packageFolder.Path, "Assets"));
+                File.WriteAllText(Path.Combine(assets.FullName, "DefaultScene.json"), "{}");
+                using var fixture = new Fixture();
+                using var editor = fixture.Editor();
+                var activeId = fixture.Service.ActiveSceneId;
+                var created = fixture.Service.Create("新场景");
+                editor.Open(created.SceneId);
+                var row = editor.SelectedScene!;
+                Check(row.Id == created.SceneId && row.IsEditing && row.CanDelete
+                    && editor.Scenes.Single(item => item.IsActive).Id == activeId,
+                    "Opening a new scene changed the active scene or did not mark the editing row.");
+
+                editor.Open(activeId);
+                var editing = editor.Scene;
+                fixture.Service.SetActive(created.SceneId);
+                editor.RefreshScenes();
+                Check(ReferenceEquals(editor.Scene, editing) && row.IsActive && !row.IsEditing
+                    && editor.SelectedScene?.Id == activeId,
+                    "Setting the active scene changed the editing selection.");
+
+                var active = fixture.Service.Load(created.SceneId);
+                active.Name = "已重命名";
+                var blobs = new SceneBlobStorageService(fixture.Service);
+                using var stream = new MemoryStream("scene management test"u8.ToArray());
+                var blobId = await blobs.ImportAsync(active.SceneId, stream);
+                active.Background.BlobId = blobId;
+                fixture.Service.QueueSave(active);
+                fixture.Service.FlushPending();
+                editor.RefreshScenes();
+                Check(ReferenceEquals(editor.Scene, editing) && ReferenceEquals(editor.Scenes.Single(item => item.IsActive), row)
+                    && row.Name == active.Name && !row.IsEditing && !row.CanDelete,
+                    "Activation or rename replaced the editor, lost row identity, or failed to update the row.");
+                Throws<InvalidOperationException>(() => fixture.Service.Delete(active.SceneId));
+                Check(Directory.Exists(fixture.Service.GetSceneDirectory(active.SceneId)), "A rejected delete removed the active scene folder.");
+
+                var copy = fixture.Service.Duplicate(active.SceneId);
+                editor.Open(copy.SceneId);
+                var sourceBlob = Path.Combine(fixture.Service.GetSceneDirectory(active.SceneId), "Blobs", blobId[..2], blobId);
+                var copiedBlob = Path.Combine(fixture.Service.GetSceneDirectory(copy.SceneId), "Blobs", blobId[..2], blobId);
+                Check(editor.SelectedScene?.Id == copy.SceneId && fixture.Service.ActiveSceneId == active.SceneId
+                    && copy.Background.BlobId == blobId && File.ReadAllBytes(copiedBlob).SequenceEqual(File.ReadAllBytes(sourceBlob)),
+                    "Copying failed to open an independent scene with its own blob or changed the active scene.");
+                File.WriteAllText(copiedBlob, "changed copy");
+                Check(File.ReadAllText(sourceBlob) == "scene management test", "The copy shared its blob with the source.");
+
+                fixture.Service.Delete(copy.SceneId);
+                editor.RestoreSceneIfDeleted();
+                Check(ReferenceEquals(editor.SelectedScene, row) && row.IsEditing && fixture.Settings.Settings.LastEditedSceneId == active.SceneId
+                    && editor.Scenes.All(item => item.Id != copy.SceneId),
+                    "Deleting the edited scene failed to reopen the active scene and update the list.");
+
+                fixture.Service.Reload();
+                editor.RefreshScenes();
+                Check(ReferenceEquals(editor.SelectedScene, row) && row.IsActive && row.IsEditing,
+                    "Reloading lost the saved selection or replaced the existing row.");
+            }
+            finally
+            {
+                packageFolder.Path = previousPackagePath;
+            }
+        });
+
     internal static async Task RunAsync(Action<string, Action> run, Func<string, Func<Task>, Task> runAsync)
     {
         await runAsync("Dropped images retain pixel dimensions, persistent brushes and their original parent", async () =>

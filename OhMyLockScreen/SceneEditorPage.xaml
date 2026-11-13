@@ -33,21 +33,6 @@
             LayerTemplate="{StaticResource LayerInspectorTemplate}"
             EditorTemplate="{StaticResource RegisteredInspectorTemplate}" />
         <MenuFlyout
-            x:Key="SceneContextMenu">
-            <MenuFlyoutItem
-                Text="设为当前锁屏场景"
-                Click="OnSetContextSceneActiveClick" />
-            <MenuFlyoutItem
-                Text="重命名"
-                Click="OnRenameSceneClick" />
-            <MenuFlyoutItem
-                Text="复制"
-                Click="OnDuplicateSceneClick" />
-            <MenuFlyoutItem
-                Text="删除"
-                Click="OnDeleteSceneClick" />
-        </MenuFlyout>
-        <MenuFlyout
             x:Key="TreeContextMenu">
             <MenuFlyoutItem
                 Text="重命名"
@@ -359,6 +344,13 @@
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="HomePanelTransform" />
                 </Border.RenderTransform>
+                <Border.Resources>
+                    <Style x:Key="SceneManagementIconStyle" TargetType="FontIcon">
+                        <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+                        <Setter Property="FontSize" Value="16" />
+                        <Setter Property="IsTextScaleFactorEnabled" Value="False" />
+                    </Style>
+                </Border.Resources>
                 <ContentControl
                     x:Name="HomePanelInput"
                     IsTabStop="False"
@@ -390,19 +382,8 @@
                                 AutomationProperties.Name="重新加载场景列表"
                                 Click="OnRefreshScenesClick">
                                 <FontIcon
-                                    FontFamily="Segoe Fluent Icons"
-                                    Glyph="&#xE72C;"
-                                    FontSize="16" />
-                            </Button>
-                            <Button
-                                Style="{StaticResource EditorToolbarIconButtonStyle}"
-                                ToolTipService.ToolTip="打开场景文件夹"
-                                AutomationProperties.Name="打开场景文件夹"
-                                Click="OnOpenFolderClick">
-                                <FontIcon
-                                    FontFamily="Segoe Fluent Icons"
-                                    Glyph="&#xE838;"
-                                    FontSize="16" />
+                                    Style="{StaticResource SceneManagementIconStyle}"
+                                    Glyph="&#xE72C;" />
                             </Button>
                             <Button
                                 Style="{StaticResource EditorToolbarIconButtonStyle}"
@@ -410,9 +391,17 @@
                                 AutomationProperties.Name="新建场景"
                                 Click="OnCreateSceneClick">
                                 <FontIcon
-                                    FontFamily="Segoe Fluent Icons"
-                                    Glyph="&#xE710;"
-                                    FontSize="16" />
+                                    Style="{StaticResource SceneManagementIconStyle}"
+                                    Glyph="&#xE710;" />
+                            </Button>
+                            <Button
+                                Style="{StaticResource EditorToolbarIconButtonStyle}"
+                                ToolTipService.ToolTip="打开场景文件夹"
+                                AutomationProperties.Name="打开场景文件夹"
+                                Click="OnOpenFolderClick">
+                                <FontIcon
+                                    Style="{StaticResource SceneManagementIconStyle}"
+                                    Glyph="&#xE838;" />
                             </Button>
                         </StackPanel>
                         <ListView
@@ -420,11 +409,81 @@
                             Grid.Row="1"
                             MinHeight="90"
                             MaxHeight="340"
-                            DisplayMemberPath="Name"
+                            SingleSelectionFollowsFocus="False"
                             ItemsSource="{x:Bind ViewModel.Scenes}"
-                            SelectedItem="{x:Bind ViewModel.SelectedScene, Mode=OneWay}"
                             SelectionChanged="OnSceneSelectionChanged"
-                            RightTapped="OnSceneRightTapped" />
+                            ContainerContentChanging="OnSceneRowContainerChanging">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                                    <Setter Property="Padding" Value="8,0" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                                    <Setter Property="MinHeight" Value="40" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SceneListItem">
+                                    <Grid Background="Transparent">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="32" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="96" />
+                                        </Grid.ColumnDefinitions>
+                                        <RadioButton
+                                            MinWidth="0"
+                                            Width="32"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            IsChecked="{x:Bind IsActive, Mode=OneWay}"
+                                            AutomationProperties.Name="{x:Bind EnableLabel, Mode=OneWay}"
+                                            ToolTipService.ToolTip="设为锁屏场景"
+                                            Tapped="OnSceneActionTapped"
+                                            Click="OnEnableSceneClick" />
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            VerticalAlignment="Center"
+                                            Text="{x:Bind Name, Mode=OneWay}"
+                                            TextTrimming="CharacterEllipsis"
+                                            ToolTipService.ToolTip="{x:Bind Name, Mode=OneWay}" />
+                                        <StackPanel
+                                            Grid.Column="2"
+                                            VerticalAlignment="Center"
+                                            Orientation="Horizontal"
+                                            Visibility="{x:Bind ShowActions, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}">
+                                            <Button
+                                                Style="{StaticResource EditorTransparentIconButtonStyle}"
+                                                AllowFocusOnInteraction="True"
+                                                ToolTipService.ToolTip="重命名"
+                                                AutomationProperties.Name="重命名场景"
+                                                Tapped="OnSceneActionTapped"
+                                                Click="OnRenameSceneClick">
+                                                <FontIcon Style="{StaticResource SceneManagementIconStyle}" Glyph="&#xE8AC;" />
+                                            </Button>
+                                            <Button
+                                                Style="{StaticResource EditorTransparentIconButtonStyle}"
+                                                AllowFocusOnInteraction="True"
+                                                ToolTipService.ToolTip="复制"
+                                                AutomationProperties.Name="复制场景"
+                                                Tapped="OnSceneActionTapped"
+                                                Click="OnDuplicateSceneClick">
+                                                <FontIcon Style="{StaticResource SceneManagementIconStyle}" Glyph="&#xE8C8;" />
+                                            </Button>
+                                            <Button
+                                                Style="{StaticResource EditorTransparentIconButtonStyle}"
+                                                AllowFocusOnInteraction="True"
+                                                IsEnabled="{x:Bind CanDelete, Mode=OneWay}"
+                                                Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+                                                ToolTipService.ToolTip="删除"
+                                                AutomationProperties.Name="删除场景"
+                                                Tapped="OnSceneActionTapped"
+                                                Click="OnDeleteSceneClick">
+                                                <FontIcon Style="{StaticResource SceneManagementIconStyle}" Glyph="&#xE74D;" />
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                     </Grid>
                 </ContentControl>
             </Border>
