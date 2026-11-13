@@ -64,6 +64,8 @@
     <Page Include="../../OhMyLockScreen/Controls/Editor/FontSettingsControl.xaml" Link="Controls/Editor/FontSettingsControl.xaml" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/BorderSettingsControl.xaml.cs" Link="Controls/Editor/BorderSettingsControl.xaml.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/BorderSettingsControl.xaml" Link="Controls/Editor/BorderSettingsControl.xaml" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/BackgroundSettingsControl.xaml.cs" Link="Controls/Editor/BackgroundSettingsControl.xaml.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/Editor/BackgroundSettingsControl.xaml" Link="Controls/Editor/BackgroundSettingsControl.xaml" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/ForegroundSettingsControl.xaml.cs" Link="Controls/Editor/ForegroundSettingsControl.xaml.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/ForegroundSettingsControl.xaml" Link="Controls/Editor/ForegroundSettingsControl.xaml" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/EditorResources.xaml" Link="Controls/Editor/EditorResources.xaml" />

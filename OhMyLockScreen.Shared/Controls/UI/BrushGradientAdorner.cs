@@ -29,6 +29,7 @@ internal sealed class BrushGradientAdorner : IDisposable
     private Button? _capturedHandle;
     private uint _pointerId;
     private bool _updating;
+    private bool _disposed;
     private bool _ownedFocus;
     private Point _axisStart;
     private Point _axisEnd;
@@ -53,7 +54,8 @@ internal sealed class BrushGradientAdorner : IDisposable
 
     internal void Update()
     {
-        if (_updating)
+        // A focus update queued before the target changed can run after disposal.
+        if (_disposed || _updating)
         {
             return;
         }
@@ -459,6 +461,14 @@ internal sealed class BrushGradientAdorner : IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _surface.GotFocus -= OnFocusChanged;
+        _surface.LostFocus -= OnFocusChanged;
         Hide();
         if (_root != null)
         {

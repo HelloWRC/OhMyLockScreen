@@ -85,7 +85,7 @@ public sealed partial class BrushEditControl : UserControl
         ImagePicker.ValidateAsync = async uri => { await SceneImageDecoder.ReadSizeAsync(uri); };
         ImagePicker.PickFailed += (_, exception) => ShowError(exception);
         // NumberBox supplies a local default formatter, so a style setter cannot replace it.
-        var formatter = (Windows.Globalization.NumberFormatting.PercentFormatter)Resources["PercentageFormatter"];
+        var formatter = new PercentFormatter { FractionDigits = 0 };
         OffsetInput.NumberFormatter = new PercentFormatter
         {
             FractionDigits = 1,
@@ -100,13 +100,12 @@ public sealed partial class BrushEditControl : UserControl
         TintOpacityInput.NumberFormatter = formatter;
         _ready = true;
         _collectionTimer.Tick += OnCollectionTick;
-        Sync();
     }
 
     private static void OnBrushChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
         var editor = (BrushEditControl)sender;
-        editor.ImagePicker.InvalidateSelection();
+        editor.ImagePicker?.InvalidateSelection();
         if (!editor._publishing)
         {
             editor.CancelStripDrag();
@@ -143,7 +142,7 @@ public sealed partial class BrushEditControl : UserControl
     private static void OnTargetChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
         var editor = (BrushEditControl)sender;
-        editor.ImagePicker.InvalidateSelection();
+        editor.ImagePicker?.InvalidateSelection();
         editor._adorner?.Dispose();
         editor._adorner = null;
         editor.UpdateAdorner();
@@ -296,7 +295,8 @@ public sealed partial class BrushEditControl : UserControl
 
     private void Sync()
     {
-        if (!_ready || _synchronizing)
+        // The containing settings control can still be loading its XAML.
+        if (!_ready || !_loaded || _synchronizing)
         {
             return;
         }
@@ -307,7 +307,7 @@ public sealed partial class BrushEditControl : UserControl
             TypeSelector.SelectedIndex = (int)kind;
             var supported = kind is not BrushEditorKind.None and not BrushEditorKind.Unsupported;
             var gradient = kind is BrushEditorKind.Linear or BrushEditorKind.Radial;
-            if (_loaded && gradient)
+            if (gradient)
             {
                 _collectionTimer.Start();
             }

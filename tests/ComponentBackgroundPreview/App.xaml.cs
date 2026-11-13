@@ -13,6 +13,7 @@ using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Extensions.Scene;
 using OhMyLockScreen.Shared.Controls.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Extensions.FeatureHost;
 using OhMyLockScreen.Shared.Models.FeatureHost;
 using Windows.ApplicationModel.Activation;
@@ -77,6 +78,7 @@ public sealed partial class App : Application
             services.AddSingleton<IComponentsService, ComponentsService>();
             services.AddSingleton(TimeProvider.System);
             services.AddSingleton<FontCatalogService>();
+            services.AddFeature<BackgroundFeature, BackgroundSettingsControl>();
             services.AddFeature<BorderFeature, BorderSettingsControl>();
             services.AddFeature<TextFeature, TextFeatureSettingsControl>();
             services.AddFeature<FontFeature, FontSettingsControl>();
@@ -102,6 +104,7 @@ public sealed partial class App : Application
         try
         {
             await Task.Delay(100);
+            await VerifyBackgroundEditorAsync(root);
             var content = new UserControl { Content = new TextBlock { Text = "组件内容", Foreground = new SolidColorBrush(Colors.White) } };
             _presenter.Content = content;
             _presenter.UpdateLayout();
@@ -186,6 +189,35 @@ public sealed partial class App : Application
         _status.Text = _report.Any(line => line.StartsWith("FAIL:")) ? "FAIL" : $"PASS: {_report.Count} native rendering checks";
         var reportFile = await ApplicationData.Current.LocalFolder.CreateFileAsync("report.txt", CreationCollisionOption.ReplaceExisting);
         await FileIO.WriteTextAsync(reportFile, string.Join(Environment.NewLine, _report));
+    }
+
+    private async Task VerifyBackgroundEditorAsync(StackPanel root)
+    {
+        var features = IAppHost.GetRequiredService<IFeatureService>();
+        var info = new FeatureInfo { Id = "omls.features.appearance.background" };
+        using var feature = (BackgroundFeature)features.CreateFeature(info)!;
+        var brush = new SolidColorBrush(Colors.Black) { Opacity = 0.25 };
+        feature.Settings.Background = brush;
+
+        var editor = (BackgroundSettingsControl)features.CreateSettingsControl(info)!;
+        var brushEditor = (BrushEditControl)editor.Content;
+        var opacity = (Microsoft.UI.Xaml.Controls.NumberBox)brushEditor.FindName("OpacityInput");
+        Check(ReferenceEquals(brushEditor.Brush, brush) && double.IsNaN(opacity.Value),
+            "The XAML-created background editor binds the brush before initializing its input");
+
+        root.Children.Add(editor);
+        await Task.Delay(100);
+        Check(opacity.Value == 0.25 && opacity.Text.Contains('%'),
+            "The background editor initializes the percentage input when loaded");
+
+        root.Children.Remove(editor);
+        await Task.Delay(100);
+        feature.Settings.Background = new SolidColorBrush(Colors.White) { Opacity = 0.5 };
+        root.Children.Add(editor);
+        await Task.Delay(100);
+        Check(ReferenceEquals(brushEditor.Brush, feature.Settings.Background) && opacity.Value == 0.5,
+            "The background editor displays the current brush when reloaded");
+        root.Children.Remove(editor);
     }
 
     private async Task VerifyBorderAsync(StackPanel root)

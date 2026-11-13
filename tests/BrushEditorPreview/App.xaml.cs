@@ -209,6 +209,7 @@ public sealed partial class App : Application
                 ((Button)((StackPanel)root.Children[0]).Children[0]).Focus(FocusState.Programmatic);
                 await Task.Delay(150);
                 Check(!popup.IsOpen, "leaving editor and adorner hides the popup");
+                await VerifyTargetReplacementAsync(gradient.Editor, popup);
             }
             radial.Editor.TargetElement!.StartBringIntoView();
             ((Muxc.NumberBox)radial.Editor.FindName("OffsetInput")).Focus(FocusState.Programmatic);
@@ -233,6 +234,29 @@ public sealed partial class App : Application
     private void Check(bool condition, string description)
     {
         _report.Add((condition ? "PASS: " : "FAIL: ") + description);
+    }
+
+    private async Task VerifyTargetReplacementAsync(BrushEditControl editor, Popup previousPopup)
+    {
+        var target = editor.TargetElement!;
+        var panel = (Panel)VisualTreeHelper.GetParent(target);
+        var replacement = new Rectangle { Width = target.Width, Height = target.Height };
+        panel.Children.Add(replacement);
+
+        ((Muxc.NumberBox)editor.FindName("OffsetInput")).Focus(FocusState.Programmatic);
+        await Task.Delay(150);
+        var previousSurface = (Canvas)previousPopup.Child;
+        previousSurface.Children.OfType<Button>().First().Focus(FocusState.Programmatic);
+        ((Muxc.NumberBox)editor.FindName("OffsetInput")).Focus(FocusState.Programmatic);
+        editor.TargetElement = replacement;
+        panel.Children.Remove(target);
+        await Task.Delay(150);
+
+        Check(!previousPopup.IsOpen && previousPopup.Child == null && previousSurface.Children.Count == 0,
+            "queued focus updates leave the disposed gradient adorner closed after target replacement");
+        Check(VisualTreeHelper.GetOpenPopups(Window.Current).Any(popup => popup != previousPopup
+            && popup.Child is Canvas canvas && canvas.Children.OfType<Button>().Any(button => Equals(button.Tag, "start"))),
+            "the gradient editor opens its adorner on the replacement target");
     }
 
     private async Task VerifyStopSelectionAsync(string name, BrushEditControl editor, BrushSource source)

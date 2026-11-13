@@ -8,7 +8,6 @@
     xmlns:local="using:OhMyLockScreen.Shared.Controls.UI"
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:icons="using:FluentIcons.Uwp"
-    xmlns:numbers="using:Windows.Globalization.NumberFormatting"
     mc:Ignorable="d"
     d:DesignWidth="325"
     MinWidth="325"
@@ -35,7 +34,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <numbers:PercentFormatter x:Key="PercentageFormatter" FractionDigits="0" />
         <Style x:Key="PercentageNumberStyle" TargetType="muxc:NumberBox">
             <Setter Property="local:NumberBoxBehavior.HideClearButton" Value="True" />
             <Setter Property="Width" Value="124" />
