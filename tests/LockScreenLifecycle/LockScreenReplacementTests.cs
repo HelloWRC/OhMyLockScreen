@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.IO.Pipes;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -148,6 +150,137 @@ internal static class LockScreenReplacementTests
 
     internal static async Task RunAsync(Func<string, Func<Task>, Task> runAsync)
     {
+        await runAsync("Lock-screen unlock records receive latency for each request", async () =>
+        {
+            var directory = Path.Combine(
+                ApplicationData.Current.LocalFolder.Path,
+                LockScreenProviderProtocol.RequestDirectoryName);
+            var logPath = Path.Combine(directory, LockScreenProviderProtocol.UnlockLatencyFileName);
+            var expectedEntries = new List<string>();
+            var beforeRequest = Stopwatch.GetTimestamp();
+            Windows.ApplicationModel.FullTrustProcessLauncher.Launch = async parameterGroup =>
+            {
+                Check(parameterGroup == LockScreenProviderProtocol.HelperParameterGroupId, "Wrong helper parameter group.");
+                var json = await File.ReadAllTextAsync(Path.Combine(directory, LockScreenProviderProtocol.RequestFileName));
+                var request = JsonSerializer.Deserialize(json, LockScreenProviderJsonContext.Default.LockScreenProviderRequest)!;
+                var receivedTimestamp = Stopwatch.GetTimestamp();
+                var startTimestamp = request.UnlockStartTimestamp.GetValueOrDefault();
+                Check(startTimestamp >= beforeRequest && startTimestamp <= receivedTimestamp, "Unlock start timestamp was missing or invalid.");
+
+                await LockScreenUnlockCommand.TryAppendReceiveLatencyAsync(directory, request, receivedTimestamp, "File");
+                var elapsed = Stopwatch.GetElapsedTime(startTimestamp, receivedTimestamp);
+                expectedEntries.Add(FormattableString.Invariant($"Transport=File RequestId={request.RequestId} LatencyMs={elapsed.TotalMilliseconds:F3}"));
+
+                var response = new LockScreenProviderResponse(request.RequestId, true, false, null, null);
+                await File.WriteAllTextAsync(
+                    Path.Combine(directory, LockScreenProviderProtocol.ResponseFileName),
+                    JsonSerializer.Serialize(response, LockScreenProviderJsonContext.Default.LockScreenProviderResponse));
+            };
+
+            using var client = new LockScreenHelperClient();
+            await client.ExecuteAsync(LockScreenProviderOperation.Unlock);
+            await client.ExecuteAsync(LockScreenProviderOperation.Unlock);
+
+            var lines = await File.ReadAllLinesAsync(logPath);
+            Check(lines.Length == 2 && lines[0].EndsWith(expectedEntries[0], StringComparison.Ordinal) &&
+                lines[1].EndsWith(expectedEntries[1], StringComparison.Ordinal), "Latency log did not retain both requests.");
+        });
+
+        await runAsync("Unlock preconnects a named pipe and sends once after dismissal", async () =>
+        {
+            var client = new FakeClient(_ => throw new InvalidOperationException("File fallback must not run."));
+            using var settings = CreateSettingsService();
+            var service = new LockScreenUnlockService(settings, client, NullLogger<LockScreenUnlockService>.Instance);
+            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, LockScreenProviderProtocol.RequestDirectoryName);
+            var eventName = $"Local\\OhMyLockScreen.Tests.{Guid.NewGuid():N}";
+            using var signal = new EventWaitHandle(false, EventResetMode.AutoReset, eventName);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var ready = new TaskCompletionSource<Task<LockScreenProviderResponse?>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Windows.ApplicationModel.FullTrustProcessLauncher.Launch = async parameterGroup =>
+            {
+                Check(parameterGroup == LockScreenProviderProtocol.UnlockPipeParameterGroupId, "Wrong prelaunch parameter group.");
+                var (pipe, id) = await ConnectTestUnlockPipeAsync(directory, timeout.Token);
+                ready.SetResult(ServeAsync(pipe, id));
+            };
+
+            async Task<LockScreenProviderResponse?> ServeAsync(NamedPipeClientStream pipe, string id)
+            {
+                await using (pipe)
+                {
+                    return await LockScreenUnlockCommand.ServePipeAsync(
+                        pipe, directory, id, new LockAppHostGlobalUnlockSignal(eventName), timeout.Token);
+                }
+            }
+
+            var send = service.PrepareUnlock();
+            var host = await ready.Task.WaitAsync(timeout.Token);
+            Check(!host.IsCompleted && !signal.WaitOne(0), "Prelaunch sent an unlock before dismissal.");
+            var operation = send();
+            Check(ReferenceEquals(operation, send()) && await operation, "Prepared unlock did not succeed exactly once.");
+            var response = await host;
+            Check(response is { Success: true } && signal.WaitOne(0) && client.Operations.IsEmpty,
+                "The pipe did not deliver the unlock or it also used file fallback.");
+
+            var log = await File.ReadAllLinesAsync(Path.Combine(directory, LockScreenProviderProtocol.UnlockLatencyFileName));
+            Check(log.Length == 1 && log[0].Contains($"Transport=Pipe RequestId={response!.RequestId} LatencyMs=", StringComparison.Ordinal),
+                "The pipe unlock was not recorded in the latency log.");
+            Check(!Directory.EnumerateFiles(Path.Combine(directory, LockScreenProviderProtocol.UnlockPipeDirectoryName)).Any(),
+                "Pipe rendezvous marker was not removed.");
+        });
+
+        await runAsync("Unlock falls back to a file when prelaunch fails before sending", async () =>
+        {
+            var client = new FakeClient(_ => Task.FromResult(Response(false, success: true)));
+            using var settings = CreateSettingsService();
+            var service = new LockScreenUnlockService(settings, client, NullLogger<LockScreenUnlockService>.Instance);
+            var launched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Windows.ApplicationModel.FullTrustProcessLauncher.Launch = _ =>
+            {
+                launched.SetResult();
+                return Task.FromException(new InvalidOperationException("Simulated prelaunch failure."));
+            };
+
+            var send = service.PrepareUnlock();
+            await launched.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Check(client.Operations.IsEmpty, "File fallback started before dismissal.");
+            var beforeSend = Stopwatch.GetTimestamp();
+            var operation = send();
+            var afterSend = Stopwatch.GetTimestamp();
+            Check(await operation && client.Operations.SequenceEqual([LockScreenProviderOperation.Unlock]),
+                "File fallback did not wait until dismissal or did not send exactly once.");
+            Check(client.UnlockStartTimestamp is long timestamp && timestamp >= beforeSend && timestamp <= afterSend,
+                "File fallback did not keep the original unlock timestamp.");
+        });
+
+        await runAsync("Unlock does not resend when the pipe closes after accepting the request", async () =>
+        {
+            var client = new FakeClient(_ => throw new InvalidOperationException("File fallback must not run."));
+            using var settings = CreateSettingsService();
+            var service = new LockScreenUnlockService(settings, client, NullLogger<LockScreenUnlockService>.Instance);
+            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, LockScreenProviderProtocol.RequestDirectoryName);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var ready = new TaskCompletionSource<Task<string?>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Windows.ApplicationModel.FullTrustProcessLauncher.Launch = async _ =>
+            {
+                var (pipe, _) = await ConnectTestUnlockPipeAsync(directory, timeout.Token);
+                ready.SetResult(ReadAndDisconnectAsync(pipe));
+            };
+
+            async Task<string?> ReadAndDisconnectAsync(NamedPipeClientStream pipe)
+            {
+                await using (pipe)
+                using (var reader = new StreamReader(pipe, leaveOpen: true))
+                {
+                    return await reader.ReadLineAsync(timeout.Token);
+                }
+            }
+
+            var send = service.PrepareUnlock();
+            var host = await ready.Task.WaitAsync(timeout.Token);
+            Check(!await send() && await host != null && client.Operations.IsEmpty,
+                "A lost reply retried an unlock that might already have been handled.");
+        });
+
         await runAsync("Lock-screen replacement refresh reads the registry-backed state", async () =>
         {
             var client = new FakeClient(operation => Task.FromResult(
@@ -282,7 +415,9 @@ internal static class LockScreenReplacementTests
                 client,
                 NullLogger<LockScreenUnlockService>.Instance);
 
-            Check(!await service.TryUnlockAsync(), "Compatibility mode did not request the legacy exit.");
+            Windows.ApplicationModel.FullTrustProcessLauncher.Launch = _ =>
+                throw new InvalidOperationException("Compatibility mode must not start a pipe host.");
+            Check(!await service.PrepareUnlock()(), "Compatibility mode did not request the legacy exit.");
             Check(client.Operations.IsEmpty, "Compatibility mode invoked the helper.");
         });
 
@@ -312,6 +447,27 @@ internal static class LockScreenReplacementTests
 
             Check(!await service.TryUnlockAsync(), "System unlock exception did not request the legacy exit.");
         });
+    }
+
+    private static async Task<(NamedPipeClientStream Pipe, string Id)> ConnectTestUnlockPipeAsync(
+        string directory,
+        CancellationToken cancellationToken)
+    {
+        var rendezvous = Path.Combine(directory, LockScreenProviderProtocol.UnlockPipeDirectoryName);
+        var marker = Directory.EnumerateFiles(rendezvous, "*" + LockScreenProviderProtocol.UnlockPipeRequestExtension).Single();
+        var id = Path.GetFileNameWithoutExtension(marker);
+        var pipe = new NamedPipeClientStream(".", @"LOCAL\" + LockScreenProviderProtocol.UnlockPipeNamePrefix + id,
+            PipeDirection.InOut, PipeOptions.Asynchronous);
+        try
+        {
+            await pipe.ConnectAsync(cancellationToken);
+            return (pipe, id);
+        }
+        catch
+        {
+            await pipe.DisposeAsync();
+            throw;
+        }
     }
 
     private sealed class FakeRegistryView(LockScreenRegistryViewKind kind) : ILockScreenRegistryView
@@ -346,11 +502,14 @@ internal static class LockScreenReplacementTests
         Func<LockScreenProviderOperation, Task<LockScreenProviderResponse>> handler) : ILockScreenHelperClient
     {
         internal ConcurrentQueue<LockScreenProviderOperation> Operations { get; } = new();
+        internal long? UnlockStartTimestamp { get; private set; }
 
         public Task<LockScreenProviderResponse> ExecuteAsync(
             LockScreenProviderOperation operation,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            long? unlockStartTimestamp = null)
         {
+            UnlockStartTimestamp = unlockStartTimestamp;
             Operations.Enqueue(operation);
             return handler(operation);
         }

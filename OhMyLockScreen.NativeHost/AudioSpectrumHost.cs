@@ -72,7 +72,9 @@ internal static class AudioSpectrumHost
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await using var pipe = new NamedPipeClientStream(".", AudioHostPipe.GetName(id),
+            var pipeName = AppContainerPipe.FindName(AudioSpectrumProtocol.PipeNamePrefix + id)
+                ?? throw new IOException("音频频谱请求的包内管道已关闭或不唯一。");
+            await using var pipe = new NamedPipeClientStream(".", pipeName,
                 PipeDirection.Out, PipeOptions.Asynchronous);
             await pipe.ConnectAsync(timeout.Token);
             File.Delete(request);

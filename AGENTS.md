@@ -22,9 +22,10 @@
 - 应用设置页通过 SettingsPageInfoAttribute 与 AddSettingsPage<T> 注册，由 UWP Frame 创建具有公开无参构造函数的 SettingsPageBase 子类；系统标题栏返回优先处理设置内容 Frame，再返回根 Frame。
 - 桌面激活显式关闭 ExtendViewIntoTitleBar，以覆盖 UWP 跨启动保存的标题栏扩展状态。
 - 应用在 App 构造时订阅 Application.UnhandledException，将未处理异常标记为已处理并复用当前窗口的 Toast 宿主显示不可自动关闭的错误；Toast 宿主尚未建立时，在窗口内容就绪后补显示。
-- 锁屏退出仅由页面收到的未处理 PointerPressed/KeyDown 冒泡事件触发；按键等待路由和应用快捷键处理完毕后再兜底，不使用 CoreWindow 或全局加速键抢占组件输入。Tab 和修饰键保留给焦点导航与组合键；卸载后丢弃排队的输入。
-- 锁屏退出动画结束后默认通过 NativeHost 向当前会话的 `Local\LockAppHostGlobalUnlockEvent` 发送事件以请求系统解锁，随后仍退出 UWP 进程，确保下次锁定重新创建锁屏视图；事件不可用或处理失败时回退退出应用。通用设置中的“兼容解锁模式”不发送事件，强制使用旧版退出应用方式。
+- 锁屏指针手势从页面收到的未处理 PointerPressed 开始，轻触和上滑均在抬起时判定；取消或失去捕获只回弹。按键等待路由和应用快捷键处理完毕后再兜底，不使用 CoreWindow 或全局加速键抢占组件输入。Tab 和修饰键保留给焦点导航与组合键；卸载后丢弃排队的输入。
+- 锁屏退出动画期间预启动一次性 NativeHost 并连接包内命名管道，预定在动画结束前 80 ms 提交一次解锁指令。NativeHost 向当前会话的 `Local\LockAppHostGlobalUnlockEvent` 发送事件，UWP 等待动画和解锁请求完成后退出，页面提前卸载时沿用一次性解锁和退出流程。管道准备失败时回退文件请求；指令已开始发送后避免重复触发事件。兼容解锁模式直接走退出应用方式。
 - 事件解锁后 UWP 进程会保留已退场的 MainPage；锁屏再次激活时必须替换该页面，不能复用已开始退场的视图。
+- 解锁路径用跨进程性能计数器测量主应用提交请求至 NativeHost 解析请求的耗时，并在发送系统事件后将传输方式和耗时追加到 `LocalState/LockScreenProvider/unlock-latency.log`。
 - 设置通过 SettingsService 统一管理，并通过 MVVM 属性变更通知自动保存。
 - 场景资产按 SHA-256 Blob 存储，场景配置只保存 Blob ID，并在运行时按当前场景解析 URI；复制整个场景目录即可迁移资产，无独立索引或自动清理。
 - 场景编辑项与启用的锁屏场景独立选择；已启用场景可以重命名或复制，删除前必须先启用另一个场景。

@@ -6,5 +6,6 @@ public interface ILockScreenHelperClient
 {
     Task<LockScreenProviderResponse> ExecuteAsync(
         LockScreenProviderOperation operation,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        long? unlockStartTimestamp = null);
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.FeatureHost;
@@ -43,15 +44,21 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
         set => SetValue(IsEditingProperty, value);
     }
 
-    private const double UnlockDurationMilliseconds = 333;
+    internal static readonly TimeSpan UnlockDuration = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan UnlockReturnDuration = TimeSpan.FromMilliseconds(180);
+
+    private static readonly DependencyProperty UnlockReturnProgressProperty = DependencyProperty.Register(
+        "UnlockReturnProgress", typeof(double), typeof(ScenePresenter), new PropertyMetadata(0d, OnUnlockReturnProgressChanged));
 
     public static readonly DependencyProperty SceneProperty = DependencyProperty.Register(
         nameof(Scene), typeof(SceneSettings), typeof(ScenePresenter), new PropertyMetadata(null, OnSceneChanged));
 
     private FeatureAttacher? _featureAttacher;
+    private Storyboard? _unlockReturnStoryboard;
     private Storyboard? _unlockStoryboard;
     private TaskCompletionSource? _unlockCompletion;
     private Task? _unlockAnimationTask;
+    private double _unlockTargetY;
 
     public SceneSettings? Scene
     {
@@ -72,6 +79,81 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
     public Task PlayUnlockAnimationAsync()
     {
         return _unlockAnimationTask ??= PlayUnlockAnimationCoreAsync();
+    }
+
+    internal bool IsReturningFromUnlockDrag => _unlockReturnStoryboard != null;
+
+    private double UnlockTravel => Math.Max(ActualHeight, 0) / 4;
+
+    internal void SetUnlockDragOffset(double upwardDistance)
+    {
+        double travel = UnlockTravel;
+        double offset = Math.Clamp(upwardDistance, 0, travel);
+        ApplyUnlockVisuals(-offset, travel > 0 ? 1 - offset / travel : 1);
+    }
+
+    internal void PlayUnlockReturnAnimation()
+    {
+        double progress = 1 - LayersLayer.Opacity;
+        if (progress <= 0 || IsReturningFromUnlockDrag)
+        {
+            return;
+        }
+
+        var storyboard = new Storyboard();
+        _unlockReturnStoryboard = storyboard;
+        storyboard.Completed += OnUnlockReturnStoryboardCompleted;
+
+        try
+        {
+            // A dependent progress animation keeps the rendered offset available for keyboard interruption.
+            AddDoubleAnimation(storyboard, this, "UnlockReturnProgress", progress, 0, UnlockReturnDuration)
+                .EnableDependentAnimation = true;
+            storyboard.Begin();
+        }
+        catch (Exception exception)
+        {
+            ResetUnlockDrag();
+            Debug.WriteLine($"无法启动锁屏回弹动画：{exception}");
+        }
+    }
+
+    internal void ResetUnlockDrag()
+    {
+        StopUnlockReturnAnimation();
+        ApplyUnlockVisuals(0, 1);
+    }
+
+    private static void OnUnlockReturnProgressChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
+    {
+        var presenter = (ScenePresenter)sender;
+        if (presenter.IsReturningFromUnlockDrag && args.NewValue is double progress)
+        {
+            presenter.ApplyUnlockVisuals(-presenter.UnlockTravel * progress, 1 - progress);
+        }
+    }
+
+    private void ApplyUnlockVisuals(double y, double opacity)
+    {
+        LayersTransform.Y = y;
+        LayersLayer.Opacity = opacity;
+        BackgroundViewport.Opacity = opacity;
+    }
+
+    private void OnUnlockReturnStoryboardCompleted(object? sender, object args)
+    {
+        ResetUnlockDrag();
+    }
+
+    private void StopUnlockReturnAnimation()
+    {
+        var storyboard = _unlockReturnStoryboard;
+        _unlockReturnStoryboard = null;
+        if (storyboard != null)
+        {
+            storyboard.Completed -= OnUnlockReturnStoryboardCompleted;
+            storyboard.Stop();
+        }
     }
 
     private bool IsActive
@@ -116,6 +198,7 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
         IsActive = false;
         DetachBackground();
         CancelUnlockAnimation();
+        ResetUnlockDrag();
         Bindings.Update();
         Bindings.StopTracking();
 
@@ -124,17 +207,22 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
         attacher?.Dispose();
     }
 
-    private async Task PlayUnlockAnimationCoreAsync()
+    private Task PlayUnlockAnimationCoreAsync()
     {
+        StopUnlockReturnAnimation();
+
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var storyboard = new Storyboard();
         _unlockCompletion = completion;
         _unlockStoryboard = storyboard;
+        _unlockTargetY = -UnlockTravel;
         storyboard.Completed += OnUnlockStoryboardCompleted;
 
         try
         {
-            AddUnlockAnimations(storyboard);
+            AddDoubleAnimation(storyboard, LayersTransform, nameof(TranslateTransform.Y), LayersTransform.Y, _unlockTargetY, UnlockDuration);
+            AddDoubleAnimation(storyboard, LayersLayer, nameof(UIElement.Opacity), LayersLayer.Opacity, 0, UnlockDuration);
+            AddDoubleAnimation(storyboard, BackgroundViewport, nameof(UIElement.Opacity), BackgroundViewport.Opacity, 0, UnlockDuration);
             storyboard.Begin();
         }
         catch (Exception exception)
@@ -142,28 +230,17 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
             CancelUnlockAnimation(exception);
         }
 
-        await completion.Task;
+        return completion.Task;
     }
 
-    private void AddUnlockAnimations(Storyboard storyboard)
-    {
-        AddDoubleAnimation(storyboard, LayersLayer, nameof(UIElement.Opacity), 1, 0);
-        AddDoubleAnimation(storyboard, LayersTransform, nameof(TranslateTransform.Y), 0, -Math.Max(ActualHeight, 0));
-
-        if (BackgroundLayer.Visibility == Visibility.Visible)
-        {
-            AddDoubleAnimation(storyboard, BackgroundLayer, nameof(UIElement.Opacity), 1, 0);
-        }
-    }
-
-    private static void AddDoubleAnimation(
+    private static DoubleAnimationUsingKeyFrames AddDoubleAnimation(
         Storyboard storyboard,
         DependencyObject target,
         string targetProperty,
         double from,
-        double to)
+        double to,
+        TimeSpan duration)
     {
-        var duration = TimeSpan.FromMilliseconds(UnlockDurationMilliseconds);
         var animation = new DoubleAnimationUsingKeyFrames
         {
             Duration = new Duration(duration),
@@ -180,27 +257,21 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
             Value = to,
             KeySpline = new KeySpline
             {
-                ControlPoint1 = new Point(0, 0),
-                ControlPoint2 = new Point(0, 1)
+                ControlPoint1 = new Point(0.1, 0.9),
+                ControlPoint2 = new Point(0.2, 1)
             }
         });
 
         Storyboard.SetTarget(animation, target);
         Storyboard.SetTargetProperty(animation, targetProperty);
         storyboard.Children.Add(animation);
+        return animation;
     }
 
     private void OnUnlockStoryboardCompleted(object? sender, object args)
     {
-        if (sender is Storyboard storyboard)
-        {
-            storyboard.Completed -= OnUnlockStoryboardCompleted;
-        }
-
-        var completion = _unlockCompletion;
-        _unlockStoryboard = null;
-        _unlockCompletion = null;
-        completion?.TrySetResult();
+        ApplyUnlockVisuals(_unlockTargetY, 0);
+        CancelUnlockAnimation();
     }
 
     private void CancelUnlockAnimation(Exception? exception = null)

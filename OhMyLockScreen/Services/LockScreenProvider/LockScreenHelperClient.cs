@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using OhMyLockScreen.Shared.Models.LockScreenProvider;
@@ -14,9 +15,13 @@ public sealed class LockScreenHelperClient : ILockScreenHelperClient, IDisposabl
 
     public async Task<LockScreenProviderResponse> ExecuteAsync(
         LockScreenProviderOperation operation,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        long? unlockStartTimestamp = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        long? startTimestamp = operation == LockScreenProviderOperation.Unlock
+            ? unlockStartTimestamp ?? Stopwatch.GetTimestamp()
+            : null;
         await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -25,7 +30,10 @@ public sealed class LockScreenHelperClient : ILockScreenHelperClient, IDisposabl
                 LockScreenProviderProtocol.RequestDirectoryName);
             var requestPath = Path.Combine(directory, LockScreenProviderProtocol.RequestFileName);
             var responsePath = Path.Combine(directory, LockScreenProviderProtocol.ResponseFileName);
-            var request = new LockScreenProviderRequest(Guid.NewGuid().ToString("N"), operation);
+            var request = new LockScreenProviderRequest(Guid.NewGuid().ToString("N"), operation)
+            {
+                UnlockStartTimestamp = startTimestamp
+            };
             var processingPath = Path.Combine(
                 directory,
                 $"request-{request.RequestId}.processing");

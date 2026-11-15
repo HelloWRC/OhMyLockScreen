@@ -433,6 +433,7 @@ namespace Windows.UI.Xaml.Media.Animation
     public sealed class DoubleAnimationUsingKeyFrames : Timeline
     {
         public List<DoubleKeyFrame> KeyFrames { get; } = [];
+        public bool EnableDependentAnimation { get; set; }
 
         internal override double GetValue(TimeSpan elapsed)
         {
@@ -511,7 +512,21 @@ namespace Windows.UI.Xaml.Media.Animation
             foreach (var animation in Children)
             {
                 double value = animation.GetValue(elapsed);
-                animation.Target!.GetType().GetProperty(animation.TargetProperty!)!.SetValue(animation.Target, value);
+                var target = animation.Target!;
+                var targetType = target.GetType();
+                var property = targetType.GetProperty(animation.TargetProperty!);
+                if (property != null)
+                {
+                    property.SetValue(target, value);
+                }
+                else
+                {
+                    const global::System.Reflection.BindingFlags flags = global::System.Reflection.BindingFlags.Static |
+                        global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic;
+                    var field = targetType.GetField(animation.TargetProperty + "Property", flags)!;
+                    ((Windows.UI.Xaml.DependencyObject)target).SetValue(
+                        (Windows.UI.Xaml.DependencyProperty)field.GetValue(null)!, value);
+                }
             }
 
             if (Children.All(animation => elapsed >= animation.Duration.TimeSpan))

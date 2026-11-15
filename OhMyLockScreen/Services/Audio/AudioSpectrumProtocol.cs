@@ -6,7 +6,8 @@ namespace OhMyLockScreen.Services.Audio;
 /// <summary>管道只传幅度平方谱；固定窗口限制帧大小，不传原始音频。</summary>
 public static class AudioSpectrumProtocol
 {
-    public const string PipePrefix = @"LOCAL\OhMyLockScreen.Spectrum.";
+    public const string PipeNamePrefix = "OhMyLockScreen.Spectrum.";
+    public const string PipePrefix = @"LOCAL\" + PipeNamePrefix;
     public const string RequestDirectory = "AudioSpectrumRequests";
     private const int Magic = 0x31534D4F;
     private const int HeaderSize = 20;

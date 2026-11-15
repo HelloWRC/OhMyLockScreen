@@ -11,6 +11,8 @@ internal static class Program
                 return 0;
             case "--lock-screen-provider":
                 return await LockScreenProviderHost.RunAsync();
+            case "--lock-screen-unlock-pipe":
+                return await LockScreenProviderHost.RunUnlockPipeAsync();
             case "--editor-window-recovery":
                 return await EditorWindowRecovery.RunAsync();
             default:

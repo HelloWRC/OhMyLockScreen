@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -42,6 +43,7 @@ internal static partial class LockScreenProviderHost
             request = JsonSerializer.Deserialize(
                 requestJson,
                 LockScreenProviderJsonContext.Default.LockScreenProviderRequest);
+            var receivedTimestamp = Stopwatch.GetTimestamp();
             if (request == null || string.IsNullOrWhiteSpace(request.RequestId))
             {
                 return 3;
@@ -56,6 +58,7 @@ internal static partial class LockScreenProviderHost
             if (request.Operation == LockScreenProviderOperation.Unlock)
             {
                 response = LockScreenUnlockCommand.Execute(request, new LockAppHostGlobalUnlockSignal());
+                await LockScreenUnlockCommand.TryAppendReceiveLatencyAsync(directory, request, receivedTimestamp, "File");
             }
             else
             {

@@ -68,7 +68,7 @@ internal static class InfrastructureTests
 
             firstLockPage.RootScenePresenter.ActualHeight = 720;
             firstLockPage.Load();
-            firstLockPage.PressPointer(PointerDeviceType.Mouse);
+            firstLockPage.ReleasePointer(firstLockPage.PressPointer(PointerDeviceType.Mouse).Pointer);
             Check(firstLockPage.IsDismissalStarted, "The lock-screen page did not start dismissing.");
             app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
             Check(lockFrame.Content is MainPage && !ReferenceEquals(lockFrame.Content, firstLockPage),
@@ -77,7 +77,7 @@ internal static class InfrastructureTests
             Window.Current = editorWindow;
             app.Launch(new LaunchActivatedEventArgs());
             Check(ReferenceEquals(editorFrame.Content, settingsPage), "Desktop relaunch lost the current settings page.");
-            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(333));
+            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(300));
             await app.ExitAsync();
         });
 
@@ -631,9 +631,9 @@ internal static class InfrastructureTests
             var page = (MainPage)((WindowToastHost)Window.Current.Content!).Frame.Content!;
             page.RootScenePresenter.ActualHeight = 720;
             page.Load();
-            page.PressPointer(PointerDeviceType.Mouse);
+            page.ReleasePointer(page.PressPointer(PointerDeviceType.Mouse).Pointer);
             Check(probe.Stops == 0 && CoreApplication.ExitCalls == 0, "Shutdown started before the animation finished.");
-            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(333));
+            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(300));
             var firstExit = app.ExitAsync();
             var secondExit = app.ExitAsync();
             Check(ReferenceEquals(firstExit, secondExit) && probe.Stops == 1 && !firstExit.IsCompleted, "Shutdown was not coalesced.");
