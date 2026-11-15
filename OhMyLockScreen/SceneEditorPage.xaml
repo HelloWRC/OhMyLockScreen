@@ -99,7 +99,7 @@
                 Value="7" />
             <Setter
                 Property="BorderBrush"
-                Value="{ThemeResource SystemControlForegroundBaseMediumLowBrush}" />
+                Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
             <Setter
                 Property="BorderThickness"
                 Value="1" />
@@ -111,7 +111,7 @@
                 Value="Top" />
             <Setter
                 Property="Background"
-                Value="{ThemeResource SystemControlAcrylicWindowBrush}" />
+                Value="{ThemeResource AcrylicInAppFillColorDefaultBrush}" />
         </Style>
     </Page.Resources>
     <Grid

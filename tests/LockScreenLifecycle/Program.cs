@@ -74,7 +74,7 @@ if (args.Contains("--activation-only"))
 {
     await InfrastructureTests.RunActivationRoutingAsync(RunAsync);
     await InfrastructureTests.RunEditorWindowRecoveryAsync(RunAsync);
-    await InfrastructureTests.RunConfirmedEditorRecoveryAsync(RunAsync);
+    await InfrastructureTests.RunEditorRecoveryExitAsync(RunAsync);
     await InfrastructureTests.RunEditorRelaunchAsync(RunAsync);
     return;
 }
@@ -158,7 +158,7 @@ if (args.Contains("--layout-only"))
 
 await InfrastructureTests.RunActivationRoutingAsync(RunAsync);
 await InfrastructureTests.RunEditorWindowRecoveryAsync(RunAsync);
-await InfrastructureTests.RunConfirmedEditorRecoveryAsync(RunAsync);
+await InfrastructureTests.RunEditorRecoveryExitAsync(RunAsync);
 await InfrastructureTests.RunEditorRelaunchAsync(RunAsync);
 await InfrastructureTests.RunAsync(Run, RunAsync);
 LockScreenReplacementTests.Run(Run);

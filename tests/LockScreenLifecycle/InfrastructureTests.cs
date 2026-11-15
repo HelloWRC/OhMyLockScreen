@@ -123,50 +123,47 @@ internal static class InfrastructureTests
             shape = ("Windows.UI.Core.CoreWindow", 1);
             app.Launch(new LaunchActivatedEventArgs());
             probe = DispatcherTimer.LastCreated!;
-            await Task.Delay(TimeSpan.FromMilliseconds(2100));
-            Window.Current = editorWindow;
-            probe.Advance();
-            probe.Advance();
-            Check(probe.IsEnabled && launches.SequenceEqual(["EditorWindowRecovery"]), "Timed-out probe did not start recovery once.");
-
-            var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, EditorWindowRecoveryProtocol.DirectoryName);
-            var request = Directory.GetFiles(directory, "*" + EditorWindowRecoveryProtocol.RequestExtension).Single();
-            var confirmed = Path.ChangeExtension(request, EditorWindowRecoveryProtocol.ConfirmedExtension);
-            File.Move(request, confirmed);
-            shape = (WindowShapeProbe.ApplicationFrameClass, 0);
-            probe.Advance();
-            Check(!File.Exists(confirmed) && !probe.IsEnabled && CoreApplication.ExitCalls == 0,
-                "A restored frame did not cancel the pending recovery.");
-
-            shape = ("Windows.UI.Core.CoreWindow", 1);
-            app.Launch(new LaunchActivatedEventArgs());
-            probe = DispatcherTimer.LastCreated!;
             app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
-            Check(!probe.IsEnabled, "Switching to a lock-screen activation left the editor probe running.");
+            Check(!probe.IsEnabled && launches.Count == 0, "Switching to a lock-screen activation left the editor probe running.");
             await app.ExitAsync();
         });
 
-    internal static Task RunConfirmedEditorRecoveryAsync(Func<string, Func<Task>, Task> runAsync) =>
-        runAsync("Confirmed editor recovery exits through the normal app lifecycle", async () =>
+    internal static Task RunEditorRecoveryExitAsync(Func<string, Func<Task>, Task> runAsync) =>
+        runAsync("A timed-out editor exits once the recovery helper is launched", async () =>
         {
             LockScreenHosting.IsHosted = () => false;
             WindowShapeProbe.GetShape = _ => ("Windows.UI.Core.CoreWindow", 1);
-            var app = new App(() => BuildHost(new HostedProbe()));
+            var launched = new TaskCompletionSource();
+            var stopping = new TaskCompletionSource();
+            var host = new HostedProbe { StopGate = stopping };
+            var app = new App(() => BuildHost(host));
+            var launches = new List<string>();
+            Windows.ApplicationModel.FullTrustProcessLauncher.Launch = parameterGroup =>
+            {
+                launches.Add(parameterGroup);
+                return launched.Task;
+            };
+
             var editorWindow = Window.Current;
             app.Launch(new LaunchActivatedEventArgs());
             var probe = DispatcherTimer.LastCreated!;
             await Task.Delay(TimeSpan.FromMilliseconds(2100));
             Window.Current = editorWindow;
             probe.Advance();
+            app.Launch(new LaunchActivatedEventArgs());
 
             var directory = Path.Combine(ApplicationData.Current.LocalFolder.Path, EditorWindowRecoveryProtocol.DirectoryName);
             var request = Directory.GetFiles(directory, "*" + EditorWindowRecoveryProtocol.RequestExtension).Single();
-            var confirmed = Path.ChangeExtension(request, EditorWindowRecoveryProtocol.ConfirmedExtension);
-            File.Move(request, confirmed);
-            probe.Advance();
+            Check(!probe.IsEnabled && ReferenceEquals(probe, DispatcherTimer.LastCreated) && launches.SequenceEqual(["EditorWindowRecovery"]),
+                "The timed-out editor did not hand off recovery exactly once.");
+            Check(CoreApplication.ExitCalls == 0 && host.Stops == 0, "The app began shutting down before launching the helper.");
 
-            Check(File.Exists(Path.ChangeExtension(request, EditorWindowRecoveryProtocol.ExitingExtension)), "The app did not acknowledge the confirmed request.");
-            Check(!probe.IsEnabled && CoreApplication.ExitCalls == 1 && IAppHost.Host is null, "Confirmed recovery did not stop the app host and exit.");
+            launched.SetResult();
+            Check(host.Stops == 1, "The app did not start shutting down after launching the helper.");
+            stopping.SetResult();
+            await app.ExitAsync();
+            Check(CoreApplication.ExitCalls == 1 && IAppHost.Host is null, "Recovery did not stop the app host and exit.");
+            Check(File.Exists(request), "The app removed the request before the helper could read it.");
         });
 
     internal static Task RunEditorRelaunchAsync(Func<string, Func<Task>, Task> runAsync) =>

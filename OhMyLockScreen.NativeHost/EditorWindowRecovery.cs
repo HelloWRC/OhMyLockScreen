@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using OhMyLockScreen.Shared.Models;
@@ -16,10 +17,8 @@ internal static partial class EditorWindowRecovery
     private const uint SetForeground = 0x00010000;
     private const uint Topmost = 0x00040000;
     private const int Yes = 6;
-    private const int No = 7;
-    private const uint CommandMessage = 0x0111;
-    [ThreadStatic]
-    private static (string Path, Process App)? _dialogRequest;
+    private static readonly TimeSpan RequestLifetime = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ProcessExitTimeout = TimeSpan.FromSeconds(3);
 
     internal static async Task<int> RunAsync()
     {
@@ -38,16 +37,19 @@ internal static partial class EditorWindowRecovery
                 return 0;
             }
 
-            foreach (var request in Directory.EnumerateFiles(directory, "*" + EditorWindowRecoveryProtocol.RequestExtension))
+            var requests = new DirectoryInfo(directory)
+                .EnumerateFiles("*" + EditorWindowRecoveryProtocol.RequestExtension)
+                .OrderByDescending(request => request.LastWriteTimeUtc);
+            foreach (var request in requests)
             {
-                using var app = GetRequestProcess(request);
-                if (app is null)
+                var requestedAt = request.LastWriteTimeUtc;
+                request.Delete();
+                if (DateTime.UtcNow - requestedAt > RequestLifetime || GetRequestProcessId(request.Name) is not { } processId)
                 {
-                    File.Delete(request);
                     continue;
                 }
 
-                return await RecoverAsync(request, app, package.Id.FamilyName + "!App");
+                return await RecoverAsync(directory, processId, requestedAt, package.Id.FamilyName + "!App");
             }
 
             return 0;
@@ -59,96 +61,76 @@ internal static partial class EditorWindowRecovery
         }
     }
 
-    private static Process? GetRequestProcess(string request)
+    private static int? GetRequestProcessId(string request)
     {
-        var name = Path.GetFileNameWithoutExtension(request).AsSpan();
+        var name = Path.GetFileNameWithoutExtension(request.AsSpan());
         var separator = name.IndexOf('-');
-        if (separator < 1 || !int.TryParse(name[..separator], out var id) ||
+        if (separator < 1 || !int.TryParse(name[..separator], out var id) || id <= 0 ||
             !Guid.TryParseExact(name[(separator + 1)..], "N", out _))
         {
             return null;
         }
 
+        return id;
+    }
+
+    private static void TerminateRequestProcess(int processId, DateTime requestedAt)
+    {
+        Process app;
         try
         {
-            var app = Process.GetProcessById(id);
-            var matches = false;
-            try
-            {
-                using var helper = Process.GetCurrentProcess();
-                matches = app.SessionId == helper.SessionId &&
-                    app.StartTime.ToUniversalTime() <= File.GetLastWriteTimeUtc(request) &&
-                    string.Equals(app.MainModule?.FileName, Path.Combine(AppContext.BaseDirectory, "OhMyLockScreen.exe"), StringComparison.OrdinalIgnoreCase);
-                return matches ? app : null;
-            }
-            finally
-            {
-                if (!matches)
-                {
-                    app.Dispose();
-                }
-            }
+            app = Process.GetProcessById(processId);
         }
         catch (ArgumentException)
         {
-            return null;
+            return;
         }
-        catch (InvalidOperationException)
+
+        using (app)
         {
-            return null;
+            try
+            {
+                // Hold the process handle across identity checks and termination.
+                _ = app.SafeHandle;
+                using var helper = Process.GetCurrentProcess();
+                if (app.HasExited || app.SessionId != helper.SessionId ||
+                    app.StartTime.ToUniversalTime() > requestedAt ||
+                    !string.Equals(app.MainModule?.FileName, Path.Combine(AppContext.BaseDirectory, "OhMyLockScreen.exe"), StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                app.Kill();
+                if (!app.WaitForExit(ProcessExitTimeout))
+                {
+                    throw new TimeoutException("等待残留应用进程结束超时。");
+                }
+            }
+            catch (Exception exception) when ((exception is InvalidOperationException or Win32Exception) && app.HasExited)
+            {
+            }
         }
     }
 
-    private static async Task<int> RecoverAsync(string request, Process app, string appUserModelId)
+    private static async Task<int> RecoverAsync(string directory, int processId, DateTime requestedAt, string appUserModelId)
     {
-        var confirmed = Path.ChangeExtension(request, EditorWindowRecoveryProtocol.ConfirmedExtension);
-        var exiting = Path.ChangeExtension(request, EditorWindowRecoveryProtocol.ExitingExtension);
-        try
+        if (MessageBoxW(
+                0,
+                "受 Windows 系统特性影响，需要重启 Windows 资源管理器（Explorer）才能正常显示场景编辑器。重启可能导致当前文件的打开状态丢失。\n\n是否现在重启资源管理器并重新打开应用？",
+                DialogTitle,
+                YesNo | WarningIcon | DefaultSecondButton | SetForeground | Topmost) != Yes)
         {
-            if (!File.Exists(request) || !Confirm(request, app))
-            {
-                return 0;
-            }
-
-            try
-            {
-                File.Move(request, confirmed);
-            }
-            catch (FileNotFoundException)
-            {
-                return 0;
-            }
-
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
-            while (!File.Exists(exiting))
-            {
-                if (!File.Exists(confirmed) && !File.Exists(exiting))
-                {
-                    return 0;
-                }
-
-                await Task.Delay(50, timeout.Token);
-            }
-
-            await app.WaitForExitAsync(timeout.Token);
-            if (!LockScreenProcessRefresher.RestartExplorer())
-            {
-                throw new InvalidOperationException("无法重启 Windows 资源管理器。");
-            }
-
-            await RelaunchAsync(Path.GetDirectoryName(request)!, appUserModelId);
             return 0;
         }
-        catch (OperationCanceledException exception)
+
+        TerminateRequestProcess(processId, requestedAt);
+        if (!LockScreenProcessRefresher.RestartExplorer())
         {
-            throw new TimeoutException("等待场景编辑器保存并退出超时。", exception);
+            throw new InvalidOperationException("无法重启 Windows 资源管理器。");
         }
-        finally
-        {
-            File.Delete(request);
-            File.Delete(confirmed);
-            File.Delete(exiting);
-        }
+
+        await RelaunchAsync(directory, appUserModelId);
+        return 0;
     }
 
     private static async Task RelaunchAsync(string directory, string appUserModelId)
@@ -200,69 +182,6 @@ internal static partial class EditorWindowRecovery
         return File.Exists(ready);
     }
 
-    private static unsafe bool Confirm(string request, Process app)
-    {
-        // A normal frame can attach while the native confirmation is open.
-        _dialogRequest = (request, app);
-        var timer = SetTimer(0, 0, 120, &CloseCanceledDialog);
-        try
-        {
-            if (timer == 0)
-            {
-                throw new InvalidOperationException("无法启动场景编辑器恢复提示。");
-            }
-
-            return MessageBoxW(
-                0,
-                "受 Windows 系统特性影响，需要重启 Windows 资源管理器（Explorer）才能正常显示场景编辑器。重启可能导致当前文件的打开状态丢失。\n\n是否现在重启资源管理器并重新打开应用？",
-                DialogTitle,
-                YesNo | WarningIcon | DefaultSecondButton | SetForeground | Topmost) == Yes;
-        }
-        finally
-        {
-            KillTimer(0, timer);
-            _dialogRequest = null;
-        }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvStdcall)])]
-    private static void CloseCanceledDialog(nint window, uint message, nuint timer, uint time)
-    {
-        try
-        {
-            if (_dialogRequest is { } request && (!File.Exists(request.Path) || request.App.HasExited))
-            {
-                var dialog = FindWindowW("#32770", DialogTitle);
-                if (dialog != 0 && GetWindowThreadProcessId(dialog, 0) == GetCurrentThreadId())
-                {
-                    PostMessageW(dialog, CommandMessage, No, 0);
-                }
-            }
-        }
-        catch (Exception exception)
-        {
-            Debug.WriteLine(exception);
-        }
-    }
-
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial int MessageBoxW(nint windowHandle, string text, string caption, uint type);
-
-    [LibraryImport("user32.dll")]
-    private static unsafe partial nuint SetTimer(nint window, nuint timer, uint interval, delegate* unmanaged[Stdcall]<nint, uint, nuint, uint, void> callback);
-
-    [LibraryImport("user32.dll")]
-    private static partial int KillTimer(nint window, nuint timer);
-
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint FindWindowW(string className, string title);
-
-    [LibraryImport("user32.dll")]
-    private static partial uint GetWindowThreadProcessId(nint window, nint processId);
-
-    [LibraryImport("kernel32.dll")]
-    private static partial uint GetCurrentThreadId();
-
-    [LibraryImport("user32.dll")]
-    private static partial int PostMessageW(nint window, uint message, nuint wParam, nint lParam);
 }

@@ -38,7 +38,7 @@
 - VLC 3 不将负数 input-repeat 视为无限循环；背景通过 EndReached 调度到所属 UI 线程后 Stop/Play 重播，并在有效视频输出建立后重新应用裁剪比例。LibVLCSharp 回调的 sender 是内部事件管理器，订阅时需捕获对应播放器，不能用 sender 识别播放器。
 - 锁屏选择通过 windows.lockScreen 扩展和当前用户的 LockAppAumId 配置实现。运行时由 NativeHost 直接读写该值；关闭替换前通过 ContentDialog 提示资源管理器将重启，用户确认后才向 32 位和 64 位注册表视图写入 Microsoft.LockApp_cw5n1h2txyewy!WindowsDefaultLockScreen，并重启当前会话中缓存锁屏扩展的 LockAppHost/LockApp 与桌面 Explorer，让 Windows 丢弃锁屏扩展缓存并回退到默认锁屏，不保留原值备份。
 - NativeHost 由同一 full-trust 扩展的参数组启动，音频采集、一次性锁屏命令和桌面编辑器恢复各自管理进程生命周期。
-- 桌面场景编辑器激活后在所属 UI 线程检查 CoreWindow 的根窗口类；超时后由 NativeHost 提示用户。窗口恢复时撤销提示；用户确认后等待旧实例保存并退出，重启当前会话的 Explorer，通过进程外系统激活启动应用，并等待可见编辑器窗口确认就绪。
+- 桌面场景编辑器激活后在所属 UI 线程检查 CoreWindow 的根窗口类；超时后请求 NativeHost 独立显示恢复提示，本体随即退出。用户确认后，NativeHost 先终止仍存活的请求进程，再重启当前会话的 Explorer，通过进程外系统激活启动应用，并等待可见编辑器窗口确认就绪。
 - 包清单必须通过 desktop6:RegistryWriteVirtualization 禁用 MSIX 注册表写入虚拟化；否则 Helper 的 HKCU 写入不会落到用户真实注册表。
 - Figma 设计稿中呈现的 Fluent System Icon 等字体图标版本可能与项目当前安装的不符，此时按字体位点名称的语义匹配，而不是位点本身或外观。
 - 特性按目标类型应用原生属性，不递归修改子元素；卸载时恢复目标原绑定或本地值。组件默认特性仅在新建配置时生成，加载或重建视图时不补齐。

@@ -34,7 +34,6 @@ public sealed partial class App : Application
 
         internal bool IsClosed { get; set; }
         internal DispatcherTimer? EditorWindowProbe { get; set; }
-        internal string? EditorRecoveryRequest { get; set; }
     }
 
     private sealed class PendingUnhandledException
