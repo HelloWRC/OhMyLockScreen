@@ -101,10 +101,16 @@ public sealed partial class SceneEditorPage : Page
         _lockScreenReplacement = IAppHost.GetRequiredService<LockScreenReplacementService>();
         ViewModel = IAppHost.GetRequiredService<SceneEditorViewModel>();
         InitializeComponent();
+        EditorPresenter.SuppressParallaxWithoutBackground = true;
+        EditorPresenter.ShowSystemBackgroundPreview = true;
         NavigationCacheMode = NavigationCacheMode.Enabled;
         VideoPicker.FileTypes = SceneMediaImport.VideoExtensions;
         VideoPicker.PickFailed += (_, exception) => ShowError(exception);
         VideoPicker.BlobPicked += OnVideoBlobPicked;
+        WallpaperPicker.FileTypes = BrushImageImport.Extensions;
+        WallpaperPicker.ValidateAsync = async uri => { await SceneImageDecoder.ReadSizeAsync(uri); };
+        WallpaperPicker.PickFailed += (_, exception) => ShowError(exception);
+        WallpaperPicker.BlobPicked += (_, _) => _mediaImportRevision++;
         InitializePanelAnimations();
         SceneTree.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnTreeDragOver), true);
         SceneTree.AddHandler(UIElement.DropEvent, new DragEventHandler(OnTreeDrop), true);
@@ -137,7 +143,6 @@ public sealed partial class SceneEditorPage : Page
         _window = Window.Current;
         _lockScreenReplacement.StateChanged += OnLockScreenReplacementStateChanged;
         _lockScreenReplacement.OperationFailed += OnLockScreenReplacementFailed;
-        AttachSystemBackground();
         ViewModel.SelectionChanged += OnSelectionChanged;
         ViewModel.StructureChanged += OnStructureChanged;
         ViewModel.InspectorChanged += OnInspectorChanged;
@@ -207,8 +212,8 @@ public sealed partial class SceneEditorPage : Page
         _pendingDropAlignments.Clear();
         _mediaImportRevision++;
         VideoPicker.InvalidateSelection();
+        WallpaperPicker.InvalidateSelection();
         ViewModel.PropertyChanged -= OnMediaImportStateChanged;
-        DetachSystemBackground();
         RefreshFeatureEditorTargets();
         ViewModel.SelectionChanged -= OnSelectionChanged;
         ViewModel.StructureChanged -= OnStructureChanged;
@@ -264,7 +269,7 @@ public sealed partial class SceneEditorPage : Page
     private void OnStructureChanged(object? sender, EventArgs args) => InvalidateSelectionGeometry();
     private void OnInspectorChanged(object? sender, EventArgs args) => RefreshInspector();
     private void OnEditorError(object? sender, Exception error) => ShowError(error);
-    private void OnBackgroundFailed(object? sender, string message) => ShowMessage("背景播放失败", message);
+    private void OnBackgroundFailed(object? sender, string message) => ShowMessage("背景加载失败", message);
     private async void OnSceneSaved(object? sender, SceneChangedEventArgs args)
     {
         await OnViewAsync(() =>
@@ -520,6 +525,38 @@ public sealed partial class SceneEditorPage : Page
         EditorPresenter.BackgroundViewportSize = args.NewSize;
         ViewModel.SidePanelWidth = Math.Clamp((args.NewSize.Width - 320) / 2, 200, 341);
         UpdatePanelViewport();
+    }
+
+    private string FormatParallaxStrength(double strength) => $"背景视差 {strength:0}%";
+
+    private bool IsImageBackground(BackgroundMode mode) => mode == BackgroundMode.Image;
+
+    private bool CanPickVideo(BackgroundMode mode, bool isPreview) => !isPreview && !IsImageBackground(mode);
+
+    private bool CanPickWallpaper(BackgroundMode mode, bool isPreview) => !isPreview && IsImageBackground(mode);
+
+    private Visibility GetVideoControlsVisibility(BackgroundMode mode) =>
+        IsImageBackground(mode) ? Visibility.Collapsed : Visibility.Visible;
+
+    private Visibility GetWallpaperControlsVisibility(BackgroundMode mode) =>
+        IsImageBackground(mode) ? Visibility.Visible : Visibility.Collapsed;
+
+    private bool HasCustomWallpaper(string? blobId) => !string.IsNullOrWhiteSpace(blobId);
+
+    private string GetWallpaperSourceLabel(string? blobId) =>
+        HasCustomWallpaper(blobId) ? "当前使用本地图片" : "当前跟随系统锁屏壁纸";
+
+    private Visibility GetSystemWallpaperButtonVisibility(string? blobId) =>
+        HasCustomWallpaper(blobId) ? Visibility.Visible : Visibility.Collapsed;
+
+    private void OnUseSystemWallpaperClick(object sender, RoutedEventArgs args)
+    {
+        if (_loaded && !ViewModel.IsPreview && ViewModel.Scene?.Background is { Mode: BackgroundMode.Image } background)
+        {
+            WallpaperPicker.InvalidateSelection();
+            _mediaImportRevision++;
+            background.ImageBlobId = null;
+        }
     }
 
     private void OnTreeSelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)

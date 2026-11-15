@@ -390,6 +390,37 @@ internal static class VideoBackgroundTests
                 "A null scene did not hide video.");
         });
 
+        run("Changing parallax strength leaves pending and playing video intact", () =>
+        {
+            using var fixture = new Fixture();
+            var blobId = fixture.AddVideo("parallax-video");
+            var opens = 0;
+            var open = new TaskCompletionSource<StorageFile>();
+            StorageFile.OpenFromApplicationUri = _ =>
+            {
+                opens++;
+                return open.Task;
+            };
+            try
+            {
+                fixture.Scene.Background.BlobId = blobId;
+                fixture.Scene.Background.ParallaxStrength = 200;
+                open.SetResult(new StorageFile { Path = fixture.GetBlobPath(blobId) });
+                fixture.Presenter.Dispatcher.Drain();
+                var view = fixture.View;
+                view.Initialize("parallax");
+                var player = view.MediaPlayer!;
+                fixture.Scene.Background.ParallaxStrength = 0;
+                Check(opens == 1 && ReferenceEquals(fixture.View, view) && ReferenceEquals(view.MediaPlayer, player)
+                    && player.IsPlaying && player.PlayCalls == 1,
+                    "Slider changes reopened the video or replaced the player.");
+            }
+            finally
+            {
+                StorageFile.OpenFromApplicationUri = null;
+            }
+        });
+
         run("A pending blob open cannot restore video after a scene switch", () =>
         {
             using var fixture = new Fixture();

@@ -236,6 +236,7 @@
                     x:Name="EditorPresenter"
                     IsEditing="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
                     IsHitTestVisible="{x:Bind ViewModel.IsPreview, Mode=OneWay}"
+                    ParallaxInputSurface="{x:Bind PageRoot}"
                     Scene="{x:Bind ViewModel.Scene, Mode=OneWay}" />
                 <Canvas
                     IsHitTestVisible="False">
@@ -768,16 +769,42 @@
                                     Content="无" />
                                 <ComboBoxItem
                                     Content="视频" />
+                                <ComboBoxItem
+                                    Content="静态图片" />
                             </ComboBox>
                             <ui:BlobPicker
                                 x:Name="VideoPicker"
                                 BlobId="{x:Bind ViewModel.Scene.Background.BlobId, Mode=TwoWay}"
                                 BlobUriConverter="{x:Bind EditorPresenter.BlobUriConverter, Mode=OneWay}"
-                                IsEnabled="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
+                                IsEnabled="{x:Bind CanPickVideo(ViewModel.Scene.Background.Mode, ViewModel.IsPreview), Mode=OneWay}"
+                                Visibility="{x:Bind GetVideoControlsVisibility(ViewModel.Scene.Background.Mode), Mode=OneWay}"
                                 SuggestedStartLocation="VideosLibrary" />
                             <CheckBox
                                 Content="启用声音"
-                                IsChecked="{x:Bind ViewModel.Scene.Background.EnableSound, Mode=TwoWay}" />
+                                IsChecked="{x:Bind ViewModel.Scene.Background.EnableSound, Mode=TwoWay}"
+                                Visibility="{x:Bind GetVideoControlsVisibility(ViewModel.Scene.Background.Mode), Mode=OneWay}" />
+                            <StackPanel
+                                Spacing="8"
+                                Visibility="{x:Bind GetWallpaperControlsVisibility(ViewModel.Scene.Background.Mode), Mode=OneWay}">
+                                <TextBlock
+                                    Text="{x:Bind GetWallpaperSourceLabel(ViewModel.Scene.Background.ImageBlobId), Mode=OneWay}" />
+                                <ui:BlobPicker
+                                    x:Name="WallpaperPicker"
+                                    BlobId="{x:Bind ViewModel.Scene.Background.ImageBlobId, Mode=TwoWay}"
+                                    BlobUriConverter="{x:Bind EditorPresenter.BlobUriConverter, Mode=OneWay}"
+                                    IsEnabled="{x:Bind CanPickWallpaper(ViewModel.Scene.Background.Mode, ViewModel.IsPreview), Mode=OneWay}"
+                                    SuggestedStartLocation="PicturesLibrary" />
+                                <Button
+                                    Click="OnUseSystemWallpaperClick"
+                                    Content="使用系统锁屏壁纸"
+                                    Visibility="{x:Bind GetSystemWallpaperButtonVisibility(ViewModel.Scene.Background.ImageBlobId), Mode=OneWay}" />
+                            </StackPanel>
+                            <Slider
+                                Header="{x:Bind FormatParallaxStrength(ViewModel.Scene.Background.ParallaxStrength), Mode=OneWay}"
+                                Minimum="0"
+                                Maximum="200"
+                                StepFrequency="1"
+                                Value="{x:Bind ViewModel.Scene.Background.ParallaxStrength, Mode=TwoWay}" />
                         </StackPanel>
                     </StackPanel>
                 </ContentControl>

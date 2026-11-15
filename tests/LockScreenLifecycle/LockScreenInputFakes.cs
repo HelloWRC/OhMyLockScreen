@@ -14,6 +14,7 @@ namespace Windows.UI.Input
 namespace Windows.UI.Xaml.Input
 {
     public sealed record Pointer(uint PointerId, PointerDeviceType PointerDeviceType);
+    public delegate void PointerEventHandler(object sender, PointerRoutedEventArgs args);
 
     public sealed class PointerRoutedEventArgs(Pointer pointer, PointerPoint point, DependencyObject source) : EventArgs
     {
@@ -27,10 +28,16 @@ namespace Windows.UI.Xaml.Input
 
 namespace Windows.UI.Xaml
 {
+    public sealed class RoutedEvent;
+
     public partial class UIElement
     {
+        public static readonly RoutedEvent PointerMovedEvent = new();
+        private event PointerEventHandler? HandledPointerMoved;
         public event UwpEventHandler<PointerRoutedEventArgs>? PointerPressed;
+        public event UwpEventHandler<PointerRoutedEventArgs>? PointerEntered;
         public event UwpEventHandler<PointerRoutedEventArgs>? PointerMoved;
+        public event UwpEventHandler<PointerRoutedEventArgs>? PointerExited;
         public event UwpEventHandler<PointerRoutedEventArgs>? PointerReleased;
         public event UwpEventHandler<PointerRoutedEventArgs>? PointerCanceled;
         public event UwpEventHandler<PointerRoutedEventArgs>? PointerCaptureLost;
@@ -69,8 +76,36 @@ namespace Windows.UI.Xaml
             return RaisePointer(PointerPressed, new(id, deviceType), position, timestamp, leftButton, handled);
         }
 
-        public PointerRoutedEventArgs MovePointer(Pointer pointer, Point position, ulong timestamp) =>
-            RaisePointer(PointerMoved, pointer, position, timestamp);
+        public void AddHandler(RoutedEvent routedEvent, PointerEventHandler handler, bool handledEventsToo)
+        {
+            if (routedEvent != PointerMovedEvent || !handledEventsToo)
+            {
+                throw new NotSupportedException();
+            }
+
+            HandledPointerMoved += handler;
+        }
+
+        public void RemoveHandler(RoutedEvent routedEvent, PointerEventHandler handler)
+        {
+            if (routedEvent != PointerMovedEvent)
+            {
+                throw new NotSupportedException();
+            }
+
+            HandledPointerMoved -= handler;
+        }
+
+        public PointerRoutedEventArgs MovePointer(Pointer pointer, Point position, ulong timestamp, bool handled = false)
+        {
+            var args = RaisePointer(PointerMoved, pointer, position, timestamp, handled: handled);
+            HandledPointerMoved?.Invoke(this, args);
+            return args;
+        }
+
+        public void ExitPointer(Pointer pointer, Point position) => RaisePointer(PointerExited, pointer, position, 0);
+
+        public void EnterPointer(Pointer pointer, Point position) => RaisePointer(PointerEntered, pointer, position, 0);
 
         public PointerRoutedEventArgs ReleasePointer(Pointer pointer, Point position = default, ulong timestamp = 0) =>
             RaisePointer(PointerReleased, pointer, position, timestamp);

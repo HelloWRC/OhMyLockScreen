@@ -24,29 +24,3 @@ namespace Windows.UI.Xaml.Controls
         public Media.ImageSource? Source { get; set; }
     }
 }
-
-namespace OhMyLockScreen
-{
-    public sealed partial class SceneEditorPage
-    {
-        private Windows.UI.Xaml.Window? _window;
-        private bool _loaded;
-        internal Shared.Controls.Scene.ScenePresenter EditorPresenter { get; } = new();
-
-        internal void LoadSystemBackground(Windows.UI.Xaml.Window window)
-        {
-            _loaded = true;
-            _window = window;
-            AttachSystemBackground();
-        }
-
-        internal void UnloadSystemBackground()
-        {
-            _loaded = false;
-            DetachSystemBackground();
-            _window = null;
-        }
-
-        internal Task RefreshSystemBackgroundForTestAsync() => RefreshSystemBackgroundAsync();
-    }
-}

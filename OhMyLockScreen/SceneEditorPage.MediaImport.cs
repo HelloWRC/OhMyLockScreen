@@ -23,6 +23,7 @@ public sealed partial class SceneEditorPage
             ClearTreePointer();
             _mediaImportRevision++;
             VideoPicker.InvalidateSelection();
+            WallpaperPicker.InvalidateSelection();
             RefreshFeatureEditorTargets();
         }
     }
@@ -65,6 +66,7 @@ public sealed partial class SceneEditorPage
         var deferral = args.GetDeferral();
         var revision = ++_mediaImportRevision;
         VideoPicker.InvalidateSelection();
+        WallpaperPicker.InvalidateSelection();
         bool IsCurrent() => IsCurrentMediaImport(scene, revision);
         try
         {

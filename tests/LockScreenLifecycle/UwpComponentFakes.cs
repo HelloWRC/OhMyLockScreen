@@ -124,6 +124,7 @@ namespace Windows.UI.Xaml
 
     public partial class UIElement : DependencyObject
     {
+        public Media.GeneralTransform TransformToVisual(UIElement visual) => new();
         public Media.RectangleGeometry? Clip { get; set; }
 
         public static readonly DependencyProperty OpacityProperty = DependencyProperty.Register(
@@ -176,7 +177,6 @@ namespace Windows.UI.Xaml
     }
     public class FrameworkElement : UIElement
     {
-        public Media.GeneralTransform TransformToVisual(UIElement visual) => new();
         public XamlRoot? XamlRoot { get; set; }
         public ElementTheme ActualTheme { get; set; }
         public ElementTheme RequestedTheme { get; set; }

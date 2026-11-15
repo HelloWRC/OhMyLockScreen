@@ -375,6 +375,10 @@ namespace Windows.UI.Xaml.Media.Imaging
         {
             get; set;
         }
+
+        public event UwpEventHandler<Controls.ExceptionRoutedEventArgs>? ImageFailed;
+
+        internal void FailImage() => ImageFailed?.Invoke(this, new());
     }
 
     public sealed class WriteableBitmap : Media.ImageSource;

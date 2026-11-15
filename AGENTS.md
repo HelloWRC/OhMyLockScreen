@@ -28,6 +28,7 @@
 - 解锁路径用跨进程性能计数器测量主应用提交请求至 NativeHost 解析请求的耗时，并在发送系统事件后将传输方式和耗时追加到 `LocalState/LockScreenProvider/unlock-latency.log`。
 - 设置通过 SettingsService 统一管理，并通过 MVVM 属性变更通知自动保存。
 - 场景资产按 SHA-256 Blob 存储，场景配置只保存 Blob ID，并在运行时按当前场景解析 URI；复制整个场景目录即可迁移资产，无独立索引或自动清理。
+- 静态壁纸模式未指定图片资产时，由场景呈现器在加载及窗口重新激活时读取当前系统锁屏壁纸；静态壁纸和视频共用背景视口的退场和视差动画。
 - 场景编辑项与启用的锁屏场景独立选择；已启用场景可以重命名或复制，删除前必须先启用另一个场景。
 - 当计划使用 OnPropertyChanged/OnPropertyChanging 实现属性变化监听比较繁复、会产生较多模板代码时，考虑用 ReactiveUI 和 DynamicData 简化。
 - 构建需要 UWP/XAML 构建工具、对应 Windows SDK 和 VC++ 14 UWP 运行库 SDK，沿用项目现有签名配置。

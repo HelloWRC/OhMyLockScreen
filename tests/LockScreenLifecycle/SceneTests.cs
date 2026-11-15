@@ -99,8 +99,44 @@ internal static class SceneTests
             }
         });
 
+    internal static void RunBackgroundParallax(Action<string, Action> run) =>
+        run("Background parallax defaults to 100 percent and saves independently for each scene", () =>
+        {
+            using var legacy = new MemoryStream("{\"Background\":{\"EnableSound\":true}}"u8.ToArray());
+            Check(ConfigureFileHelper.LoadConfigUnWrapped<SceneSettings>(legacy).Background.ParallaxStrength == 100,
+                "A legacy scene did not get default parallax strength.");
+
+            var scenes = new[] { new SceneSettings(), new SceneSettings() };
+            foreach (var scene in scenes)
+            {
+                var directory = Directory.CreateDirectory(Path.Combine(ApplicationData.Current.LocalFolder.Path, "Scenes", scene.SceneId.ToString("N")));
+                ConfigureFileHelper.SaveConfig(Path.Combine(directory.FullName, "scene.json"), scene);
+            }
+
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            var activeId = fixture.Service.ActiveSceneId;
+            var editedId = scenes.Single(scene => scene.SceneId != activeId).SceneId;
+            editor.Open(editedId);
+            var background = editor.Scene!.Background;
+            Check(background.ParallaxStrength == 100, "A new scene did not get default parallax strength.");
+
+            foreach (var strength in new[] { 0.0, 200.0 })
+            {
+                background.ParallaxStrength = strength;
+                fixture.Service.FlushPending();
+                var path = Path.Combine(fixture.Service.GetSceneDirectory(editedId), "scene.json");
+                Check(ConfigureFileHelper.LoadConfigUnWrapped<SceneSettings>(path).Background.ParallaxStrength == strength,
+                    $"The scene editor did not persist {strength}% parallax strength.");
+            }
+
+            Check(fixture.Service.Load(activeId).Background.ParallaxStrength == 100,
+                "Editing parallax affected another scene.");
+        });
+
     internal static async Task RunAsync(Action<string, Action> run, Func<string, Func<Task>, Task> runAsync)
     {
+        RunBackgroundParallax(run);
         await runAsync("Dropped images retain pixel dimensions, persistent brushes and their original parent", async () =>
         {
             using var fixture = new Fixture();

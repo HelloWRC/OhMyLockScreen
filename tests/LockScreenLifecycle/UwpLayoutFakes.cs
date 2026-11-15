@@ -239,9 +239,12 @@ namespace OhMyLockScreen.Shared.Controls.Scene
 
     public sealed partial class ScenePresenter
     {
+        private readonly Windows.UI.Xaml.Controls.Grid SceneRoot = new();
         private readonly Windows.UI.Xaml.Controls.Grid BackgroundViewport = new();
+        private readonly Windows.UI.Xaml.Media.CompositeTransform BackgroundParallaxTransform = new();
         private readonly Windows.UI.Xaml.Controls.Grid BackgroundLayer = new();
         private readonly Windows.UI.Xaml.Controls.Image SystemBackgroundImageElement = new();
+        private readonly Windows.UI.Xaml.Controls.Image WallpaperImage = new();
         private readonly Windows.UI.Xaml.Controls.Grid LayersLayer = new();
         private readonly Windows.UI.Xaml.Media.TranslateTransform LayersTransform = new();
         private new readonly TestCompiledBindings Bindings = new(() =>
@@ -250,22 +253,24 @@ namespace OhMyLockScreen.Shared.Controls.Scene
 
         internal Windows.UI.Xaml.Controls.Grid BackgroundLayerElement => BackgroundLayer;
         internal Windows.UI.Xaml.Controls.Grid BackgroundViewportElement => BackgroundViewport;
+        internal Windows.UI.Xaml.Controls.Grid SceneRootElement => SceneRoot;
+        internal Windows.UI.Xaml.Media.CompositeTransform ParallaxTransform => BackgroundParallaxTransform;
         internal Windows.UI.Xaml.Controls.Image SystemBackgroundElement => SystemBackgroundImageElement;
+        internal Windows.UI.Xaml.Controls.Image WallpaperElement => WallpaperImage;
+        internal Task RefreshSystemBackgroundForTestAsync() => RefreshSystemBackgroundAsync();
         internal Windows.UI.Xaml.Controls.Grid LayersLayerElement => LayersLayer;
         internal Windows.UI.Xaml.Media.TranslateTransform LayersTranslation => LayersTransform;
 
         private void InitializeComponent()
         {
-            BackgroundViewport.Children.Add(SystemBackgroundImageElement);
-            BackgroundViewport.Children.Add(BackgroundLayer);
-            Content = new Windows.UI.Xaml.Controls.Grid
+            BackgroundViewport.Children.Add(new Windows.UI.Xaml.Controls.Grid
             {
-                Children =
-                {
-                    BackgroundViewport,
-                    LayersLayer
-                }
-            };
+                RenderTransform = BackgroundParallaxTransform,
+                Children = { SystemBackgroundImageElement, WallpaperImage, BackgroundLayer }
+            });
+            SceneRoot.Children.Add(BackgroundViewport);
+            SceneRoot.Children.Add(LayersLayer);
+            Content = SceneRoot;
         }
     }
 }

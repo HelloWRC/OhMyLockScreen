@@ -24,7 +24,6 @@
     <Compile Include="../../OhMyLockScreen.NativeHost/LockAppHostGlobalUnlockSignal.cs" Link="NativeHost/LockAppHostGlobalUnlockSignal.cs" />
     <Compile Include="../../OhMyLockScreen.NativeHost/LockScreenUnlockCommand.cs" Link="NativeHost/LockScreenUnlockCommand.cs" />
     <Compile Include="../../OhMyLockScreen/MainPage.xaml.cs" Link="MainPage.xaml.cs" />
-    <Compile Include="../../OhMyLockScreen/SceneEditorPage.SystemBackground.cs" Link="SceneEditorPage.SystemBackground.cs" />
     <Compile Include="../../OhMyLockScreen/SceneEditorPage.Tree.cs" Link="SceneEditorPage.Tree.cs" />
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneSaveToastTracker.cs" Link="Helpers/UI/SceneSaveToastTracker.cs" />
   </ItemGroup>

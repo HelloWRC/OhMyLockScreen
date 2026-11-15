@@ -58,6 +58,7 @@ public sealed partial class ScenePresenter
 
         BackgroundLayer.SizeChanged -= OnBackgroundSizeChanged;
         UpdateBackgroundSubscriptions();
+        DetachSystemBackground();
         ReleaseBackground();
         _backgroundSuspended = false;
     }
@@ -96,14 +97,26 @@ public sealed partial class ScenePresenter
             return;
         }
 
+        Action refresh = args.PropertyName switch
+        {
+            nameof(BackgroundSettings.ParallaxStrength) => RefreshParallaxStrength,
+            nameof(BackgroundSettings.Mode) when SuppressParallaxWithoutBackground => RefreshBackgroundMode,
+            _ => RefreshBackgroundSettings
+        };
         if (Dispatcher.HasThreadAccess)
         {
-            RefreshBackgroundSettings();
+            refresh();
         }
         else
         {
-            DispatchBackground(RefreshBackgroundSettings);
+            DispatchBackground(refresh);
         }
+    }
+
+    private void RefreshBackgroundMode()
+    {
+        RefreshParallaxStrength();
+        UpdateBackground();
     }
 
     private void RefreshBackgroundSettings()
@@ -115,15 +128,32 @@ public sealed partial class ScenePresenter
             _featureAttacher?.Reload();
         }
 
+        var backgroundChanged = !ReferenceEquals(_subscribedBackground, Scene?.Background);
         UpdateBackgroundSubscriptions();
+        if (backgroundChanged)
+        {
+            RefreshParallaxStrength();
+        }
+
         UpdateBackground();
     }
 
     private async void UpdateBackground()
     {
+        if (!IsActive)
+        {
+            return;
+        }
+
         var request = ++_backgroundRequest;
-        if (!IsActive || Scene is not { Background.Mode: BackgroundMode.Video } scene
-            || string.IsNullOrWhiteSpace(scene.Background.BlobId))
+        UpdateSystemBackgroundSubscription();
+        if (Scene?.Background is { Mode: BackgroundMode.Image } imageSettings)
+        {
+            UpdateWallpaperImage(imageSettings.ImageBlobId);
+            return;
+        }
+
+        if (Scene is not { Background.Mode: BackgroundMode.Video } scene || string.IsNullOrWhiteSpace(scene.Background.BlobId))
         {
             ReleaseBackground();
             return;
@@ -154,11 +184,20 @@ public sealed partial class ScenePresenter
         }
     }
 
-    private async Task ApplyBackgroundRequestAsync(long request, Action apply)
+    private Task ApplyBackgroundRequestAsync(long request, Action apply) =>
+        ApplyBackgroundUpdateAsync(() =>
+        {
+            if (request == _backgroundRequest)
+            {
+                apply();
+            }
+        });
+
+    private async Task ApplyBackgroundUpdateAsync(Action apply)
     {
         void ApplyIfCurrent()
         {
-            if (IsActive && request == _backgroundRequest)
+            if (IsActive)
             {
                 apply();
             }
@@ -176,7 +215,7 @@ public sealed partial class ScenePresenter
             }
             catch (Exception exception)
             {
-                Debug.WriteLine($"无法调度背景视频：{exception}");
+                Debug.WriteLine($"无法调度背景更新：{exception}");
             }
         }
     }
@@ -380,6 +419,7 @@ public sealed partial class ScenePresenter
         }
 
         _backgroundSuspended = true;
+        ResetParallaxMotion();
         _resumeBackground = _backgroundPlayer?.State is VLCState.Opening or VLCState.Buffering or VLCState.Playing;
         if (_resumeBackground)
         {
@@ -394,6 +434,7 @@ public sealed partial class ScenePresenter
         DispatchBackground(() =>
         {
             _backgroundSuspended = false;
+            UpdateParallaxTarget();
             if (_backgroundPlayer == null)
             {
                 StartBackgroundPlayer();
@@ -485,6 +526,7 @@ public sealed partial class ScenePresenter
             _backgroundPath = null;
             _backgroundUri = null;
             _swapChainOptions = null;
+            ClearWallpaperImage();
             BackgroundLayer.Visibility = Visibility.Collapsed;
             if (view != null)
             {

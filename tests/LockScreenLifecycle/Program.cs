@@ -85,12 +85,21 @@ if (args.Contains("--scene-management-only"))
     return;
 }
 
+if (args.Contains("--parallax-only"))
+{
+    SceneTests.RunBackgroundParallax(Run);
+    BackgroundParallaxTests.Run(Run);
+    Console.WriteLine($"All {passed} parallax checks passed using isolated scenes and simulated UWP input.");
+    return;
+}
+
 if (args.Contains("--scene-only"))
 {
     await SceneTests.RunManagementAsync(RunAsync);
     await SceneTests.RunAsync(Run, RunAsync);
     await SceneMediaImportTests.RunAsync(RunAsync);
     await SceneBlobStorageTests.RunAsync(RunAsync);
+    BackgroundParallaxTests.Run(Run);
     Console.WriteLine($"All {passed} scene checks passed using independent temporary scene folders and simulated UWP views.");
     return;
 }
@@ -188,5 +197,6 @@ await SceneMediaImportTests.RunAsync(RunAsync);
 await SceneBlobStorageTests.RunAsync(RunAsync);
 await DismissalTests.RunAsync(Run, RunAsync);
 VideoBackgroundTests.Run(Run);
+BackgroundParallaxTests.Run(Run);
 await SystemBackgroundTests.RunAsync(Run, RunAsync);
 Console.WriteLine($"All {passed} checks passed using temporary settings and simulated UWP views and animations.");

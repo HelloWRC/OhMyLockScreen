@@ -53,6 +53,7 @@ public sealed partial class MainPage : Page
     internal MainPage(ILockScreenUnlockService? lockScreenUnlockService)
     {
         InitializeComponent();
+        RootScenePresenter.ParallaxInputSurface = this;
         _scenes = IAppHost.TryGetService<ISceneService>();
         _lockScreenUnlockService = lockScreenUnlockService;
         Loaded += OnLoaded;
@@ -191,6 +192,7 @@ public sealed partial class MainPage : Page
         }
 
         dismissalPointer = e.Pointer;
+        RootScenePresenter.SampleParallaxPointer(e);
         pressPosition = point.Position;
         pointerSamples.Enqueue((point.Timestamp, point.Position.Y));
         e.Handled = true;

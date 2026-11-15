@@ -127,7 +127,8 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
     private static void OnUnlockReturnProgressChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
         var presenter = (ScenePresenter)sender;
-        if (presenter.IsReturningFromUnlockDrag && args.NewValue is double progress)
+        var progress = (double)args.NewValue!;
+        if (presenter.IsReturningFromUnlockDrag)
         {
             presenter.ApplyUnlockVisuals(-presenter.UnlockTravel * progress, 1 - progress);
         }
@@ -138,6 +139,7 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
         LayersTransform.Y = y;
         LayersLayer.Opacity = opacity;
         BackgroundViewport.Opacity = opacity;
+        SetParallaxMultiplier(opacity);
     }
 
     private void OnUnlockReturnStoryboardCompleted(object? sender, object args)
@@ -173,6 +175,12 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
 
         if (presenter.IsActive)
         {
+            if ((args.OldValue as SceneSettings)?.SceneId != (args.NewValue as SceneSettings)?.SceneId)
+            {
+                presenter.ResetParallaxMotion();
+            }
+
+            presenter.RefreshParallaxStrength();
             presenter.UpdateBackgroundSubscriptions();
             presenter.UpdateBackground();
         }
@@ -186,16 +194,20 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
         }
 
         IsActive = true;
+        _parallaxClock = IAppHost.TryGetService<TimeProvider>() ?? TimeProvider.System;
         UpdateBlobContext();
         Bindings.Update();
         _featureAttacher ??= new FeatureAttacher(this) { FeatureContainer = Scene };
         _featureAttacher.Attach();
+        RefreshParallaxStrength();
         AttachBackground();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
         IsActive = false;
+        RefreshParallaxStrength();
+        DetachParallaxTimer();
         DetachBackground();
         CancelUnlockAnimation();
         ResetUnlockDrag();
@@ -210,6 +222,7 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
     private Task PlayUnlockAnimationCoreAsync()
     {
         StopUnlockReturnAnimation();
+        StopParallaxTimer();
 
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var storyboard = new Storyboard();
@@ -223,6 +236,15 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
             AddDoubleAnimation(storyboard, LayersTransform, nameof(TranslateTransform.Y), LayersTransform.Y, _unlockTargetY, UnlockDuration);
             AddDoubleAnimation(storyboard, LayersLayer, nameof(UIElement.Opacity), LayersLayer.Opacity, 0, UnlockDuration);
             AddDoubleAnimation(storyboard, BackgroundViewport, nameof(UIElement.Opacity), BackgroundViewport.Opacity, 0, UnlockDuration);
+            var parallax = BackgroundParallaxTransform;
+            if (parallax.ScaleX != 1 || parallax.TranslateX != 0 || parallax.TranslateY != 0)
+            {
+                AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.ScaleX), parallax.ScaleX, 1, UnlockDuration);
+                AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.ScaleY), parallax.ScaleY, 1, UnlockDuration);
+                AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.TranslateX), parallax.TranslateX, 0, UnlockDuration);
+                AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.TranslateY), parallax.TranslateY, 0, UnlockDuration);
+            }
+
             storyboard.Begin();
         }
         catch (Exception exception)

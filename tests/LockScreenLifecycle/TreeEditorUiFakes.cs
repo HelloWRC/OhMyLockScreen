@@ -76,6 +76,8 @@ namespace OhMyLockScreen
     {
         public SceneEditorViewModel ViewModel { get; private set; } = null!;
         internal Microsoft.UI.Xaml.Controls.TreeView SceneTree { get; } = new();
+        private Window? _window;
+        private bool _loaded;
         private SceneTreeItem? _draggedTreeItem;
         private static T? FindParent<T>(DependencyObject? child) where T : DependencyObject => child as T;
         private static void TryAction(Action action) => action();
