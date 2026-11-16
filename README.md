@@ -3,7 +3,7 @@
 > [!caution]
 > 本应用还在早期实验阶段，可能会出现不稳定的情况，请谨慎在主力设备上使用。
 
-![截图](image/README/PixPin_2026-11-13_15-33-47.png)
+![banner](image/README/OMLS_Banner.webp)
 
 > 你的锁屏，如你所想
 
