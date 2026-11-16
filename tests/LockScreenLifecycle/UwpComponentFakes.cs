@@ -124,6 +124,15 @@ namespace Windows.UI.Xaml
 
     public partial class UIElement : DependencyObject
     {
+        public static readonly DependencyProperty IsHitTestVisibleProperty = DependencyProperty.Register(
+            nameof(IsHitTestVisible), typeof(bool), typeof(UIElement), new PropertyMetadata(true));
+
+        public bool IsHitTestVisible
+        {
+            get => (bool)GetValue(IsHitTestVisibleProperty)!;
+            set => SetValue(IsHitTestVisibleProperty, value);
+        }
+
         public Media.GeneralTransform TransformToVisual(UIElement visual) => new();
         public Media.RectangleGeometry? Clip { get; set; }
 

@@ -45,6 +45,9 @@ public sealed partial class ComponentPresenter : ContentPresenter, IBorderable, 
     private bool _isLoaded;
     private bool _isUpdating;
     private bool _preserveContentOnUnload;
+    private bool? _hitTestVisibilityBeforePassiveContent;
+    private ComponentBase? _hitTestContent;
+    private long _hitTestCallback;
     private Border? _border;
 
     public event PropertyChangingEventHandler? PropertyChanging;
@@ -72,13 +75,50 @@ public sealed partial class ComponentPresenter : ContentPresenter, IBorderable, 
         set => SetValue(SettingsProperty, value);
     }
 
+    public bool IsContentHitTestVisible => Content is not ComponentBase { IsHitTestVisible: false };
+
     public ComponentPresenter()
     {
         InitializeComponent();
-        RegisterPropertyChangedCallback(ContentProperty, (_, _) => UpdateContentVisibility());
+        RegisterPropertyChangedCallback(ContentProperty, (_, _) =>
+        {
+            ObserveContentHitTesting();
+            UpdateContentVisibility();
+        });
         RegisterPropertyChangedCallback(ForegroundProperty, OnForegroundChanged);
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+    }
+
+    private void ObserveContentHitTesting()
+    {
+        if (_hitTestContent != null)
+        {
+            _hitTestContent.UnregisterPropertyChangedCallback(IsHitTestVisibleProperty, _hitTestCallback);
+        }
+
+        _hitTestContent = Content as ComponentBase;
+        if (_hitTestContent != null)
+        {
+            _hitTestCallback = _hitTestContent.RegisterPropertyChangedCallback(
+                IsHitTestVisibleProperty, (_, _) => UpdateContentHitTesting());
+        }
+
+        UpdateContentHitTesting();
+    }
+
+    private void UpdateContentHitTesting()
+    {
+        if (!IsContentHitTestVisible)
+        {
+            _hitTestVisibilityBeforePassiveContent ??= IsHitTestVisible;
+            IsHitTestVisible = false;
+        }
+        else if (_hitTestVisibilityBeforePassiveContent is { } previous)
+        {
+            _hitTestVisibilityBeforePassiveContent = null;
+            IsHitTestVisible = previous;
+        }
     }
 
     private static void OnSettingsChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)

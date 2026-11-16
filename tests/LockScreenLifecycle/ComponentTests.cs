@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OhMyLockScreen.Controls.Components;
+using OhMyLockScreen.Models.Features.Layout;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Services.FeatureHost;
 using OhMyLockScreen.Services.Scene;
@@ -32,6 +33,52 @@ internal static class ComponentTests
     internal static void Run(Action<string, Action> run)
     {
         ComponentDefaultFeaturesTests.Run(run);
+        run("WebView2 settings round-trip and passive content disables the whole presenter", () =>
+        {
+            var services = new ServiceCollection();
+            services.AddComponent<WebView2Component, WebView2SettingsControl>();
+            using var provider = services.BuildServiceProvider();
+            var info = provider.GetRequiredService<ComponentRegistryService>().Find(WebView2Component.Id)!;
+            var model = info.CreateSettings();
+            var settings = model.GetSettings<WebView2ComponentSettings>();
+            var legacySettings = JsonSerializer.Deserialize<WebView2ComponentSettings>("""{"Uri":"https://example.test"}""")!;
+            Check(!settings.AllowInteraction && !legacySettings.AllowInteraction, "New and existing webpage settings must default to passive.");
+            settings.AllowInteraction = true;
+            settings.Uri = " https://example.test/status#today ";
+            Check(WebView2ComponentSettings.ParseAddress(settings.Uri)?.Fragment == "#today"
+                && WebView2ComponentSettings.ParseAddress("http://example.test") != null
+                && WebView2ComponentSettings.ParseAddress("example.test") == null
+                && WebView2ComponentSettings.ParseAddress("file:///page.html") == null
+                && WebView2ComponentSettings.ParseAddress("   ") == null,
+                "The URI parser did not enforce absolute HTTP(S) addresses.");
+            var layout = model.Features.Single().GetSettings<LayoutFeatureSettings>();
+            Check(layout is { Width: 640, Height: 360, IsAutoWidth: false, IsAutoHeight: false },
+                "A new webpage component did not receive fixed viewport dimensions.");
+
+            AutoJsonPolymorphicRegistrationHelper.DiscoverAndRegisterForAssembly(typeof(WebView2ComponentSettings).Assembly);
+            var scene = new SceneSettings { Layers = [new LayerSettings { Children = [model] }] };
+            var path = Path.Combine(ApplicationData.Current.LocalFolder.Path, "webview2-scene.json");
+            ConfigureFileHelper.SaveConfig(path, scene);
+            var restored = ConfigureFileHelper.LoadConfigUnWrapped<SceneSettings>(path);
+            var copy = ConfigureFileHelper.CopyObject(restored).Layers.Single().Children.Single();
+            var copySettings = copy.GetSettings<WebView2ComponentSettings>();
+            Check(copy.Id == WebView2Component.Id && copySettings.Uri == settings.Uri && copySettings.AllowInteraction
+                && !ReferenceEquals(copy.Settings, restored.Layers.Single().Children.Single().Settings),
+                "Saving, reloading and copying the scene lost the address or interaction setting, or shared component settings.");
+
+            var component = new WebView2Component();
+            var target = new ComponentPresenter { Content = component };
+            Check(!target.IsHitTestVisible && !target.IsContentHitTestVisible,
+                "The presenter intercepted input above passive content.");
+            component.IsHitTestVisible = true;
+            Check(target.IsHitTestVisible && target.IsContentHitTestVisible, "The presenter blocked interactive content.");
+            component.IsHitTestVisible = false;
+            target.Content = new TextComponent();
+            component.IsHitTestVisible = true;
+            component.IsHitTestVisible = false;
+            Check(target.IsHitTestVisible && target.IsContentHitTestVisible,
+                "Replacing passive content did not restore hit testing.");
+        });
         run("Component registration validates metadata and container contracts without partial registration", () =>
         {
             var services = new ServiceCollection();

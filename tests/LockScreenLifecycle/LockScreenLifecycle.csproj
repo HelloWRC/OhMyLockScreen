@@ -32,6 +32,8 @@
     <Compile Remove="../../OhMyLockScreen/Services/Audio/AudioHostSpectrumClient.cs" />
     <Compile Remove="../../OhMyLockScreen/Services/Audio/WindowsAudioSpectrumSource.cs" />
     <Compile Remove="../../OhMyLockScreen/Controls/Components/AudioSpectrum*.cs" />
+    <Compile Remove="../../OhMyLockScreen/Controls/Components/WebView2Component.cs" />
+    <Compile Remove="../../OhMyLockScreen/Controls/Components/WebView2SettingsControl.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/Media/**/*.cs" />
     <Compile Remove="../../OhMyLockScreen/Controls/Components/MediaComponent.cs" />
     <Compile Remove="../../OhMyLockScreen/Controls/Components/MediaParts.cs" />

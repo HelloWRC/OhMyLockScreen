@@ -1544,6 +1544,7 @@ public sealed partial class SceneEditorPage : Page
         var source = FindVisuals(EditorPresenter)
             .OfType<ComponentPresenter>()
             .Where(presenter => presenter.Settings is not null
+                && presenter.IsContentHitTestVisible
                 && presenter.Visibility == Visibility.Visible
                 && presenter.ActualWidth > 0
                 && presenter.ActualHeight > 0

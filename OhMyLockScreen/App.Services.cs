@@ -78,6 +78,7 @@ public sealed partial class App
         services.AddComponent<DateComponent>();
         services.AddComponent<SystemStatusComponent, SystemStatusSettingsControl>();
         services.AddComponent<AudioSpectrumComponent, AudioSpectrumSettingsControl>();
+        services.AddComponent<WebView2Component, WebView2SettingsControl>();
         services.AddComponent<ContainerComponent, ContainerSettingsControl>();
         services.AddComponent<MediaComponent, MediaSettingsControl>();
         services.AddComponent<MediaTextComponent, MediaTextSettingsControl>();
