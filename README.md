@@ -53,7 +53,7 @@ OhMyLockScreen 不能——且以后也不会——替换或修改锁屏后的�
 
 ### 3. 怎么恢复系统锁屏？
 
-答：在应用设置（编辑器右上角的齿轮）的通用页面中，关闭【替换系统锁屏】选项即可。
+答：使用[LockScreenSwitcher](https://github.com/HelloWRC/LockScreenSwitcher/releases/latest)切换回 Windows 默认锁屏即可。
 
 ### 4. 怎么彻底卸载？卸载后会有残留吗？
 
