@@ -15,16 +15,14 @@ public static class LockScreenProviderProtocol
     public const string UnlockPipeNamePrefix = "OhMyLockScreen.Unlock.";
     public const string UnlockPipeRequestExtension = ".request";
     public static readonly TimeSpan UnlockPipeTimeout = TimeSpan.FromSeconds(2);
-    public const string DefaultLockAppAumId = "Microsoft.LockApp_cw5n1h2txyewy!WindowsDefaultLockScreen";
     public const string HelperParameterGroupId = "LockScreenProvider";
 }
 
 public enum LockScreenProviderOperation
 {
-    Query,
-    Enable,
-    Disable,
-    Unlock
+    Query = 0,
+    // Keep the wire value so requests from older versions can still be recognized.
+    Unlock = 3
 }
 
 public sealed record LockScreenProviderRequest(string RequestId, LockScreenProviderOperation Operation)

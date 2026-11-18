@@ -1,7 +1,6 @@
 using FluentIcons.Common;
 using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Attributes;
-using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 
 namespace OhMyLockScreen.Views
@@ -13,8 +12,6 @@ namespace OhMyLockScreen.Views.SettingsPages
 {
     public sealed partial class GeneralSettingsPage
     {
-        private ContentDialog RestartExplorerDialog { get; } = new();
-
         private void InitializeComponent() { }
     }
 
@@ -30,24 +27,4 @@ namespace OhMyLockScreen.Views.SettingsPages
     [SettingsPageInfo("hidden-title", "Hidden title", Icon.Settings)]
     [HidePageTitle]
     public sealed class HiddenTitleSettingsPage : SettingsPageBase;
-}
-
-namespace Windows.UI.Xaml.Controls
-{
-    public sealed class ToggleSwitch : FrameworkElement
-    {
-        public bool IsOn { get; set; }
-    }
-
-    public enum ContentDialogResult
-    {
-        None,
-        Primary,
-        Secondary
-    }
-
-    public sealed class ContentDialog : FrameworkElement
-    {
-        public Task<ContentDialogResult> ShowAsync() => Task.FromResult(ContentDialogResult.None);
-    }
 }

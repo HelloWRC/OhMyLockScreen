@@ -15,7 +15,6 @@ using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Controls.Scene;
 using OhMyLockScreen.Shared.Models.FeatureHost;
-using OhMyLockScreen.Shared.Models.LockScreenProvider;
 using OhMyLockScreen.Shared.Models.Scene;
 using OhMyLockScreen.Shared.Services.FeatureHost;
 using OhMyLockScreen.ViewModels;
@@ -53,6 +52,8 @@ public sealed partial class SceneEditorPage : Page
     private readonly IFeatureService _features;
     private readonly FeatureRegistryService _featureRegistry;
     private readonly LockScreenReplacementService _lockScreenReplacement;
+    private int _lockScreenStatusRequest;
+    private bool? _lastLockScreenEnabled;
     private Window? _window;
     private bool _loaded;
     private bool _restoringEditor;
@@ -141,8 +142,8 @@ public sealed partial class SceneEditorPage : Page
 
         _loaded = true;
         _window = Window.Current;
-        _lockScreenReplacement.StateChanged += OnLockScreenReplacementStateChanged;
-        _lockScreenReplacement.OperationFailed += OnLockScreenReplacementFailed;
+        _lastLockScreenEnabled = null;
+        _window.Activated += OnWindowActivated;
         ViewModel.SelectionChanged += OnSelectionChanged;
         ViewModel.StructureChanged += OnStructureChanged;
         ViewModel.InspectorChanged += OnInspectorChanged;
@@ -189,8 +190,7 @@ public sealed partial class SceneEditorPage : Page
             SettingsButton.Focus(FocusState.Programmatic);
         }
 
-        await _lockScreenReplacement.EnsureInitializedAsync();
-        await OnViewAsync(UpdateLockScreenReplacementInfoBar);
+        await RefreshLockScreenStatusAsync();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
@@ -202,8 +202,6 @@ public sealed partial class SceneEditorPage : Page
 
         EndDrag();
         ClearTreePointer();
-        _lockScreenReplacement.StateChanged -= OnLockScreenReplacementStateChanged;
-        _lockScreenReplacement.OperationFailed -= OnLockScreenReplacementFailed;
         ViewModel.PropertyChanged -= OnPanelViewModelPropertyChanged;
         StopPanelAnimations();
         ExitPreview();
@@ -226,6 +224,7 @@ public sealed partial class SceneEditorPage : Page
         SceneViewport.LayoutUpdated -= OnViewportLayoutUpdated;
         if (_window != null)
         {
+            _window.Activated -= OnWindowActivated;
             _window.CoreWindow.KeyDown -= OnEditorKeyDown;
         }
 
@@ -239,24 +238,40 @@ public sealed partial class SceneEditorPage : Page
         TryAction(() => Frame.Navigate(typeof(ApplicationSettingsPage)));
     }
 
-    private async void OnLockScreenReplacementStateChanged(
-        object? sender,
-        LockScreenReplacementStateChangedEventArgs args) =>
-        await OnViewAsync(UpdateLockScreenReplacementInfoBar);
-
-    private async void OnLockScreenReplacementFailed(
-        object? sender,
-        LockScreenReplacementFailedEventArgs args)
+    private async void OnWindowActivated(object sender, WindowActivatedEventArgs args)
     {
-        var title = args.Operation == LockScreenProviderOperation.Query
-            ? "无法读取系统锁屏设置"
-            : "无法更改系统锁屏设置";
-        await OnViewAsync(() => ShowMessage(title, args.Exception.Message));
+        if (args.WindowActivationState != CoreWindowActivationState.Deactivated)
+        {
+            await RefreshLockScreenStatusAsync();
+        }
     }
 
-    private void UpdateLockScreenReplacementInfoBar() =>
-        LockScreenReplacementInfoBar.IsOpen =
-            _lockScreenReplacement.IsInitialized && !_lockScreenReplacement.CurrentValue;
+    private async Task RefreshLockScreenStatusAsync()
+    {
+        var request = ++_lockScreenStatusRequest;
+        try
+        {
+            var isEnabled = await _lockScreenReplacement.IsEnabledAsync();
+            await OnViewAsync(() =>
+            {
+                if (request == _lockScreenStatusRequest && _lastLockScreenEnabled != isEnabled)
+                {
+                    _lastLockScreenEnabled = isEnabled;
+                    LockScreenReplacementInfoBar.IsOpen = !isEnabled;
+                }
+            });
+        }
+        catch (Exception exception)
+        {
+            await OnViewAsync(() =>
+            {
+                if (request == _lockScreenStatusRequest)
+                {
+                    ShowMessage("无法读取系统锁屏设置", exception.Message);
+                }
+            });
+        }
+    }
 
     private void OnSelectionChanged(object? sender, EventArgs args)
     {

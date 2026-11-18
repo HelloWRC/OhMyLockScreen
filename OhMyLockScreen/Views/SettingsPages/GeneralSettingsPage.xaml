@@ -9,14 +9,6 @@
             <Grid>
                 <StackPanel Style="{StaticResource SettingsStackPanelStyle}">
                     <toolkit:SettingsCard
-                        Header="替换系统锁屏实现"
-                        Description="开启后，将替换系统锁屏实现为 OhMyLockScreen。要应用在本应用内设置的锁屏外观，必须启用此选项。">
-                        <ToggleSwitch
-                            AutomationProperties.Name="替换系统锁屏实现"
-                            IsOn="{x:Bind Settings.ReplaceSystemLockScreen, Mode=OneWay}"
-                            Toggled="OnReplaceSystemLockScreenToggled" />
-                    </toolkit:SettingsCard>
-                    <toolkit:SettingsCard
                         Header="兼容解锁模式"
                         Description="开启后，不发送锁屏解锁事件，改用旧版退出应用方式解锁，以兼容无法响应解锁事件的系统。">
                         <ToggleSwitch
@@ -26,12 +18,5 @@
                 </StackPanel>
             </Grid>
         </ScrollViewer>
-        <ContentDialog
-            x:Name="RestartExplorerDialog"
-            Title="恢复默认锁屏？"
-            Content="关闭替换后，将立即重启资源管理器（explorer.exe）以清除 Windows 锁屏缓存。任务栏和桌面会短暂消失，已打开的文件夹窗口会被关闭。"
-            PrimaryButtonText="恢复并重启"
-            CloseButtonText="取消"
-            DefaultButton="Close" />
     </Grid>
 </settings:SettingsPageBase>

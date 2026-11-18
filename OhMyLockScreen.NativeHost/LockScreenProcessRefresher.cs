@@ -3,37 +3,22 @@ using System.Runtime.InteropServices;
 
 namespace OhMyLockScreen.NativeHost;
 
-internal sealed partial class LockScreenProcessRefresher
+internal static partial class LockScreenProcessRefresher
 {
     private const string ShellProcessName = "explorer";
     private const string LockScreenHostModuleName = "AboveLockAppHost.dll";
-    private static readonly string[] LockProcessNames = ["LockAppHost", "LockApp"];
     private static readonly TimeSpan ProcessExitTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ShellRestartTimeout = TimeSpan.FromSeconds(3);
-
-    public bool Refresh()
-    {
-        // The main Explorer holds AboveLockAppHost and caches the selected lock-screen extension.
-        var currentSessionId = Process.GetCurrentProcess().SessionId;
-        var succeeded = TerminateProcesses(LockProcessNames, currentSessionId);
-        succeeded &= RestartShell(currentSessionId);
-        return succeeded;
-    }
 
     internal static bool RestartExplorer()
     {
         using var currentProcess = Process.GetCurrentProcess();
-        return RestartShell(currentProcess.SessionId, allowMissingShell: false);
+        return RestartShell(currentProcess.SessionId);
     }
 
-    private static bool RestartShell(int currentSessionId, bool allowMissingShell = true)
+    private static bool RestartShell(int currentSessionId)
     {
         using var shell = FindShellProcess(currentSessionId);
-        if (shell is null && allowMissingShell)
-        {
-            return true;
-        }
-
         var shellProcessId = shell?.Id ?? 0;
         if (shell is not null)
         {
@@ -175,47 +160,6 @@ internal sealed partial class LockScreenProcessRefresher
         {
             return false;
         }
-    }
-
-    private static bool TerminateProcesses(IReadOnlyList<string> processNames, int currentSessionId)
-    {
-        var succeeded = true;
-        foreach (var processName in processNames)
-        {
-            Process[] processes;
-            try
-            {
-                processes = Process.GetProcessesByName(processName);
-            }
-            catch (Exception)
-            {
-                succeeded = false;
-                continue;
-            }
-
-            foreach (var process in processes)
-            {
-                using (process)
-                {
-                    try
-                    {
-                        if (process.HasExited || process.SessionId != currentSessionId)
-                        {
-                            continue;
-                        }
-
-                        process.Kill();
-                        succeeded &= process.WaitForExit(ProcessExitTimeout);
-                    }
-                    catch (Exception)
-                    {
-                        succeeded = false;
-                    }
-                }
-            }
-        }
-
-        return succeeded;
     }
 
     [LibraryImport("user32.dll")]

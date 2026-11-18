@@ -1,12 +1,8 @@
-using System.Diagnostics;
 using FluentIcons.Common;
 using FluentIcons.Uwp;
 using OhMyLockScreen.Shared;
 using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Helpers.UI;
-using OhMyLockScreen.Services;
-using OhMyLockScreen.Services.LockScreenProvider;
-using OhMyLockScreen.Shared.Models.LockScreenProvider;
 using OhMyLockScreen.Shared.Services.Registry;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
@@ -19,8 +15,6 @@ namespace OhMyLockScreen.Views;
 public sealed partial class ApplicationSettingsPage : Page
 {
     private readonly SettingsPageRegistry _registry;
-    private readonly SettingsService _settingsService;
-    private readonly LockScreenReplacementService _lockScreenReplacement;
     private readonly Dictionary<string, Muxc.NavigationViewItem> _menuItems = new(StringComparer.Ordinal);
     private bool _keepHistory;
     private Window? _window;
@@ -28,13 +22,10 @@ public sealed partial class ApplicationSettingsPage : Page
     private SystemNavigationManager? _systemNavigation;
     private long _rootBackToken;
     private long _settingsBackToken;
-    private bool _lockScreenEventsAttached;
 
     public ApplicationSettingsPage()
     {
         _registry = IAppHost.GetRequiredService<SettingsPageRegistry>();
-        _settingsService = IAppHost.GetRequiredService<SettingsService>();
-        _lockScreenReplacement = IAppHost.GetRequiredService<LockScreenReplacementService>();
         InitializeComponent();
 
         SettingsFrame.Tag = (Func<string, bool, bool>)NavigateToSettingsPage;
@@ -87,7 +78,6 @@ public sealed partial class ApplicationSettingsPage : Page
     private void OnLoaded(object sender, RoutedEventArgs args)
     {
         AttachSystemNavigation();
-        AttachLockScreenReplacementEvents();
         if (SettingsFrame.Content == null)
         {
             NavigateToSettingsPage("general");
@@ -161,77 +151,6 @@ public sealed partial class ApplicationSettingsPage : Page
         }
     }
 
-    private void AttachLockScreenReplacementEvents()
-    {
-        if (_lockScreenEventsAttached)
-        {
-            return;
-        }
-
-        _lockScreenEventsAttached = true;
-        _lockScreenReplacement.StateChanged += OnLockScreenReplacementStateChanged;
-        _lockScreenReplacement.OperationFailed += OnLockScreenReplacementFailed;
-    }
-
-    private void DetachLockScreenReplacementEvents()
-    {
-        if (!_lockScreenEventsAttached)
-        {
-            return;
-        }
-
-        _lockScreenEventsAttached = false;
-        _lockScreenReplacement.StateChanged -= OnLockScreenReplacementStateChanged;
-        _lockScreenReplacement.OperationFailed -= OnLockScreenReplacementFailed;
-    }
-
-    private async void OnLockScreenReplacementStateChanged(
-        object? sender,
-        LockScreenReplacementStateChangedEventArgs args)
-    {
-        var window = _window;
-        if (window == null)
-        {
-            return;
-        }
-
-        try
-        {
-            await window.Dispatcher.RunAsync(
-                CoreDispatcherPriority.Normal,
-                () => _settingsService.Settings.NotifyReplaceSystemLockScreenChanged());
-        }
-        catch (Exception exception)
-        {
-            Debug.WriteLine($"无法通知锁屏替换状态：{exception}");
-        }
-    }
-
-    private async void OnLockScreenReplacementFailed(
-        object? sender,
-        LockScreenReplacementFailedEventArgs args)
-    {
-        var window = _window;
-        if (window == null)
-        {
-            return;
-        }
-
-        var title = args.Operation == LockScreenProviderOperation.Query
-            ? "无法读取系统锁屏设置"
-            : "无法更改系统锁屏设置";
-        try
-        {
-            await window.Dispatcher.RunAsync(
-                CoreDispatcherPriority.Normal,
-                () => this.ShowErrorToast(title, args.Exception));
-        }
-        catch (Exception exception)
-        {
-            Debug.WriteLine($"无法显示锁屏替换错误：{exception}");
-        }
-    }
-
     private void AttachSystemNavigation()
     {
         if (_systemNavigation != null || Frame is not { } root)
@@ -251,13 +170,11 @@ public sealed partial class ApplicationSettingsPage : Page
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
-        DetachLockScreenReplacementEvents();
         DetachSystemNavigation();
     }
 
     private void OnWindowClosed(object sender, CoreWindowEventArgs args)
     {
-        DetachLockScreenReplacementEvents();
         DetachSystemNavigation();
     }
 

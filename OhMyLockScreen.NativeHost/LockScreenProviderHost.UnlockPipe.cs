@@ -42,7 +42,7 @@ internal static partial class LockScreenProviderHost
                     return 2;
                 }
 
-                await TryWriteDiagnosticAsync(directory, new(id, LockScreenProviderOperation.Unlock), response, [], []);
+                await TryWriteDiagnosticAsync(directory, new(id, LockScreenProviderOperation.Unlock), response);
                 return response.Success ? 0 : 1;
             }
         }

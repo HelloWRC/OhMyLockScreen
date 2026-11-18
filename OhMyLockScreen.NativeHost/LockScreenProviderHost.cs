@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Win32;
 using OhMyLockScreen.Shared.Models.LockScreenProvider;
 
 namespace OhMyLockScreen.NativeHost;
@@ -21,9 +22,6 @@ internal static partial class LockScreenProviderHost
         var responsePath = Path.Combine(directory, LockScreenProviderProtocol.ResponseFileName);
 
         LockScreenProviderRequest? request = null;
-        LockScreenRegistryAccess? registry = null;
-        IReadOnlyList<LockScreenRegistryValue> beforeValues = [];
-        IReadOnlyList<LockScreenRegistryValue> afterValues = [];
         string? processingPath = null;
         try
         {
@@ -60,18 +58,16 @@ internal static partial class LockScreenProviderHost
                 response = LockScreenUnlockCommand.Execute(request, new LockAppHostGlobalUnlockSignal());
                 await LockScreenUnlockCommand.TryAppendReceiveLatencyAsync(directory, request, receivedTimestamp, "File");
             }
+            else if (request.Operation == LockScreenProviderOperation.Query)
+            {
+                response = QueryProvider(request.RequestId);
+            }
             else
             {
-                registry = CreateRegistryAccess();
-                beforeValues = registry.ReadValues();
-                response = Execute(request, registry);
-                afterValues = registry.ReadValues();
+                throw new InvalidOperationException("未知的锁屏提供程序操作。");
             }
 
-            var hostRefresh = request.Operation == LockScreenProviderOperation.Disable && response.Success
-                ? (new LockScreenProcessRefresher().Refresh() ? "Completed" : "Failed")
-                : "NotRequested";
-            await TryWriteDiagnosticAsync(directory, request, response, beforeValues, afterValues, hostRefresh);
+            await TryWriteDiagnosticAsync(directory, request, response);
             await WriteAtomicAsync(
                 responsePath,
                 JsonSerializer.Serialize(response, LockScreenProviderJsonContext.Default.LockScreenProviderResponse));
@@ -87,7 +83,7 @@ internal static partial class LockScreenProviderHost
                     false,
                     null,
                     exception.Message);
-                await TryWriteDiagnosticAsync(directory, request, response, beforeValues, afterValues);
+                await TryWriteDiagnosticAsync(directory, request, response);
                 await TryWriteResponseAsync(responsePath, response);
             }
 
@@ -100,22 +96,12 @@ internal static partial class LockScreenProviderHost
         }
     }
 
-    private static LockScreenProviderResponse Execute(
-        LockScreenProviderRequest request,
-        LockScreenRegistryAccess registry)
+    private static LockScreenProviderResponse QueryProvider(string requestId)
     {
         var expectedAumId = GetPackageFamilyName() + "!App";
-        var state = request.Operation switch
-        {
-            LockScreenProviderOperation.Query => registry.Read(expectedAumId),
-            LockScreenProviderOperation.Enable => registry.Enable(expectedAumId),
-            LockScreenProviderOperation.Disable => registry.Disable(
-                expectedAumId,
-                LockScreenProviderProtocol.DefaultLockAppAumId),
-            _ => throw new InvalidOperationException("未知的锁屏提供程序操作。")
-        };
+        var state = CreateRegistryAccess().Read(expectedAumId);
         return new LockScreenProviderResponse(
-            request.RequestId,
+            requestId,
             true,
             state.IsEnabled,
             state.Value,
@@ -128,20 +114,17 @@ internal static partial class LockScreenProviderHost
         var views = Environment.Is64BitOperatingSystem
             ? new ILockScreenRegistryView[]
             {
-                new LockScreenRegistryView(LockScreenRegistryViewKind.Registry64),
-                new LockScreenRegistryView(LockScreenRegistryViewKind.Registry32)
+                new LockScreenRegistryView(RegistryView.Registry64),
+                new LockScreenRegistryView(RegistryView.Registry32)
             }
-            : [new LockScreenRegistryView(LockScreenRegistryViewKind.Registry32)];
+            : [new LockScreenRegistryView(RegistryView.Registry32)];
         return new LockScreenRegistryAccess(views, LockScreenKeyPath, LockAppAumIdValueName);
     }
 
     private static async Task TryWriteDiagnosticAsync(
         string directory,
         LockScreenProviderRequest request,
-        LockScreenProviderResponse response,
-        IReadOnlyList<LockScreenRegistryValue> beforeValues,
-        IReadOnlyList<LockScreenRegistryValue> afterValues,
-        string hostRefresh = "NotRequested")
+        LockScreenProviderResponse response)
     {
         try
         {
@@ -154,9 +137,6 @@ internal static partial class LockScreenProviderHost
                 $"Success={response.Success}",
                 $"IsEnabled={response.IsEnabled}",
                 $"Value={response.Value ?? "<null>"}",
-                $"Before={FormatRegistryValues(beforeValues)}",
-                $"After={FormatRegistryValues(afterValues)}",
-                $"HostRefresh={hostRefresh}",
                 $"Error={response.Error ?? "<null>"}");
             await WriteAtomicAsync(
                 Path.Combine(directory, LockScreenProviderProtocol.DiagnosticFileName),
@@ -166,9 +146,6 @@ internal static partial class LockScreenProviderHost
         {
         }
     }
-
-    private static string FormatRegistryValues(IReadOnlyList<LockScreenRegistryValue> values) =>
-        string.Join(", ", values.Select(value => $"{value.Kind}={value.Value ?? "<null>"}"));
 
     private static async Task TryWriteResponseAsync(
         string responsePath,

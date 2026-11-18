@@ -35,8 +35,6 @@
     <Compile Include="../../OhMyLockScreen/Services/Scene/DefaultSceneFactory.cs" Link="Services/DefaultSceneFactory.cs" />
     <Compile Include="../../OhMyLockScreen/Services/SettingsService.cs" Link="Services/SettingsService.cs" />
     <Compile Include="../../OhMyLockScreen/Models/Settings.cs" Link="Models/Settings.cs" />
-    <Compile Include="../../OhMyLockScreen/Services/LockScreenProvider/ILockScreenHelperClient.cs" Link="Services/LockScreenProvider/ILockScreenHelperClient.cs" />
-    <Compile Include="../../OhMyLockScreen/Services/LockScreenProvider/LockScreenReplacementService.cs" Link="Services/LockScreenProvider/LockScreenReplacementService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/FontCatalogService.cs" Link="Services/FontCatalogService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/FeatureHost/FeatureService.cs" Link="Services/FeatureService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/ComponentsService.cs" Link="Services/ComponentsService.cs" />

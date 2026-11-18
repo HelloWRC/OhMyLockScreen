@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using OhMyLockScreen.NativeHost;
 using OhMyLockScreen.Models;
@@ -24,18 +23,9 @@ internal static class LockScreenReplacementTests
 
     internal static void Run(Action<string, Action> run)
     {
-        run("Lock-screen replacement property is excluded from settings JSON", () =>
-        {
-            var property = typeof(Settings).GetProperty(nameof(Settings.ReplaceSystemLockScreen));
-            Check(property != null, "Replacement property was not found.");
-            Check(
-                property!.GetCustomAttributes(typeof(JsonIgnoreAttribute), true).Length == 1,
-                "Replacement property is not marked JsonIgnore.");
-        });
-
         run("Lock-screen helper protocol round trips with source generation", () =>
         {
-            var request = new LockScreenProviderRequest("abc", LockScreenProviderOperation.Enable);
+            var request = new LockScreenProviderRequest("abc", LockScreenProviderOperation.Query);
             var requestJson = JsonSerializer.Serialize(
                 request,
                 LockScreenProviderJsonContext.Default.LockScreenProviderRequest);
@@ -54,32 +44,27 @@ internal static class LockScreenReplacementTests
             Check(parsedResponse == response, "Protocol response did not round trip.");
         });
 
-        run("Lock-screen registry restores the default provider in both views", () =>
+        run("Lock-screen registry queries both views for the current provider", () =>
         {
             const string expectedAumId = "dev.test!App";
-            var view64 = new FakeRegistryView(LockScreenRegistryViewKind.Registry64);
-            var view32 = new FakeRegistryView(LockScreenRegistryViewKind.Registry32);
-            view32.Values["LockAppAumId"] = expectedAumId;
+            const string anotherAumId = "other.app!App";
+            var view64 = new FakeRegistryView(anotherAumId);
+            var view32 = new FakeRegistryView();
             var registry = new LockScreenRegistryAccess(
                 [view64, view32],
                 @"Software\Test\Lock Screen",
                 "LockAppAumId");
 
+            Check(
+                registry.Read(expectedAumId) == new LockScreenRegistryState(false, anotherAumId),
+                "An unrelated provider was incorrectly detected as enabled.");
+
+            view32.Value = "DEV.TEST!App";
             Check(registry.Read(expectedAumId).IsEnabled, "Legacy 32-bit provider was not detected.");
 
-            registry.Disable(expectedAumId, LockScreenProviderProtocol.DefaultLockAppAumId);
-
-            Check(
-                view64.Values["LockAppAumId"] == LockScreenProviderProtocol.DefaultLockAppAumId,
-                "64-bit provider was not restored.");
-            Check(
-                view32.Values["LockAppAumId"] == LockScreenProviderProtocol.DefaultLockAppAumId,
-                "32-bit provider was not restored.");
-
-            registry.Enable(expectedAumId);
-
-            Check(view64.Values["LockAppAumId"] == expectedAumId, "64-bit provider was not written.");
-            Check(view32.Values["LockAppAumId"] == expectedAumId, "32-bit provider was not written.");
+            view32.Value = null;
+            view64.Value = expectedAumId;
+            Check(registry.Read(expectedAumId).IsEnabled, "64-bit provider was not detected.");
         });
 
         run("Compatibility unlock mode defaults off and persists", () =>
@@ -281,112 +266,38 @@ internal static class LockScreenReplacementTests
                 "A lost reply retried an unlock that might already have been handled.");
         });
 
-        await runAsync("Lock-screen replacement refresh reads the registry-backed state", async () =>
+        await runAsync("Lock-screen status reflects the latest helper query", async () =>
         {
-            var client = new FakeClient(operation => Task.FromResult(
-                Response(operation == LockScreenProviderOperation.Query, success: true)));
-            using var service = CreateService(client);
+            var enabled = false;
+            var client = new FakeClient(_ => Task.FromResult(Response(enabled, success: true)));
+            var service = new LockScreenReplacementService(client);
 
-            await service.RefreshAsync();
-
-            Check(service.IsInitialized && service.CurrentValue, "Query state was not applied.");
-            Check(client.Operations.SequenceEqual([LockScreenProviderOperation.Query]), "Unexpected helper operation.");
-        });
-
-        await runAsync("Lock-screen replacement setter applies helper state", async () =>
-        {
-            var client = new FakeClient(operation => Task.FromResult(
-                Response(operation == LockScreenProviderOperation.Enable, success: true)));
-            using var service = CreateService(client);
-
-            await service.RefreshAsync();
-            await service.SetEnabledAsync(true);
-
-            Check(service.CurrentValue, "Enable result was not applied.");
+            Check(!await service.IsEnabledAsync(), "Disabled status was not returned.");
+            enabled = true;
+            Check(await service.IsEnabledAsync(), "External selection was not detected on the next query.");
             Check(
                 client.Operations.SequenceEqual([
                     LockScreenProviderOperation.Query,
-                    LockScreenProviderOperation.Enable
+                    LockScreenProviderOperation.Query
                 ]),
-                "Enable operation was not sent.");
+                "Unexpected helper operation.");
         });
 
-        await runAsync("Failed replacement rolls back the optimistic value and reports an error", async () =>
+        await runAsync("A failed lock-screen query surfaces the helper error", async () =>
         {
-            var enableGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var client = new FakeClient(async operation =>
+            var client = new FakeClient(_ => Task.FromResult(Response(false, success: false)));
+            var service = new LockScreenReplacementService(client);
+
+            try
             {
-                if (operation == LockScreenProviderOperation.Enable)
-                {
-                    await enableGate.Task;
-                    throw new InvalidOperationException("simulated helper failure");
-                }
-
-                return Response(false, success: true);
-            });
-            using var service = CreateService(client);
-            LockScreenReplacementFailedEventArgs? failure = null;
-            service.OperationFailed += (_, args) => failure = args;
-
-            await service.RefreshAsync();
-            var operation = service.SetEnabledAsync(true);
-            Check(service.CurrentValue, "Setter was not optimistic.");
-
-            enableGate.SetResult();
-            await operation;
-
-            Check(!service.CurrentValue, "Failed set did not roll back.");
-            Check(
-                failure is { Operation: LockScreenProviderOperation.Enable, RolledBack: true },
-                "Failure was not reported with rollback.");
-        });
-
-        await runAsync("Rapid replacement requests do not publish stale success state", async () =>
-        {
-            var enableGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var client = new FakeClient(async operation =>
+                await service.IsEnabledAsync();
+            }
+            catch (InvalidOperationException exception) when (exception.Message == "test failure")
             {
-                if (operation == LockScreenProviderOperation.Enable)
-                {
-                    await enableGate.Task;
-                }
+                return;
+            }
 
-                return Response(operation == LockScreenProviderOperation.Enable, success: true);
-            });
-            using var service = CreateService(client);
-
-            await service.RefreshAsync();
-            var enable = service.SetEnabledAsync(true);
-            var disable = service.SetEnabledAsync(false);
-            Check(service.CurrentValue == false, "Latest optimistic disable was not retained.");
-
-            enableGate.SetResult();
-            await enable;
-            await disable;
-
-            Check(!service.CurrentValue, "Stale enable result overwrote the latest disable.");
-            Check(
-                client.Operations.SequenceEqual([
-                    LockScreenProviderOperation.Query,
-                    LockScreenProviderOperation.Enable,
-                    LockScreenProviderOperation.Disable
-                ]),
-                "Rapid requests were not serialized in order.");
-        });
-
-        await runAsync("Refresh failure is surfaced without changing the cached value", async () =>
-        {
-            var client = new FakeClient(_ => throw new TimeoutException("simulated timeout"));
-            using var service = CreateService(client);
-            LockScreenReplacementFailedEventArgs? failure = null;
-            service.OperationFailed += (_, args) => failure = args;
-
-            await service.RefreshAsync();
-
-            Check(!service.CurrentValue, "Refresh failure changed the cached value.");
-            Check(
-                failure is { Operation: LockScreenProviderOperation.Query },
-                "Refresh failure was not reported.");
+            throw new Exception("Query failure was not reported.");
         });
 
         await runAsync("System unlock uses the helper and reports success", async () =>
@@ -470,20 +381,12 @@ internal static class LockScreenReplacementTests
         }
     }
 
-    private sealed class FakeRegistryView(LockScreenRegistryViewKind kind) : ILockScreenRegistryView
+    private sealed class FakeRegistryView(string? value = null) : ILockScreenRegistryView
     {
-        public LockScreenRegistryViewKind Kind { get; } = kind;
-        internal Dictionary<string, string> Values { get; } = new(StringComparer.Ordinal);
+        internal string? Value { get; set; } = value;
 
-        public string? ReadValue(string keyPath, string valueName) =>
-            Values.TryGetValue(valueName, out var value) ? value : null;
-
-        public void WriteValue(string keyPath, string valueName, string value) =>
-            Values[valueName] = value;
+        public string? ReadValue(string keyPath, string valueName) => Value;
     }
-
-    private static LockScreenReplacementService CreateService(ILockScreenHelperClient client) =>
-        new(client, NullLogger<LockScreenReplacementService>.Instance);
 
     private static SettingsService CreateSettingsService()
     {

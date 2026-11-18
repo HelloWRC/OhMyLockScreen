@@ -38,10 +38,9 @@
 - 视频呈现使用自有 BackgroundVideoView/VideoSwapChain 管理生命周期，避免 LibVLCSharp VideoView 的全局匿名事件引用；释放时先停止并销毁播放器，再解绑面板与交换链，执行 D3D ClearState/Flush 后释放上下文和设备。
 - 视频交换链的宽高私有数据 GUID 必须匹配 VLC WinRT 输出协议；原生检查使用独立协议常量，实际播放需在隔离 UWP 预览包中验证解码帧与输出像素。
 - VLC 3 不将负数 input-repeat 视为无限循环；背景通过 EndReached 调度到所属 UI 线程后 Stop/Play 重播，并在有效视频输出建立后重新应用裁剪比例。LibVLCSharp 回调的 sender 是内部事件管理器，订阅时需捕获对应播放器，不能用 sender 识别播放器。
-- 锁屏选择通过 windows.lockScreen 扩展和当前用户的 LockAppAumId 配置实现。运行时由 NativeHost 直接读写该值；关闭替换前通过 ContentDialog 提示资源管理器将重启，用户确认后才向 32 位和 64 位注册表视图写入 Microsoft.LockApp_cw5n1h2txyewy!WindowsDefaultLockScreen，并重启当前会话中缓存锁屏扩展的 LockAppHost/LockApp 与桌面 Explorer，让 Windows 丢弃锁屏扩展缓存并回退到默认锁屏，不保留原值备份。
+- 应用通过 `windows.lockScreen` 声明锁屏扩展，由 NativeHost 只读查询当前用户注册表的 `LockAppAumId` 以检测启用状态。用户按首页链接中的指南在应用外切换锁屏。
 - NativeHost 由同一 full-trust 扩展的参数组启动，音频采集、一次性锁屏命令和桌面编辑器恢复各自管理进程生命周期。
 - 桌面场景编辑器激活后在所属 UI 线程检查 CoreWindow 的根窗口类；超时后请求 NativeHost 独立显示恢复提示，本体随即退出。用户确认后，NativeHost 先终止仍存活的请求进程，再重启当前会话的 Explorer，通过进程外系统激活启动应用，并等待可见编辑器窗口确认就绪。
-- 包清单必须通过 desktop6:RegistryWriteVirtualization 禁用 MSIX 注册表写入虚拟化；否则 Helper 的 HKCU 写入不会落到用户真实注册表。
 - Figma 设计稿中呈现的 Fluent System Icon 等字体图标版本可能与项目当前安装的不符，此时按字体位点名称的语义匹配，而不是位点本身或外观。
 - 特性按目标类型应用原生属性，不递归修改子元素；卸载时恢复目标原绑定或本地值。组件默认特性仅在新建配置时生成，加载或重建视图时不补齐。
 - 网页组件使用 WinUI 2 WebView2 呈现 HTTP(S) 页面。网页和外层 Presenter 默认禁用输入与命中，可按组件启用交互。组件在编辑器中通过组件树访问设置，在完整预览与锁屏中接收已启用的网页输入。
