@@ -14,6 +14,86 @@
     Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
     FontFamily="Microsoft YaHei UI">
     <Page.Resources>
+        <Style x:Key="EditorListItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="MinHeight" Value="40" />
+        </Style>
+        <!-- Windows 10 lacks the native single-selection indicator. Use WinUI's cross-version tree row brushes. -->
+        <ControlTemplate x:Key="Windows10EditorListItemTemplate" TargetType="ListViewItem">
+            <Grid x:Name="Row" Margin="2" Background="{TemplateBinding Background}" CornerRadius="{ThemeResource ControlCornerRadius}">
+                <VisualStateManager.VisualStateGroups>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualState x:Name="Normal" />
+                        <VisualState x:Name="PointerOver">
+                            <VisualState.Setters>
+                                <Setter Target="Row.Background" Value="{ThemeResource TreeViewItemBackgroundPointerOver}" />
+                                <Setter Target="Presenter.Foreground" Value="{ThemeResource TreeViewItemForegroundPointerOver}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Pressed">
+                            <VisualState.Setters>
+                                <Setter Target="Row.Background" Value="{ThemeResource TreeViewItemBackgroundPressed}" />
+                                <Setter Target="Presenter.Foreground" Value="{ThemeResource TreeViewItemForegroundPressed}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Selected">
+                            <VisualState.Setters>
+                                <Setter Target="Row.Background" Value="{ThemeResource TreeViewItemBackgroundSelected}" />
+                                <Setter Target="Presenter.Foreground" Value="{ThemeResource TreeViewItemForegroundSelected}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="PointerOverSelected">
+                            <VisualState.Setters>
+                                <Setter Target="Row.Background" Value="{ThemeResource TreeViewItemBackgroundSelectedPointerOver}" />
+                                <Setter Target="Presenter.Foreground" Value="{ThemeResource TreeViewItemForegroundSelectedPointerOver}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="PressedSelected">
+                            <VisualState.Setters>
+                                <Setter Target="Row.Background" Value="{ThemeResource TreeViewItemBackgroundSelectedPressed}" />
+                                <Setter Target="Presenter.Foreground" Value="{ThemeResource TreeViewItemForegroundSelectedPressed}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <VisualState.Setters>
+                                <Setter Target="Row.Background" Value="{ThemeResource TreeViewItemBackgroundDisabled}" />
+                                <Setter Target="Presenter.Foreground" Value="{ThemeResource TreeViewItemForegroundDisabled}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="SelectedDisabled">
+                            <VisualState.Setters>
+                                <Setter Target="Row.Background" Value="{ThemeResource TreeViewItemBackgroundSelectedDisabled}" />
+                                <Setter Target="Presenter.Foreground" Value="{ThemeResource TreeViewItemForegroundSelectedDisabled}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                    <VisualStateGroup x:Name="DragStates">
+                        <VisualState x:Name="NotDragging" />
+                        <VisualState x:Name="Dragging">
+                            <VisualState.Setters>
+                                <Setter Target="Row.Opacity" Value="{ThemeResource ListViewItemDragThemeOpacity}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateManager.VisualStateGroups>
+                <ContentPresenter
+                    x:Name="Presenter"
+                    Padding="{TemplateBinding Padding}"
+                    Content="{TemplateBinding Content}"
+                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                    ContentTransitions="{TemplateBinding ContentTransitions}"
+                    HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                    VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                    Foreground="{TemplateBinding Foreground}" />
+                <Border
+                    Width="3" Height="16" CornerRadius="1.5"
+                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                    Background="{ThemeResource TreeViewItemSelectionIndicatorForeground}"
+                    IsHitTestVisible="False"
+                    Visibility="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BooleanVisibilityConverter}}" />
+            </Grid>
+        </ControlTemplate>
         <DataTemplate x:Key="AddFeatureMenuItemTemplate">
             <MenuFlyoutItem Text="{Binding Name}" Click="OnAddFeatureClick" />
         </DataTemplate>
@@ -406,11 +486,8 @@
                             SelectionChanged="OnSceneSelectionChanged"
                             ContainerContentChanging="OnSceneRowContainerChanging">
                             <ListView.ItemContainerStyle>
-                                <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                                <Style TargetType="ListViewItem" BasedOn="{StaticResource EditorListItemStyle}">
                                     <Setter Property="Padding" Value="8,0" />
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="VerticalContentAlignment" Value="Center" />
-                                    <Setter Property="MinHeight" Value="40" />
                                 </Style>
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
@@ -617,21 +694,8 @@
                                 DoubleTapped="OnAddComponentDoubleTapped"
                                 ItemsSource="{x:Bind ViewModel.Library}">
                                 <ListView.ItemContainerStyle>
-                                    <Style
-                                        TargetType="ListViewItem"
-                                        BasedOn="{StaticResource DefaultListViewItemStyle}">
-                                        <Setter
-                                            Property="Padding"
-                                            Value="16,0" />
-                                        <Setter
-                                            Property="HorizontalContentAlignment"
-                                            Value="Stretch" />
-                                        <Setter
-                                            Property="MinHeight"
-                                            Value="40" />
-                                        <Setter
-                                            Property="VerticalContentAlignment"
-                                            Value="Center" />
+                                    <Style TargetType="ListViewItem" BasedOn="{StaticResource EditorListItemStyle}">
+                                        <Setter Property="Padding" Value="16,0" />
                                     </Style>
                                 </ListView.ItemContainerStyle>
                                 <ListView.ItemTemplate>

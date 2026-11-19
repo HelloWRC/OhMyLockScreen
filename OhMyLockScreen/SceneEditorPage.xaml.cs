@@ -102,6 +102,19 @@ public sealed partial class SceneEditorPage : Page
         _lockScreenReplacement = IAppHost.GetRequiredService<LockScreenReplacementService>();
         ViewModel = IAppHost.GetRequiredService<SceneEditorViewModel>();
         InitializeComponent();
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+        {
+            var template = (ControlTemplate)Resources["Windows10EditorListItemTemplate"];
+            foreach (var list in new[] { SceneList, ComponentLibrary })
+            {
+                list.ItemContainerStyle = new Style(typeof(ListViewItem))
+                {
+                    BasedOn = list.ItemContainerStyle,
+                    Setters = { new Setter(Control.TemplateProperty, template) }
+                };
+            }
+        }
+
         EditorPresenter.SuppressParallaxWithoutBackground = true;
         EditorPresenter.ShowSystemBackgroundPreview = true;
         NavigationCacheMode = NavigationCacheMode.Enabled;

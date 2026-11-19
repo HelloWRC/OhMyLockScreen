@@ -46,29 +46,34 @@
                                     <VisualState x:Name="Normal" />
                                     <VisualState x:Name="PointerOver">
                                         <VisualState.Setters>
-                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource ListViewItemBackgroundPointerOver}" />
+                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource TreeViewItemBackgroundPointerOver}" />
+                                            <Setter Target="RadioIndicator.Foreground" Value="{ThemeResource TreeViewItemForegroundPointerOver}" />
                                         </VisualState.Setters>
                                     </VisualState>
                                     <VisualState x:Name="Pressed">
                                         <VisualState.Setters>
-                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource ListViewItemBackgroundPressed}" />
+                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource TreeViewItemBackgroundPressed}" />
+                                            <Setter Target="RadioIndicator.Foreground" Value="{ThemeResource TreeViewItemForegroundPressed}" />
                                         </VisualState.Setters>
                                     </VisualState>
                                     <VisualState x:Name="Selected">
                                         <VisualState.Setters>
-                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource ListViewItemBackgroundSelected}" />
+                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource TreeViewItemBackgroundSelected}" />
+                                            <Setter Target="RadioIndicator.Foreground" Value="{ThemeResource TreeViewItemForegroundSelected}" />
                                             <Setter Target="RadioIndicator.IsChecked" Value="True" />
                                         </VisualState.Setters>
                                     </VisualState>
                                     <VisualState x:Name="PointerOverSelected">
                                         <VisualState.Setters>
-                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource ListViewItemBackgroundSelectedPointerOver}" />
+                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource TreeViewItemBackgroundSelectedPointerOver}" />
+                                            <Setter Target="RadioIndicator.Foreground" Value="{ThemeResource TreeViewItemForegroundSelectedPointerOver}" />
                                             <Setter Target="RadioIndicator.IsChecked" Value="True" />
                                         </VisualState.Setters>
                                     </VisualState>
                                     <VisualState x:Name="PressedSelected">
                                         <VisualState.Setters>
-                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource ListViewItemBackgroundSelectedPressed}" />
+                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource TreeViewItemBackgroundSelectedPressed}" />
+                                            <Setter Target="RadioIndicator.Foreground" Value="{ThemeResource TreeViewItemForegroundSelectedPressed}" />
                                             <Setter Target="RadioIndicator.IsChecked" Value="True" />
                                         </VisualState.Setters>
                                     </VisualState>
@@ -79,7 +84,8 @@
                                     </VisualState>
                                     <VisualState x:Name="SelectedDisabled">
                                         <VisualState.Setters>
-                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource ListViewItemBackgroundSelected}" />
+                                            <Setter Target="ContentBorder.Background" Value="{ThemeResource TreeViewItemBackgroundSelected}" />
+                                            <Setter Target="RadioIndicator.Foreground" Value="{ThemeResource TreeViewItemForegroundSelected}" />
                                             <Setter Target="ContentBorder.Opacity" Value="{ThemeResource ListViewItemDisabledThemeOpacity}" />
                                             <Setter Target="RadioIndicator.IsChecked" Value="True" />
                                         </VisualState.Setters>
