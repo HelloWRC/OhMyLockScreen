@@ -21,6 +21,8 @@
     <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <ProjectReference Include="../../OhMyLockScreen.Shared/OhMyLockScreen.Shared.csproj" />
     <Content Include="../../OhMyLockScreen/Assets/*.png" Link="Assets/%(Filename)%(Extension)" />
+    <Content Include="../../OhMyLockScreen/Assets/DefaultScene.json" Link="Assets/DefaultScene.json" />
+    <Compile Include="../../OhMyLockScreen/WindowTransparency.cs" Link="WindowTransparency.cs" />
     <Compile Include="../../OhMyLockScreen/Models/Features/**/*.cs" Link="Models/Features/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BorderFeature.cs" Link="Services/BorderFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BackgroundFeature.cs" Link="Services/BackgroundFeature.cs" />
@@ -34,6 +36,9 @@
     <Compile Include="../../OhMyLockScreen/Services/Scene/SceneService.cs" Link="Services/SceneService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/DefaultSceneFactory.cs" Link="Services/DefaultSceneFactory.cs" />
     <Compile Include="../../OhMyLockScreen/Services/SettingsService.cs" Link="Services/SettingsService.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/WeatherService.cs" Link="Services/WeatherService.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/Weather/WeatherPresentation.cs" Link="Controls/Weather/WeatherPresentation.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/Components/WeatherComponent.cs" Link="Controls/Components/WeatherComponent.cs" />
     <Compile Include="../../OhMyLockScreen/Models/Settings.cs" Link="Models/Settings.cs" />
     <Compile Include="../../OhMyLockScreen/Services/FontCatalogService.cs" Link="Services/FontCatalogService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/FeatureHost/FeatureService.cs" Link="Services/FeatureService.cs" />

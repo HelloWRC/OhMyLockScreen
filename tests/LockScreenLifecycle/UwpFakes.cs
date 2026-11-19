@@ -149,6 +149,13 @@ namespace Windows.UI.Core
         PointerActivated
     }
 
+    public enum CoreWindowActivationMode
+    {
+        None,
+        ActivatedInForeground,
+        ActivatedNotForeground
+    }
+
     public enum CoreDispatcherPriority
     {
         Normal,
@@ -226,6 +233,8 @@ namespace Windows.UI.Core
 
     public sealed partial class CoreWindow
     {
+        public static CoreWindow GetForCurrentThread() => Windows.UI.Xaml.Window.Current.CoreWindow;
+        public CoreWindowActivationMode ActivationMode { get; internal set; }
         public CoreDispatcher Dispatcher { get; } = new();
 
         public event UwpTypedEventHandler<CoreWindow, KeyEventArgs>? KeyDown;
@@ -673,13 +682,21 @@ namespace Windows.UI.Xaml
         public int VisibilitySubscribers => VisibilityChanged?.GetInvocationList().Length ?? 0;
         public bool Visible { get; private set; }
 
-        public void Activate() => Activated?.Invoke(this, new(CoreWindowActivationState.CodeActivated));
+        public void Activate()
+        {
+            CoreWindow.ActivationMode = CoreWindowActivationMode.ActivatedInForeground;
+            Activated?.Invoke(this, new(CoreWindowActivationState.CodeActivated));
+        }
         public void SetVisible(bool visible)
         {
             Visible = visible;
             VisibilityChanged?.Invoke(this, new(visible));
         }
-        public void Deactivate() => Activated?.Invoke(this, new(CoreWindowActivationState.Deactivated));
+        public void Deactivate()
+        {
+            CoreWindow.ActivationMode = CoreWindowActivationMode.None;
+            Activated?.Invoke(this, new(CoreWindowActivationState.Deactivated));
+        }
     }
 
     public sealed class DispatcherTimer

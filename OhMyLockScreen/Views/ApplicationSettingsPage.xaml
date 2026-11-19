@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:icons="using:FluentIcons.Uwp"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
     <Page.Resources>
         <x:Double x:Key="SettingsNavigationPaneWidth">320</x:Double>
@@ -17,41 +18,43 @@
             <Setter Property="FontSize" Value="16" />
         </Style>
     </Page.Resources>
-    <muxc:NavigationView
-        x:Name="SettingsNavigation"
-        AlwaysShowHeader="False"
-        ExpandedModeThresholdWidth="{StaticResource SettingsExpandedModeThresholdWidth}"
-        IsBackButtonVisible="Collapsed"
-        IsSettingsVisible="False"
-        OpenPaneLength="{StaticResource SettingsNavigationPaneWidth}"
-        PaneDisplayMode="Auto">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <Grid
-                x:Name="TitleArea"
-                Style="{StaticResource SettingsTitleAreaStyle}">
-                <TextBlock
-                    x:Name="SettingsTitle"
-                    AutomationProperties.HeadingLevel="Level1"
-                    Style="{StaticResource TitleTextBlockStyle}" />
+    <ui:DrawerHost x:Name="SettingsDrawer" DrawerPlacement="Right">
+        <muxc:NavigationView
+            x:Name="SettingsNavigation"
+            AlwaysShowHeader="False"
+            ExpandedModeThresholdWidth="{StaticResource SettingsExpandedModeThresholdWidth}"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            OpenPaneLength="{StaticResource SettingsNavigationPaneWidth}"
+            PaneDisplayMode="Auto">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid
+                    x:Name="TitleArea"
+                    Style="{StaticResource SettingsTitleAreaStyle}">
+                    <TextBlock
+                        x:Name="SettingsTitle"
+                        AutomationProperties.HeadingLevel="Level1"
+                        Style="{StaticResource TitleTextBlockStyle}" />
+                </Grid>
+                <Frame
+                    x:Name="SettingsFrame"
+                    Grid.Row="1"
+                    CacheSize="0">
+                    <Frame.ContentTransitions>
+                        <TransitionCollection>
+                            <NavigationThemeTransition>
+                                <NavigationThemeTransition.DefaultNavigationTransitionInfo>
+                                    <SlideNavigationTransitionInfo Effect="FromBottom" />
+                                </NavigationThemeTransition.DefaultNavigationTransitionInfo>
+                            </NavigationThemeTransition>
+                        </TransitionCollection>
+                    </Frame.ContentTransitions>
+                </Frame>
             </Grid>
-            <Frame
-                x:Name="SettingsFrame"
-                Grid.Row="1"
-                CacheSize="0">
-                <Frame.ContentTransitions>
-                    <TransitionCollection>
-                        <NavigationThemeTransition>
-                            <NavigationThemeTransition.DefaultNavigationTransitionInfo>
-                                <SlideNavigationTransitionInfo Effect="FromBottom" />
-                            </NavigationThemeTransition.DefaultNavigationTransitionInfo>
-                        </NavigationThemeTransition>
-                    </TransitionCollection>
-                </Frame.ContentTransitions>
-            </Frame>
-        </Grid>
-    </muxc:NavigationView>
+        </muxc:NavigationView>
+    </ui:DrawerHost>
 </Page>

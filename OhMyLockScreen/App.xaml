@@ -10,6 +10,8 @@
                     xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <ResourceDictionary
                     Source="ms-appx:///Controls/Editor/EditorResources.xaml" />
+                <ResourceDictionary Source="ms-appx:///OhMyLockScreen.Shared/Controls/UI/DrawerHostResources.xaml" />
+                <ResourceDictionary Source="ms-appx:///OhMyLockScreen.Shared/Controls/Weather/WeatherIconTemplates.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <x:Double x:Key="SettingsContainerWidth">960</x:Double>
             <x:Double x:Key="SettingsExpandedModeThresholdWidth">1008</x:Double>

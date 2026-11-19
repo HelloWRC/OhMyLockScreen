@@ -46,6 +46,12 @@ public sealed partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (args.Arguments.Contains("acrylic-foreground", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchAcrylicForegroundPreview();
+            return;
+        }
+
         if (args.Arguments.Contains("webview2", StringComparison.OrdinalIgnoreCase))
         {
             LaunchWebView2Preview(args.Arguments == "webview2-missing-runtime");

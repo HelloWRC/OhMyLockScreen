@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using FluentIcons.Common;
-using FluentIcons.Uwp;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Services.SystemStatus;
 using OhMyLockScreen.Shared.Abstractions.Controls;
@@ -24,7 +24,7 @@ public sealed class SystemStatusComponent : ComponentBase<SystemStatusComponentS
     public const string Id = "omls.components.systemStatus";
     private readonly ISystemStatusService _service;
     private readonly Grid _root = new();
-    private readonly FluentIcon _icon = new() { IconSize = IconSize.Resizable, VerticalAlignment = VerticalAlignment.Center };
+    private readonly ViewFluentIcon _icon = new() { IconSize = IconSize.Resizable, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _text = new() { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     private SystemStatusComponentSettings? _observed;
     private IDisposable? _subscription;

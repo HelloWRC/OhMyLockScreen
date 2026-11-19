@@ -41,6 +41,12 @@
     <Compile Remove="../../OhMyLockScreen/Services/Media/WindowsMediaSessionSource.cs" />
     <Compile Remove="../../OhMyLockScreen/Services/SystemStatus/AudioVolume*.cs" />
     <Compile Remove="../../OhMyLockScreen/Controls/Components/SystemStatusSettingsControl.cs" />
+    <Compile Remove="../../OhMyLockScreen/Controls/Components/WeatherComponentSettingsControl.cs" />
+    <Compile Remove="../../OhMyLockScreen/Controls/Components/WeatherComponent.cs" />
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/Weather/*.cs" />
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/DrawerHost.cs" />
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BackdropBlurBrush.cs" />
+    <Compile Remove="../../OhMyLockScreen/Views/SettingsPages/WeatherSettingsPage.xaml.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/Scene/VideoSwapChain.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/ToastCard.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BrushEditControl.xaml.cs" />

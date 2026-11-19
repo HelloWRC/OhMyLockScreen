@@ -63,5 +63,6 @@
     <uap:Capability Name="picturesLibrary" />
     <uap7:Capability Name="globalMediaControl" />
     <DeviceCapability Name="bluetooth" />
+    <DeviceCapability Name="location" />
   </Capabilities>
 </Package>

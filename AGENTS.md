@@ -49,6 +49,8 @@
 - 媒体通过共享 IMediaStateService 读取系统当前 SMTC 会话；共享快照仅包含数据，UI 图像和画刷由各视图创建。异步结果显式返回所属 Dispatcher，卸载后忽略过期结果。
 - IsEditing 从场景显式传递到嵌套组件且不持久化；编辑时 Presenter 不同步组件 Visibility，无媒体会话使用隔离占位数据，完整预览恢复真实行为；媒体默认仅在无会话时隐藏。
 - 系统状态通过共享 ISystemStatusService 按已加载实例的状态类型启停监听，快照仅包含数据；视图更新回到所属 Dispatcher，卸载后丢弃旧结果。
+- 天气沿用 ClassIsland 的共享 IWeatherService、五分钟 DispatcherTimer、`Settings.LastWeatherInfo` 和按 ID 选择的图标模板注册表。注册表只保存资源键，模板与场景图标字体在使用它们的视图线程上解析，不跨视图共享 XAML 对象。锁屏使用已保存的位置，Windows 定位权限只在桌面前台请求。
+- 设置页通过 `SettingsPageBase.OpenDrawer` 和 `CloseDrawer` 使用 Shared 中的 DrawerHost。每个设置窗口有独立的抽屉，返回优先关闭抽屉。
 - 音频频谱通过共享 IAudioSpectrumService 按租约连接 NativeHost，避免锁屏 UWP 宿主 loopback 静音；通过当前会话的包内管道传递频谱快照，无客户端后释放采集并自动退出。
 
 ## 验证原则

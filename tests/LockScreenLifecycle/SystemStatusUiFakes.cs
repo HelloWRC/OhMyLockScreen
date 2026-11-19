@@ -18,8 +18,10 @@ namespace OhMyLockScreen.Services.SystemStatus
 
 namespace FluentIcons.Uwp
 {
-    public sealed class FluentIcon : Windows.UI.Xaml.Controls.FontIcon
+    public class FluentIcon : Windows.UI.Xaml.Controls.FontIcon
     {
+        protected virtual Windows.UI.Xaml.Media.FontFamily IconFont => throw new NotSupportedException();
+        public FluentIcons.Common.IconVariant IconVariant { get; set; }
         public FluentIcons.Common.Icon Icon { get; set; }
         public FluentIcons.Common.IconSize IconSize { get; set; }
     }

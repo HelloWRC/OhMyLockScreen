@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -28,7 +29,10 @@ using OhMyLockScreen.Services.Audio;
 using OhMyLockScreen.Services.LockScreenProvider;
 using OhMyLockScreen.Shared.Abstractions.Services.Audio;
 using OhMyLockScreen.Shared.Extensions.Registry;
+using OhMyLockScreen.Shared.Abstractions.Services.Weather;
+using OhMyLockScreen.Shared.Models.Weather;
 using OhMyLockScreen.Views.SettingsPages;
+using Windows.UI.Xaml;
 
 namespace OhMyLockScreen;
 
@@ -43,6 +47,9 @@ public sealed partial class App
 
     private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
     {
+        services.AddWeatherIconTemplate(WeatherIconIds.Lucide, "Lucide（默认）", "LucideWeatherIconTemplate");
+        services.AddWeatherIconTemplate(WeatherIconIds.FluentDesign, "Fluent Design", "FluentDesignWeatherIconTemplate");
+        services.AddWeatherIconTemplate(WeatherIconIds.SimpleText, "纯文本", "SimpleTextWeatherIconTemplate");
         services.AddSingleton<IHostLifetime, UwpHostLifetime>();
         services.AddSingleton<ILockScreenHelperClient, LockScreenHelperClient>();
         services.AddSingleton<ILockScreenUnlockService, LockScreenUnlockService>();
@@ -52,6 +59,13 @@ public sealed partial class App
         services.AddSingleton<ISceneService>(provider => provider.GetRequiredService<SceneService>());
         services.AddSingleton<ISceneBlobStorageService, SceneBlobStorageService>();
         services.AddSingleton(TimeProvider.System);
+        var uiDispatcher = Window.Current?.Dispatcher;
+        services.AddSingleton(provider => new WeatherService(provider.GetRequiredService<SettingsService>(),
+            new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }),
+            provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<ILogger<WeatherService>>(),
+            uiDispatcher));
+        services.AddSingleton<IWeatherService>(provider => provider.GetRequiredService<WeatherService>());
+        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<WeatherService>());
         services.AddSingleton<IAudioSpectrumSource, WindowsAudioSpectrumSource>();
         services.AddSingleton<AudioSpectrumService>();
         services.AddSingleton<IAudioSpectrumService>(provider => provider.GetRequiredService<AudioSpectrumService>());
@@ -71,11 +85,13 @@ public sealed partial class App
         services.AddSingleton<IFeatureService, FeatureService>();
         services.AddSingleton<IComponentsService, ComponentsService>();
         services.AddSettingsPage<GeneralSettingsPage>();
+        services.AddSettingsPage<WeatherSettingsPage>();
         services.AddSettingsPage<AboutSettingsPage>();
         // Components
         services.AddComponent<TextComponent, TextSettingsControl>();
         services.AddComponent<ClockComponent, ClockSettingsControl>();
         services.AddComponent<DateComponent>();
+        services.AddComponent<WeatherComponent, WeatherComponentSettingsControl>();
         services.AddComponent<SystemStatusComponent, SystemStatusSettingsControl>();
         services.AddComponent<AudioSpectrumComponent, AudioSpectrumSettingsControl>();
         services.AddComponent<WebView2Component, WebView2SettingsControl>();

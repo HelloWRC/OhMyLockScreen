@@ -12,6 +12,7 @@
       <Folder Include="Abstractions\Services\" />
       <Folder Include="Extensions\" />
       <Content Include="Assets\Media\*" />
+      <Content Include="Assets\WeatherIcons\*" />
     </ItemGroup>
     
     <ItemGroup>

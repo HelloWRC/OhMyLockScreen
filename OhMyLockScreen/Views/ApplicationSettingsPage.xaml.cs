@@ -2,6 +2,7 @@ using FluentIcons.Common;
 using FluentIcons.Uwp;
 using OhMyLockScreen.Shared;
 using OhMyLockScreen.Shared.Abstractions.Controls;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers.UI;
 using OhMyLockScreen.Shared.Services.Registry;
 using Windows.UI.Core;
@@ -22,6 +23,8 @@ public sealed partial class ApplicationSettingsPage : Page
     private SystemNavigationManager? _systemNavigation;
     private long _rootBackToken;
     private long _settingsBackToken;
+    private long _drawerBackToken;
+    private IDisposable? _drawerRoute;
 
     public ApplicationSettingsPage()
     {
@@ -113,6 +116,7 @@ public sealed partial class ApplicationSettingsPage : Page
 
     private void OnSettingsNavigated(object sender, NavigationEventArgs args)
     {
+        ResetDrawer();
         if (args.Content is SettingsPageBase page)
         {
             page.NavigationCacheMode = NavigationCacheMode.Disabled;
@@ -161,10 +165,12 @@ public sealed partial class ApplicationSettingsPage : Page
         _rootFrame = root;
         _window = Window.Current;
         _window.Closed += OnWindowClosed;
+        _drawerRoute = SettingsPageBase.AttachDrawerRoute(_window, SettingsFrame, OpenDrawer, CloseDrawer);
         _systemNavigation = SystemNavigationManager.GetForCurrentView();
         _systemNavigation.BackRequested += OnSystemBackRequested;
         _rootBackToken = root.RegisterPropertyChangedCallback(Frame.CanGoBackProperty, OnCanGoBackChanged);
         _settingsBackToken = SettingsFrame.RegisterPropertyChangedCallback(Frame.CanGoBackProperty, OnCanGoBackChanged);
+        _drawerBackToken = SettingsDrawer.RegisterPropertyChangedCallback(DrawerHost.IsDrawerOpenProperty, OnCanGoBackChanged);
         UpdateSystemBackButton();
     }
 
@@ -189,6 +195,10 @@ public sealed partial class ApplicationSettingsPage : Page
         systemNavigation.BackRequested -= OnSystemBackRequested;
         root.UnregisterPropertyChangedCallback(Frame.CanGoBackProperty, _rootBackToken);
         SettingsFrame.UnregisterPropertyChangedCallback(Frame.CanGoBackProperty, _settingsBackToken);
+        SettingsDrawer.UnregisterPropertyChangedCallback(DrawerHost.IsDrawerOpenProperty, _drawerBackToken);
+        _drawerRoute?.Dispose();
+        _drawerRoute = null;
+        ResetDrawer();
         systemNavigation.AppViewBackButtonVisibility = AppViewBackButtonVisibility.Collapsed;
         _systemNavigation = null;
         _rootFrame = null;
@@ -201,7 +211,7 @@ public sealed partial class ApplicationSettingsPage : Page
     {
         if (_systemNavigation is { } systemNavigation)
         {
-            systemNavigation.AppViewBackButtonVisibility = SettingsFrame.CanGoBack || _rootFrame?.CanGoBack == true
+            systemNavigation.AppViewBackButtonVisibility = SettingsDrawer.IsDrawerOpen || SettingsFrame.CanGoBack || _rootFrame?.CanGoBack == true
                 ? AppViewBackButtonVisibility.Visible
                 : AppViewBackButtonVisibility.Collapsed;
         }
@@ -222,6 +232,12 @@ public sealed partial class ApplicationSettingsPage : Page
             return false;
         }
 
+        if (SettingsDrawer.IsDrawerOpen)
+        {
+            CloseDrawer();
+            return true;
+        }
+
         var destination = SettingsFrame.CanGoBack ? SettingsFrame : root;
         if (!destination.CanGoBack)
         {
@@ -230,5 +246,19 @@ public sealed partial class ApplicationSettingsPage : Page
 
         destination.GoBack();
         return true;
+    }
+
+    private void OpenDrawer(object? content)
+    {
+        SettingsDrawer.DrawerContent = content;
+        SettingsDrawer.IsDrawerOpen = true;
+    }
+
+    private void CloseDrawer() => SettingsDrawer.IsDrawerOpen = false;
+
+    private void ResetDrawer()
+    {
+        CloseDrawer();
+        SettingsDrawer.DrawerContent = null;
     }
 }

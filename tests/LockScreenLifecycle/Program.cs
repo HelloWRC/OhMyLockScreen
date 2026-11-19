@@ -40,6 +40,14 @@ if (args.Contains("--system-status-only"))
     return;
 }
 
+if (args.Contains("--weather-only"))
+{
+    WeatherTests.Run(Run);
+    await WeatherTests.RunAsync(RunAsync);
+    Console.WriteLine($"All {passed} weather checks passed using isolated settings and simulated sources.");
+    return;
+}
+
 if (args.Contains("--brush-only"))
 {
     BrushSerializationTests.Run(Run);
@@ -176,6 +184,8 @@ AudioSpectrumTests.Run(Run);
 await AudioSpectrumTests.RunAsync(RunAsync);
 SystemStatusTests.Run(Run);
 await SystemStatusTests.RunAsync(RunAsync);
+WeatherTests.Run(Run);
+await WeatherTests.RunAsync(RunAsync);
 MediaTests.Run(Run);
 await MediaTests.RunAsync(RunAsync);
 BrushSerializationTests.Run(Run);

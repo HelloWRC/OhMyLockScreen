@@ -1,0 +1,22 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:weather="using:OhMyLockScreen.Shared.Controls.Weather">
+    <weather:WeatherGlyphConverter x:Key="FluentWeatherGlyph" Kind="Fluent" />
+    <weather:WeatherGlyphConverter x:Key="LucideWeatherGlyph" Kind="Lucide" />
+    <weather:WeatherGlyphConverter x:Key="TextWeatherGlyph" Kind="Text" />
+    <Style x:Key="WeatherAlertPillStyle" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource AcrylicInAppFillColorDefaultBrush}" />
+        <Setter Property="CornerRadius" Value="11" />
+    </Style>
+
+    <DataTemplate x:Key="LucideWeatherIconTemplate">
+        <ContentPresenter Margin="1" Width="16" Height="16" Content="{Binding Converter={StaticResource LucideWeatherGlyph}}" />
+    </DataTemplate>
+    <DataTemplate x:Key="FluentDesignWeatherIconTemplate">
+        <ContentPresenter Width="20" Height="20" Content="{Binding Converter={StaticResource FluentWeatherGlyph}}" />
+    </DataTemplate>
+    <DataTemplate x:Key="SimpleTextWeatherIconTemplate">
+        <ContentPresenter Content="{Binding Converter={StaticResource TextWeatherGlyph}}" />
+    </DataTemplate>
+</ResourceDictionary>

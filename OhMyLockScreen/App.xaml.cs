@@ -13,6 +13,8 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Core;
 using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers.UI;
+using OhMyLockScreen.Shared;
+using OhMyLockScreen.Services;
 using OhMyLockScreen.Views;
 
 namespace OhMyLockScreen;
@@ -33,6 +35,8 @@ public sealed partial class App : Application
         }
 
         internal bool IsClosed { get; set; }
+        internal bool IsDesktop { get; set; }
+        internal bool WeatherForegroundPending { get; set; }
         internal DispatcherTimer? EditorWindowProbe { get; set; }
     }
 
@@ -208,6 +212,7 @@ public sealed partial class App : Application
     private void ShowMainPage(Window window, ViewActivation activation)
     {
         var isLockScreen = activation.Kind is ActivationKind.LockScreen or ActivationKind.LockScreenComponent || LockScreenHosting.IsWindowHostedByLockScreen();
+        activation.IsDesktop = !isLockScreen;
         if (isLockScreen)
         {
             StopEditorWindowProbe(activation);
@@ -264,7 +269,39 @@ public sealed partial class App : Application
         if (!isLockScreen && !_isExiting && !activation.IsClosed)
         {
             StartEditorWindowProbe(window, activation);
+            StartDesktopWeatherLocation(window, activation);
         }
+    }
+
+    private void StartDesktopWeatherLocation(Window window, ViewActivation activation)
+    {
+        if (activation.WeatherForegroundPending || IAppHost.TryGetService<WeatherService>() is not { } weather)
+        {
+            return;
+        }
+
+        if (window.CoreWindow.ActivationMode == CoreWindowActivationMode.ActivatedInForeground)
+        {
+            Start();
+            return;
+        }
+
+        activation.WeatherForegroundPending = true;
+        window.Activated += OnWindowActivated;
+
+        void OnWindowActivated(object sender, WindowActivatedEventArgs args)
+        {
+            if (activation.IsDesktop && !_isExiting && !activation.IsClosed &&
+                window.CoreWindow.ActivationMode == CoreWindowActivationMode.ActivatedInForeground)
+            {
+                window.Activated -= OnWindowActivated;
+                activation.WeatherForegroundPending = false;
+                Start();
+            }
+        }
+
+        void Start() => _ = weather.TryUpdateAutomaticallyAsync(window.Dispatcher,
+            () => activation.IsDesktop && !_isExiting && !activation.IsClosed);
     }
 
     /// <summary>

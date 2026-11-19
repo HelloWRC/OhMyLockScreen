@@ -1,0 +1,44 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls">
+    <Style TargetType="ui:DrawerHost">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ui:DrawerHost">
+                    <Grid x:Name="PART_Root">
+                        <ContentPresenter
+                            x:Name="PART_ContentPresenter"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+                        <Border x:Name="PART_IgnoreLayer" Background="{ThemeResource SmokeFillColorDefaultBrush}" Visibility="Collapsed" />
+                        <Grid x:Name="PART_Panel" Visibility="Collapsed">
+                            <Border x:Name="PART_Shadow" IsHitTestVisible="False" />
+                            <Border x:Name="PART_DrawerContentBorder" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                                <Grid>
+                                    <!-- UWP 的第二个 ContentPresenter 可能继承宿主内容。 -->
+                                    <ContentControl
+                                        x:Name="PART_DrawerContentPresenter"
+                                        HorizontalContentAlignment="Stretch"
+                                        VerticalContentAlignment="Stretch"
+                                        ContentTemplate="{TemplateBinding DrawerContentTemplate}" />
+                                    <muxc:ProgressRing
+                                        x:Name="PART_LoadingIndicator"
+                                        Width="48"
+                                        Height="48"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        IsHitTestVisible="False"
+                                        Visibility="Collapsed" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>
