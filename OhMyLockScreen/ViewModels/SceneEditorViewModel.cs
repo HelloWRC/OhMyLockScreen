@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using FluentIcons.Common;
+using FluentIcons.Uwp;
 using OhMyLockScreen.Models.Features.Layout;
 using OhMyLockScreen.Shared.Abstractions.Models.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Models.Scene;
@@ -704,10 +706,10 @@ public sealed partial class SceneTreeItem(object model, SceneTreeItem? parent, C
     public FontIconSource? IconSource => Model switch
     {
         ComponentSettings component => components.Find(component.Id)?.IconSource,
-        _ => new FontIconSource
+        _ => new FluentIconSource
         {
-            Glyph = Model is LayerSettings ? "\uE81E" : "\uE8B9",
-            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            Icon = Model is LayerSettings ? Icon.Layer : Icon.Image,
+            IconSize = IconSize.Resizable,
             FontSize = 16
         }
     };

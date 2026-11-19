@@ -1,3 +1,5 @@
+using FluentIcons.Common;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Abstractions.Services.Media;
 using OhMyLockScreen.Shared.Models.Media;
 using System.Diagnostics;
@@ -14,7 +16,7 @@ public sealed class MediaController : MediaPartControl
         nameof(Action), typeof(MediaAction), typeof(MediaController),
         new PropertyMetadata(MediaAction.PlayPause, (sender, _) => ((MediaController)sender).UpdateState()));
 
-    private readonly FontIcon _icon = new();
+    private readonly ViewFluentIcon _icon = new();
     private readonly Button _button = new() { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
     private bool _busy;
     private bool _active;
@@ -54,13 +56,13 @@ public sealed class MediaController : MediaPartControl
 
     protected override void UpdateState()
     {
-        var (symbol, label, enabled) = Action switch
+        var (icon, label, enabled) = Action switch
         {
-            MediaAction.Previous => (Symbol.Previous, "上一首", State.CanPrevious),
-            MediaAction.Next => (Symbol.Next, "下一首", State.CanNext),
-            _ => (State.IsPlaying ? Symbol.Pause : Symbol.Play, State.IsPlaying ? "暂停" : "播放", State.CanPlayPause)
+            MediaAction.Previous => (Icon.Previous, "上一首", State.CanPrevious),
+            MediaAction.Next => (Icon.Next, "下一首", State.CanNext),
+            _ => (State.IsPlaying ? Icon.Pause : Icon.Play, State.IsPlaying ? "暂停" : "播放", State.CanPlayPause)
         };
-        _icon.Glyph = ((char)symbol).ToString();
+        _icon.Icon = icon;
         _button.IsEnabled = _active && !_busy && !IsPlaceholder && State.HasSession && enabled;
         ToolTipService.SetToolTip(_button, label);
         AutomationProperties.SetName(_button, label);

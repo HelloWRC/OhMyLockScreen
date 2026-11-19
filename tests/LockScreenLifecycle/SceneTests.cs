@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using FluentIcons.Common;
 using OhMyLockScreen;
 using OhMyLockScreen.Controls.Components;
 using OhMyLockScreen.Models.Features.Layout;
@@ -1516,7 +1517,7 @@ internal static class SceneTests
             Check(target.Margin == model.Margin && ReferenceEquals(target.RenderTransform, original), "Movement introduced a render transform instead of native margins.");
             Check(BitConverter.DoubleToInt64Bits(SceneLayoutEditing.Round(-0.1)) == 0, "Rounding retained negative zero.");
         });
-        run("Tree icons use the design fonts and semantic component icons", () =>
+        run("Tree icons use semantic FluentIcon sources", () =>
         {
             using var fixture = new Fixture();
             using var editor = fixture.Editor();
@@ -1526,7 +1527,7 @@ internal static class SceneTests
             var container = layer.Children[0];
             var clock = container.Children[0];
             var date = container.Children[1];
-            Check(root.IconSource is { Glyph: "\uE8B9", FontSize: 16 } && root.IconSource.FontFamily?.Source == "Segoe Fluent Icons" && layer.IconSource is { Glyph: "\uE81E", FontSize: 16 }, "Scene/layer icons used the component icon font.");
+            Check(root.IconSource is FluentIcons.Uwp.FluentIconSource { Icon: Icon.Image, IconSize: IconSize.Resizable, FontSize: 16 } && layer.IconSource is FluentIcons.Uwp.FluentIconSource { Icon: Icon.Layer, IconSize: IconSize.Resizable, FontSize: 16 }, "Scene/layer icons did not use semantic FluentIcon sources.");
             Check(container.IconSource is FluentIcons.Uwp.FluentIconSource { Icon: FluentIcons.Common.Icon.Group } && clock.IconSource is FluentIcons.Uwp.FluentIconSource { Icon: FluentIcons.Common.Icon.Clock } && date.IconSource is FluentIcons.Uwp.FluentIconSource { Icon: FluentIcons.Common.Icon.Calendar }, "Component icons were encoded as unrelated glyphs.");
             Check(clock.Title == "[时钟]" && date.Title == "[日期]", "Independent clock and date components did not retain their titles.");
         });

@@ -8,6 +8,7 @@
     xmlns:components="using:OhMyLockScreen.Shared.Models.Scene"
     xmlns:editor="using:OhMyLockScreen.Controls.Editor"
     xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
+    xmlns:icons="using:FluentIcons.Uwp"
     RequestedTheme="Dark"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
@@ -195,9 +196,8 @@
                     ToolTipService.ToolTip="全屏预览（按任意键退出）"
                     AutomationProperties.Name="全屏预览"
                     Click="OnPreviewClick">
-                    <FontIcon
-                        FontFamily="Segoe Fluent Icons"
-                        Glyph="&#xE768;"
+                    <icons:FluentIcon
+                        Icon="Play"
                         FontSize="16" />
                 </Button>
                 <Button
@@ -206,9 +206,8 @@
                     ToolTipService.ToolTip="设置"
                     AutomationProperties.Name="设置"
                     Click="OnSettingsClick">
-                    <FontIcon
-                        FontFamily="Segoe Fluent Icons"
-                        Glyph="&#xE713;"
+                    <icons:FluentIcon
+                        Icon="Settings"
                         FontSize="16" />
                 </Button>
             </StackPanel>
@@ -339,8 +338,7 @@
                     <TranslateTransform x:Name="HomePanelTransform" />
                 </Border.RenderTransform>
                 <Border.Resources>
-                    <Style x:Key="SceneManagementIconStyle" TargetType="FontIcon">
-                        <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+                    <Style x:Key="SceneManagementIconStyle" TargetType="icons:FluentIcon">
                         <Setter Property="FontSize" Value="16" />
                         <Setter Property="IsTextScaleFactorEnabled" Value="False" />
                     </Style>
@@ -375,27 +373,27 @@
                                 ToolTipService.ToolTip="重新加载场景列表"
                                 AutomationProperties.Name="重新加载场景列表"
                                 Click="OnRefreshScenesClick">
-                                <FontIcon
+                                <icons:FluentIcon
                                     Style="{StaticResource SceneManagementIconStyle}"
-                                    Glyph="&#xE72C;" />
+                                    Icon="ArrowClockwise" />
                             </Button>
                             <Button
                                 Style="{StaticResource EditorToolbarIconButtonStyle}"
                                 ToolTipService.ToolTip="新建场景"
                                 AutomationProperties.Name="新建场景"
                                 Click="OnCreateSceneClick">
-                                <FontIcon
+                                <icons:FluentIcon
                                     Style="{StaticResource SceneManagementIconStyle}"
-                                    Glyph="&#xE710;" />
+                                    Icon="Add" />
                             </Button>
                             <Button
                                 Style="{StaticResource EditorToolbarIconButtonStyle}"
                                 ToolTipService.ToolTip="打开场景文件夹"
                                 AutomationProperties.Name="打开场景文件夹"
                                 Click="OnOpenFolderClick">
-                                <FontIcon
+                                <icons:FluentIcon
                                     Style="{StaticResource SceneManagementIconStyle}"
-                                    Glyph="&#xE838;" />
+                                    Icon="FolderOpen" />
                             </Button>
                         </StackPanel>
                         <ListView
@@ -451,7 +449,9 @@
                                                 AutomationProperties.Name="重命名场景"
                                                 Tapped="OnSceneActionTapped"
                                                 Click="OnRenameSceneClick">
-                                                <FontIcon Style="{StaticResource SceneManagementIconStyle}" Glyph="&#xE8AC;" />
+                                                <icons:FluentIcon
+                                                    Style="{StaticResource SceneManagementIconStyle}"
+                                                    Icon="Rename" />
                                             </Button>
                                             <Button
                                                 Style="{StaticResource EditorTransparentIconButtonStyle}"
@@ -460,7 +460,9 @@
                                                 AutomationProperties.Name="复制场景"
                                                 Tapped="OnSceneActionTapped"
                                                 Click="OnDuplicateSceneClick">
-                                                <FontIcon Style="{StaticResource SceneManagementIconStyle}" Glyph="&#xE8C8;" />
+                                                <icons:FluentIcon
+                                                    Style="{StaticResource SceneManagementIconStyle}"
+                                                    Icon="Copy" />
                                             </Button>
                                             <Button
                                                 Style="{StaticResource EditorTransparentIconButtonStyle}"
@@ -471,7 +473,9 @@
                                                 AutomationProperties.Name="删除场景"
                                                 Tapped="OnSceneActionTapped"
                                                 Click="OnDeleteSceneClick">
-                                                <FontIcon Style="{StaticResource SceneManagementIconStyle}" Glyph="&#xE74D;" />
+                                                <icons:FluentIcon
+                                                    Style="{StaticResource SceneManagementIconStyle}"
+                                                    Icon="Delete" />
                                             </Button>
                                         </StackPanel>
                                     </Grid>
@@ -534,9 +538,8 @@
                                 ToolTipService.ToolTip="添加图层"
                                 AutomationProperties.Name="添加图层"
                                 Click="OnAddLayerClick">
-                                <FontIcon
-                                    FontFamily="Segoe Fluent Icons"
-                                    Glyph="&#xE710;"
+                                <icons:FluentIcon
+                                    Icon="Add"
                                     FontSize="16" />
                             </Button>
                             <muxc:TreeView
@@ -692,8 +695,8 @@
                                                         ToolTipService.ToolTip="移除特性"
                                                         AutomationProperties.Name="移除特性"
                                                         Visibility="{x:Bind CanRemove, Converter={StaticResource BooleanVisibilityConverter}}">
-                                                        <FontIcon
-                                                            Glyph="&#xE711;"
+                                                        <icons:FluentIcon
+                                                            Icon="Dismiss"
                                                             FontSize="12" />
                                                     </Button>
                                                 </Grid>
@@ -710,8 +713,8 @@
                                     <StackPanel
                                         Orientation="Horizontal"
                                         Spacing="8">
-                                        <FontIcon
-                                            Glyph="&#xE710;"
+                                        <icons:FluentIcon
+                                            Icon="Add"
                                             FontSize="16" />
                                         <TextBlock
                                             Text="添加特性" />
