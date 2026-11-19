@@ -22,7 +22,15 @@ OhMyLockScreen 不能——且以后也不会——替换或修改锁屏后的�
 
 ## 开始使用
 
-> 等微软商店审核完后补充
+首先确保您的系统满足以下要求：
+
+- Windows 11 或更新系统，x64 架构
+
+不满足以上要求的平台不受开发者的支持，应用也可能无法在这些平台上正常工作。
+
+<a href="https://get.microsoft.com/installer/download/9pnh2x9k2v25?referrer=appbadge" target="_self" >
+	<img src="https://get.microsoft.com/images/zh-cn%20dark.svg" width="200"/>
+</a>
 
 ## 开发
 
