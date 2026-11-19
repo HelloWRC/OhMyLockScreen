@@ -71,7 +71,7 @@ public sealed partial class BrushEditControl : UserControl
     private bool _loaded;
     private bool _synchronizing;
     private bool _publishing;
-    private bool _selectionReady;
+    private int _loadVersion;
     private int _selectedStop = -1;
     private Button? _dragHandle;
     private int _dragStop = -1;
@@ -148,26 +148,27 @@ public sealed partial class BrushEditControl : UserControl
         editor.UpdateAdorner();
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs args)
+    private async void OnLoaded(object sender, RoutedEventArgs args)
     {
-        _loaded = true;
-        _selectionReady = false;
-        Observe();
-        Sync();
-        _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
+        var version = ++_loadVersion;
+        // Selecting a Segmented item during the parent Loaded event can precede its native container setup.
+        await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
         {
-            if (_loaded)
+            if (version != _loadVersion)
             {
-                Sync();
-                _selectionReady = true;
+                return;
             }
+
+            _loaded = true;
+            Observe();
+            Sync();
         });
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
         _loaded = false;
-        _selectionReady = false;
+        ++_loadVersion;
         ImagePicker.InvalidateSelection();
         _collectionTimer.Stop();
         CancelStripDrag();
@@ -383,7 +384,7 @@ public sealed partial class BrushEditControl : UserControl
 
     internal void Edit(Action<Brush> change)
     {
-        if (_synchronizing || Brush == null || BrushEditorOperations.Kind(Brush) == BrushEditorKind.Unsupported)
+        if (!_loaded || _synchronizing || Brush == null || BrushEditorOperations.Kind(Brush) == BrushEditorKind.Unsupported)
         {
             return;
         }
@@ -399,7 +400,7 @@ public sealed partial class BrushEditControl : UserControl
 
     private void OnTypeChanged(object sender, SelectionChangedEventArgs args)
     {
-        if (_synchronizing || !_ready || !_selectionReady || TypeSelector.SelectedIndex < 0
+        if (_synchronizing || !_ready || !_loaded || TypeSelector.SelectedIndex < 0
             || (int)BrushEditorOperations.Kind(Brush) == TypeSelector.SelectedIndex)
         {
             return;

@@ -217,10 +217,23 @@ public sealed partial class App : Application
         Check(ReferenceEquals(brushEditor.Brush, brush) && double.IsNaN(opacity.Value),
             "The XAML-created background editor binds the brush before initializing its input");
 
+        var replacement = new AcrylicBrush { TintColor = Colors.Red, TintOpacity = 0.1, Opacity = 0.75 };
+        brushEditor.Loaded += ReplaceBrushOnFirstLoad;
         root.Children.Add(editor);
         await Task.Delay(100);
-        Check(opacity.Value == 0.25 && opacity.Text.Contains('%'),
-            "The background editor initializes the percentage input when loaded");
+        var picker = (Microsoft.UI.Xaml.Controls.ColorPicker)brushEditor.FindName("Picker");
+        var selector = (CommunityToolkit.WinUI.Controls.Segmented)brushEditor.FindName("TypeSelector");
+        Check(ReferenceEquals(feature.Settings.Background, replacement) && selector.SelectedIndex == 5
+            && picker.Visibility == Visibility.Visible && picker.Color == Colors.Red
+            && opacity.Value == 0.75 && opacity.Text.Contains('%'),
+            "The inspector displays the latest bound brush after its native controls load");
+
+        void ReplaceBrushOnFirstLoad(object sender, RoutedEventArgs args)
+        {
+            brushEditor.Loaded -= ReplaceBrushOnFirstLoad;
+            feature.Settings.Background = replacement;
+            Check(double.IsNaN(opacity.Value), "A binding change during Loaded does not update partially loaded inputs");
+        }
 
         root.Children.Remove(editor);
         await Task.Delay(100);
