@@ -36,6 +36,11 @@
     <Compile Include="../../OhMyLockScreen/Services/Scene/SceneService.cs" Link="Services/SceneService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/DefaultSceneFactory.cs" Link="Services/DefaultSceneFactory.cs" />
     <Compile Include="../../OhMyLockScreen/Services/SettingsService.cs" Link="Services/SettingsService.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/Rules/*.xaml" Link="Controls/Rules/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Controls/Rules/*.cs" Link="Controls/Rules/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Models/Rules/*.cs" Link="Models/Rules/%(Filename)%(Extension)" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Visibility/HideByRulesFeature.cs" Link="Services/Features/Visibility/HideByRulesFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Rules/*.cs" Link="Services/Rules/%(Filename)%(Extension)" />
     <Compile Include="../../OhMyLockScreen/Services/WeatherService.cs" Link="Services/WeatherService.cs" />
     <Compile Include="../../OhMyLockScreen/Controls/Weather/WeatherPresentation.cs" Link="Controls/Weather/WeatherPresentation.cs" />
     <Compile Include="../../OhMyLockScreen/Controls/Components/WeatherComponent.cs" Link="Controls/Components/WeatherComponent.cs" />

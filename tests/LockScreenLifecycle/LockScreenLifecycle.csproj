@@ -43,6 +43,8 @@
     <Compile Remove="../../OhMyLockScreen/Controls/Components/SystemStatusSettingsControl.cs" />
     <Compile Remove="../../OhMyLockScreen/Controls/Components/WeatherComponentSettingsControl.cs" />
     <Compile Remove="../../OhMyLockScreen/Controls/Components/WeatherComponent.cs" />
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/Ruleset/*.cs" />
+    <Compile Remove="../../OhMyLockScreen/Controls/Rules/*.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/Weather/*.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/DrawerHost.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BackdropBlurBrush.cs" />

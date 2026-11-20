@@ -1,0 +1,22 @@
+<UserControl x:Class="OhMyLockScreen.Shared.Controls.Ruleset.RuleOptionsPresenter"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI">
+    <StackPanel Orientation="Horizontal" Spacing="4">
+        <ComboBox x:Name="TypePicker" SelectionChanged="SelectType" AutomationProperties.Name="规则类型">
+            <ComboBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <Grid>
+                            <FontIcon Visibility="{Binding GlyphVisibility}" FontSize="16" Glyph="{Binding Glyph}" />
+                            <ui:ViewFluentIcon Visibility="{Binding FluentVisibility}" Icon="{Binding IconName}"
+                                              FontSize="20" />
+                        </Grid>
+                        <TextBlock Text="{Binding Name}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+        <ContentPresenter x:Name="SettingsPresenter" />
+    </StackPanel>
+</UserControl>

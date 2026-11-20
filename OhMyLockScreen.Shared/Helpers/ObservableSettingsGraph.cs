@@ -68,7 +68,7 @@ public sealed class ObservableSettingsGraph : IDisposable
 
     private void OnChanged(object sender, string? property, bool isCollection)
     {
-        if (_disposed)
+        if (_disposed || sender is Models.Ruleset.IRuleState && property == nameof(Models.Ruleset.IRuleState.State))
         {
             return;
         }
@@ -81,7 +81,7 @@ public sealed class ObservableSettingsGraph : IDisposable
         _changed(sender, property, isCollection);
     }
 
-    private static bool CanContainSettings(Type type) => typeof(INotifyPropertyChanged).IsAssignableFrom(type) || typeof(INotifyCollectionChanged).IsAssignableFrom(type) || type.IsInterface;
+    private static bool CanContainSettings(Type type) => typeof(INotifyPropertyChanged).IsAssignableFrom(type) || typeof(INotifyCollectionChanged).IsAssignableFrom(type) || type.IsInterface || type == typeof(object);
     public void Dispose()
     {
         _disposed = true;

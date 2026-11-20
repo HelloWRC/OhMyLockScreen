@@ -1,3 +1,8 @@
+using OhMyLockScreen.Services.Rules;
+using OhMyLockScreen.Controls.Rules;
+using OhMyLockScreen.Models.Rules;
+using OhMyLockScreen.Shared.Abstractions.Services;
+using OhMyLockScreen.Services.Features.Visibility;
 using System.IO;
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -101,6 +106,13 @@ public sealed partial class App
         services.AddComponent<MediaControllerComponent, MediaControllerSettingsControl>();
         services.AddComponent<MediaCoverComponent, MediaCoverSettingsControl>();
         services.AddComponent<MediaProgressComponent, MediaProgressSettingsControl>();
+        services.AddSingleton<IRulesetService, RulesetService>();
+        services.AddRule<CurrentWeatherRuleSettings, CurrentWeatherRuleControl>(BuiltinRules.WeatherId, "当前天气是", "\uE706");
+        services.AddRule<RainTimeRuleSettings, RainTimeRuleControl>(BuiltinRules.RainId, "距离降水开始/结束还剩", BuiltinRules.RainIcon);
+        services.AddRule(BuiltinRules.PlayingId, "有媒体正在播放", "\uE768");
+        services.AddRule<MediaFieldRuleSettings, MediaFieldRuleControl>(BuiltinRules.FieldId, "媒体字段是", "\uE8D6");
+        services.AddHostedService<BuiltinRules>();
+        services.AddFeature<HideByRulesFeature, HideByRulesSettingsControl>();
         // Features
         services.AddFeature<LayoutFeature, LayoutSettingsControl>();
         services.AddFeature<GridLayoutFeature, GridLayoutSettingsControl>();

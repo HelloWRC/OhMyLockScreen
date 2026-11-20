@@ -1,0 +1,15 @@
+<local:RainTimeRuleControlBase
+    x:Class="OhMyLockScreen.Controls.Rules.RainTimeRuleControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Rules"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:rules="using:OhMyLockScreen.Shared.Controls.Ruleset">
+    <StackPanel Orientation="Horizontal" Spacing="4">
+        <rules:RuleSegment FirstLabel="开始" SecondLabel="结束" FirstGlyph="&#xE768;" SecondGlyph="&#xE71A;"
+                           SecondSelected="{x:Bind Settings.IsRemainingTime, Mode=TwoWay}" />
+        <muxc:NumberBox Width="85" Minimum="0" Maximum="120" SpinButtonPlacementMode="Compact"
+                        Value="{x:Bind Settings.RainTimeMinutes, Mode=TwoWay}" />
+        <TextBlock Text="分钟" VerticalAlignment="Center" />
+    </StackPanel>
+</local:RainTimeRuleControlBase>

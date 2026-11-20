@@ -1,0 +1,19 @@
+<UserControl x:Class="ComponentBackgroundPreview.RulesetPreviewEditor"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
+    xmlns:rules="using:OhMyLockScreen.Shared.Controls.Ruleset"
+    xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene"
+    Width="600" Height="320">
+    <UserControl.Resources>
+        <DataTemplate x:Key="RuleEditor">
+            <rules:RulesetControl Width="600" Height="320" ShowTitle="True" />
+        </DataTemplate>
+    </UserControl.Resources>
+    <ui:DrawerHost x:Name="Drawer" x:FieldModifier="internal">
+        <StackPanel>
+            <scene:ComponentPresenter x:Name="PreviewPresenter" x:FieldModifier="internal" IsEditing="True" />
+            <ContentPresenter x:Name="FeatureEditor" x:FieldModifier="internal" />
+        </StackPanel>
+    </ui:DrawerHost>
+</UserControl>

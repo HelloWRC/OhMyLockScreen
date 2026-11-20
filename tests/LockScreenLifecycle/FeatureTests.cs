@@ -10,7 +10,8 @@ using OhMyLockScreen.Shared.Attributes.FeatureHost;
 using OhMyLockScreen.Shared.Extensions.FeatureHost;
 using OhMyLockScreen.Shared.Models.FeatureHost;
 using OhMyLockScreen.Shared.Services.FeatureHost;
-using Windows.ApplicationModel.Activation;
+using System.Reflection;
+using Microsoft.Extensions.Hosting;
 using Windows.UI.Xaml.Controls;
 
 internal static class FeatureTests
@@ -251,14 +252,15 @@ internal static class FeatureTests
         });
         run("The app host provides the built-in features and feature service", () =>
         {
-            new App().Launch(new LaunchActivatedEventArgs());
-            var registered = IAppHost.Host!.Services.GetRequiredService<FeatureRegistryService>().Registered;
+            var factory = typeof(App).GetMethod("CreateHost", BindingFlags.Static | BindingFlags.NonPublic)!;
+            using var host = (IHost)factory.Invoke(null, null)!;
+            var registered = host.Services.GetRequiredService<FeatureRegistryService>().Registered;
             Check(registered.Select(feature => feature.Id).ToHashSet().SetEquals(
                 ["omls.features.layout.layout", "omls.features.layout.grid", "omls.features.appearance.background",
                     "omls.features.appearance.border", "omls.features.appearance.foreground",
-                    "omls.features.appearance.text", "omls.features.appearance.font"]),
+                    "omls.features.appearance.text", "omls.features.appearance.font", "omls.features.visibility.hideByRules"]),
                 "The app host did not register the built-in features.");
-            Check(IAppHost.Host.Services.GetRequiredService<IFeatureService>() is FeatureService, "The app host did not register the feature service.");
+            Check(host.Services.GetRequiredService<IFeatureService>() is FeatureService, "The app host did not register the feature service.");
         });
         FeatureAttacherTests.Run(run);
         PresenterFeatureTests.Run(run);

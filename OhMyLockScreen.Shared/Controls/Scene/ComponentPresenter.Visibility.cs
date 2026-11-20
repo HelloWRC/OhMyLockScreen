@@ -13,6 +13,13 @@ public sealed partial class ComponentPresenter
         new PropertyMetadata(false, (sender, _) => ((ComponentPresenter)sender).UpdateContentVisibility()));
 
     private IDisposable? _contentVisibility;
+    private readonly HashSet<object> _hideRequests = new(ReferenceEqualityComparer.Instance);
+    private event Action? HideRequestsChanged;
+
+    public void SetVisibilitySuppressed(object owner, bool suppressed)
+    {
+        if (suppressed ? _hideRequests.Add(owner) : _hideRequests.Remove(owner)) HideRequestsChanged?.Invoke();
+    }
 
     public bool IsEditing
     {
@@ -39,10 +46,16 @@ public sealed partial class ComponentPresenter
         {
             var changes = Observable.Create<Visibility>(observer =>
             {
+                void Publish() => observer.OnNext(_hideRequests.Count > 0 ? Visibility.Collapsed : component.Visibility);
+                HideRequestsChanged += Publish;
                 var token = component.RegisterPropertyChangedCallback(VisibilityProperty,
-                    (_, _) => observer.OnNext(component.Visibility));
-                observer.OnNext(component.Visibility);
-                return Disposable.Create(() => component.UnregisterPropertyChangedCallback(VisibilityProperty, token));
+                    (_, _) => Publish());
+                Publish();
+                return Disposable.Create(() =>
+                {
+                    HideRequestsChanged -= Publish;
+                    component.UnregisterPropertyChangedCallback(VisibilityProperty, token);
+                });
             });
             _contentVisibility = DependencyPropertyBindingHelper.Bind(changes, this, VisibilityProperty);
         }

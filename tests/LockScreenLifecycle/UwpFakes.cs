@@ -204,6 +204,12 @@ namespace Windows.UI.Core
         public int PendingCallbacks => _callbacks.Count;
         public bool HasThreadAccess => owner == null || ReferenceEquals(owner, Windows.UI.Xaml.Window.Current);
 
+        public async Task<bool> TryRunAsync(CoreDispatcherPriority priority, Action callback)
+        {
+            await RunAsync(priority, callback);
+            return true;
+        }
+
         public Task RunAsync(CoreDispatcherPriority priority, Action callback)
         {
             var completion = new TaskCompletionSource();

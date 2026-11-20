@@ -1,0 +1,78 @@
+<UserControl
+    x:Class="OhMyLockScreen.Shared.Controls.Ruleset.RulesetControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Shared.Controls.Ruleset">
+    <UserControl.Resources>
+        <local:LogicalModeConverter x:Key="LogicalMode" />
+        <Style x:Key="Negate" TargetType="ToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}">
+            <Setter Property="Content" Value="非" />
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="5,2" />
+            <Setter Property="MinWidth" Value="28" />
+        </Style>
+        <local:RuleStateConverter x:Key="DotBrush" />
+        <local:RuleStateConverter x:Key="DotLabel" Label="True" />
+        <DataTemplate x:Key="StateDot">
+            <Ellipse Width="8" Height="8" Margin="4,0" Fill="{Binding State, Converter={StaticResource DotBrush}}"
+                     ToolTipService.ToolTip="{Binding State, Converter={StaticResource DotLabel}}" />
+        </DataTemplate>
+    </UserControl.Resources>
+    <Grid x:Name="LayoutRoot">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock x:Name="Heading" Text="规则集" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,0,0,8" />
+            <ScrollViewer HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                    <ToggleButton Style="{StaticResource Negate}" IsChecked="{Binding IsReversed, Mode=TwoWay}" ToolTipService.ToolTip="反转" />
+                    <local:RuleSegment FirstLabel="规则组任一满足时" SecondLabel="规则组全部满足时" SecondSelected="{Binding Mode, Mode=TwoWay, Converter={StaticResource LogicalMode}}" />
+                    <Button Style="{StaticResource TransparentButton}" MinWidth="28" MinHeight="28" Padding="5,2" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Content="＋ 添加组" Click="AddGroup" />
+                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource StateDot}" />
+                </StackPanel>
+            </ScrollViewer>
+        </StackPanel>
+        <ScrollViewer Grid.Row="1" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch">
+            <ItemsControl ItemsSource="{Binding Groups}" HorizontalContentAlignment="Stretch">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{ThemeResource ControlFillColorTertiaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,6" Padding="8,4">
+                            <StackPanel>
+                                <ScrollViewer HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                                    <Grid Margin="0,0,0,2">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="2">
+                                            <ToggleButton Style="{StaticResource Negate}" IsChecked="{Binding IsReversed, Mode=TwoWay}" ToolTipService.ToolTip="反转" />
+                                            <local:RuleSegment FirstLabel="规则任一满足时" SecondLabel="规则全部满足时" SecondSelected="{Binding Mode, Mode=TwoWay, Converter={StaticResource LogicalMode}}" />
+                                            <Button Style="{StaticResource TransparentButton}" MinWidth="28" MinHeight="28" Padding="5,2" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Content="＋ 规则" Click="AddRule" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                                            <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource StateDot}" />
+                                            <ToggleSwitch MinWidth="0" OnContent="" OffContent="" IsOn="{Binding IsEnabled, Mode=TwoWay}" ToolTipService.ToolTip="启用规则组" />
+                                            <Button Style="{StaticResource TransparentButton}" MinWidth="28" MinHeight="28" Padding="5,2" Click="CopyGroup" ToolTipService.ToolTip="复制"><FontIcon Glyph="&#xE8C8;" FontSize="13" /></Button>
+                                            <Button Style="{StaticResource TransparentButton}" MinWidth="28" MinHeight="28" Padding="5,2" Click="DeleteGroup" ToolTipService.ToolTip="删除"><FontIcon Glyph="&#xE711;" FontSize="12" /></Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </ScrollViewer>
+                                <ItemsControl ItemsSource="{Binding Rules}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <ScrollViewer HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2" Spacing="2">
+                                                    <Button Style="{StaticResource TransparentButton}" MinWidth="28" MinHeight="28" Padding="5,2" Click="DeleteRule" ToolTipService.ToolTip="删除"><FontIcon Glyph="&#xE711;" FontSize="12" /></Button>
+                                                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource StateDot}" />
+                                                    <ToggleButton Style="{StaticResource Negate}" IsChecked="{Binding IsReversed, Mode=TwoWay}" ToolTipService.ToolTip="反转" />
+                                                    <local:RuleOptionsPresenter />
+                                                </StackPanel>
+                                            </ScrollViewer>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

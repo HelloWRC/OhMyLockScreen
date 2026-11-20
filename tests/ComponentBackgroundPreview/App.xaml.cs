@@ -46,6 +46,12 @@ public sealed partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (args.Arguments == "ruleset")
+        {
+            LaunchRulesetPreview();
+            return;
+        }
+
         if (args.Arguments.Contains("acrylic-foreground", StringComparison.OrdinalIgnoreCase))
         {
             LaunchAcrylicForegroundPreview();

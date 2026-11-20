@@ -43,8 +43,43 @@ using TreeViewItem = Microsoft.UI.Xaml.Controls.TreeViewItem;
 
 namespace OhMyLockScreen;
 
-public sealed partial class SceneEditorPage : Page
+public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawerHost
 {
+    private SystemNavigationManager? _drawerNavigation;
+    private long _drawerToken;
+
+    void Controls.Rules.IRulesetDrawerHost.OpenRulesetDrawer(Shared.Models.Ruleset.Ruleset ruleset)
+    {
+        var editor = (Shared.Controls.Ruleset.RulesetControl)((DataTemplate)Resources["RulesetDrawerTemplate"]).LoadContent();
+        editor.Ruleset = ruleset;
+        editor.Width = Math.Min(600, EditorDrawer.ActualWidth);
+        EditorDrawer.DrawerContent = editor;
+        EditorDrawer.ActualDrawerWidth = editor.Width;
+        EditorDrawer.IsDrawerOpen = true;
+    }
+
+    private void OnEditorDrawerSizeChanged(object sender, SizeChangedEventArgs args)
+    {
+        if (EditorDrawer.DrawerContent is Shared.Controls.Ruleset.RulesetControl editor)
+            editor.Width = Math.Min(600, args.NewSize.Width);
+    }
+
+    private void OnDrawerBack(object? sender, BackRequestedEventArgs args)
+    {
+        if (!args.Handled && EditorDrawer.IsDrawerOpen)
+        {
+            EditorDrawer.IsDrawerOpen = false;
+            args.Handled = true;
+        }
+    }
+
+    private void OnDrawerChanged(DependencyObject sender, DependencyProperty property)
+    {
+        if (!EditorDrawer.IsDrawerOpen) EditorDrawer.DrawerContent = null;
+        if (_drawerNavigation != null)
+            _drawerNavigation.AppViewBackButtonVisibility = EditorDrawer.IsDrawerOpen ? AppViewBackButtonVisibility.Visible : AppViewBackButtonVisibility.Collapsed;
+    }
+
     private readonly ISceneService _scenes;
     private readonly ISceneBlobStorageService _blobs;
     private readonly SettingsService _settings;
@@ -155,6 +190,9 @@ public sealed partial class SceneEditorPage : Page
 
         _loaded = true;
         _window = Window.Current;
+        _drawerNavigation = SystemNavigationManager.GetForCurrentView();
+        _drawerNavigation.BackRequested += OnDrawerBack;
+        _drawerToken = EditorDrawer.RegisterPropertyChangedCallback(Shared.Controls.UI.DrawerHost.IsDrawerOpenProperty, OnDrawerChanged);
         _lastLockScreenEnabled = null;
         _window.Activated += OnWindowActivated;
         ViewModel.SelectionChanged += OnSelectionChanged;
@@ -219,6 +257,10 @@ public sealed partial class SceneEditorPage : Page
         StopPanelAnimations();
         ExitPreview();
         ClearPageToasts();
+        EditorDrawer.IsDrawerOpen = false;
+        EditorDrawer.UnregisterPropertyChangedCallback(Shared.Controls.UI.DrawerHost.IsDrawerOpenProperty, _drawerToken);
+        if (_drawerNavigation != null) _drawerNavigation.BackRequested -= OnDrawerBack;
+        _drawerNavigation = null;
         _loaded = false;
         _pendingDropAlignments.Clear();
         _mediaImportRevision++;
@@ -288,6 +330,7 @@ public sealed partial class SceneEditorPage : Page
 
     private void OnSelectionChanged(object? sender, EventArgs args)
     {
+        EditorDrawer.IsDrawerOpen = false;
         EndDrag();
         ClearHover();
         InvalidateSelectionGeometry();
@@ -2072,6 +2115,16 @@ public sealed partial class SceneEditorPage : Page
     {
         if (!_loaded || ViewModel.IsPreview)
         {
+            return;
+        }
+
+        if (EditorDrawer.IsDrawerOpen)
+        {
+            if (args.VirtualKey == VirtualKey.Escape)
+            {
+                EditorDrawer.IsDrawerOpen = false;
+                args.Handled = true;
+            }
             return;
         }
 

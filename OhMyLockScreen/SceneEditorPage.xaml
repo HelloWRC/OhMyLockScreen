@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:rules="using:OhMyLockScreen.Shared.Controls.Ruleset"
     xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene"
     xmlns:vm="using:OhMyLockScreen.ViewModels"
     xmlns:components="using:OhMyLockScreen.Shared.Models.Scene"
@@ -14,6 +15,9 @@
     Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
     FontFamily="Microsoft YaHei UI">
     <Page.Resources>
+        <DataTemplate x:Key="RulesetDrawerTemplate">
+            <rules:RulesetControl ShowTitle="True" />
+        </DataTemplate>
         <Style x:Key="EditorListItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -195,6 +199,7 @@
                 Value="{ThemeResource AcrylicInAppFillColorDefaultBrush}" />
         </Style>
     </Page.Resources>
+    <ui:DrawerHost x:Name="EditorDrawer" DrawerPlacement="Right" SizeChanged="OnEditorDrawerSizeChanged">
     <Grid
         x:Name="PageRoot">
         <Grid.RowDefinitions>
@@ -911,4 +916,5 @@
                 MaxWidth="280" />
         </Popup>
     </Grid>
+    </ui:DrawerHost>
 </Page>

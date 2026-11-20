@@ -16,6 +16,11 @@ async Task RunAsync(string name, Func<Task> test)
     Console.WriteLine($"PASS: {name}");
 }
 
+if (args.Length == 0 || args.Contains("--ruleset-only"))
+{
+    RulesetTests.Run(Run);
+    if (args.Contains("--ruleset-only")) return;
+}
 if (args.Contains("--spectrum-only"))
 {
     AudioSpectrumTests.Run(Run);
