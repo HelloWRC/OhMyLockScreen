@@ -15,6 +15,7 @@ namespace OhMyLockScreen;
 public sealed partial class App
 {
     private readonly Lazy<Task> _initializeHost;
+    private readonly Queue<Exception> _earlyUnhandledExceptions = new();
     private readonly object _exitSync = new();
     private IHost? _host;
     private Task? _exitTask;
@@ -25,6 +26,13 @@ public sealed partial class App
         IAppHost.Host = _host;
         try
         {
+            lock (_earlyUnhandledExceptions)
+            {
+                while (_earlyUnhandledExceptions.TryDequeue(out var exception))
+                {
+                    _host.Services.GetService<ILogger<App>>()?.LogCritical(exception, UnhandledExceptionToastTitle);
+                }
+            }
             await _host.Services.GetRequiredService<SettingsService>().LoadSettingsAsync();
             _host.Services.GetService<ISceneService>()?.Initialize();
             await _host.StartAsync();
@@ -111,6 +119,24 @@ public sealed partial class App
         {
             LogLifecycleError(exception, "释放应用主机失败");
         }
+    }
+
+    private void LogUnhandledException(Exception exception)
+    {
+        ILogger<App>? logger;
+        lock (_earlyUnhandledExceptions)
+        {
+            if (_host == null && !_isExiting)
+            {
+                // XAML can report an exception before the first activation creates the host.
+                _earlyUnhandledExceptions.Enqueue(exception);
+                Debug.WriteLine($"{UnhandledExceptionToastTitle}: {exception}");
+                return;
+            }
+            logger = _host?.Services.GetService<ILogger<App>>();
+        }
+
+        logger?.LogCritical(exception, UnhandledExceptionToastTitle);
     }
 
     private void LogLifecycleError(Exception exception, string message)

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using Windows.ApplicationModel;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
 using Windows.ApplicationModel.Activation;
@@ -68,7 +69,7 @@ public sealed partial class App : Application
 
         try
         {
-            LogLifecycleError(args.Exception, UnhandledExceptionToastTitle);
+            LogUnhandledException(args.Exception);
         }
         catch (Exception exception)
         {
@@ -249,6 +250,10 @@ public sealed partial class App : Application
             : rootFrame.Content is not (SceneEditorPage or ApplicationSettingsPage);
         if (pageChanged)
         {
+            var version = Package.Current.Id.Version;
+            IAppHost.TryGetService<ILogger<App>>()?.LogInformation(
+                "OhMyLockScreen {Version} 启动，生命周期：{Lifetime}",
+                $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}", isLockScreen ? "锁屏" : "编辑器");
             toastHost.Clear();
             rootFrame.Navigate(pageType);
             rootFrame.BackStack.Clear();

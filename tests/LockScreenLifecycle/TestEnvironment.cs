@@ -16,6 +16,10 @@ internal sealed class TestEnvironment : IDisposable
         Application.Current = null;
         IAppHost.Host = null;
         ApplicationData.Current.LocalFolder.Path = directory.FullName;
+        var packagePath = Path.Combine(directory.FullName, "Package");
+        Windows.ApplicationModel.Package.Current.InstalledLocation.Path = packagePath;
+        var assets = Directory.CreateDirectory(Path.Combine(packagePath, "Assets"));
+        File.WriteAllText(Path.Combine(assets.FullName, "DefaultScene.json"), "{}");
         Window.Current = new Window();
         Windows.System.UserProfile.LockScreen.OpenImage =
             () => throw new InvalidOperationException("No simulated lock screen image was configured.");

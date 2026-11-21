@@ -1,3 +1,4 @@
+using OhMyLockScreen.Services.Logging;
 using OhMyLockScreen.Services.Rules;
 using OhMyLockScreen.Controls.Rules;
 using OhMyLockScreen.Models.Rules;
@@ -47,7 +48,20 @@ public sealed partial class App
     {
         AutoJsonPolymorphicRegistrationHelper.DiscoverAndRegisterForAssembly(typeof(IAppHost).Assembly);
         AutoJsonPolymorphicRegistrationHelper.DiscoverAndRegisterForAssembly(typeof(App).Assembly);
-        return new HostBuilder().ConfigureLogging(logging => logging.AddDebug()).ConfigureServices(ConfigureServices).Build();
+        return new HostBuilder()
+            .ConfigureLogging(logging =>
+            {
+                logging.AddDebug();
+#if DEBUG
+                logging.AddFilter<FileLoggerProvider>(null, LogLevel.Trace);
+#else
+                logging.AddFilter<FileLoggerProvider>(null, LogLevel.Information);
+#endif
+                logging.Services.AddSingleton<ILoggerProvider>(provider => new FileLoggerProvider(
+                    Path.Combine(ApplicationData.Current.LocalFolder.Path, "Logs"), provider.GetRequiredService<TimeProvider>()));
+            })
+            .ConfigureServices(ConfigureServices)
+            .Build();
     }
 
     private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)

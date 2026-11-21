@@ -16,6 +16,12 @@ async Task RunAsync(string name, Func<Task> test)
     Console.WriteLine($"PASS: {name}");
 }
 
+if (args.Length == 0 || args.Contains("--file-logging-only"))
+{
+    await FileLoggingTests.RunAsync(RunAsync);
+    if (args.Contains("--file-logging-only")) return;
+}
+
 if (args.Length == 0 || args.Contains("--ruleset-only"))
 {
     RulesetTests.Run(Run);

@@ -19,11 +19,12 @@
 
 - 本项目是 Windows UWP 自定义锁屏应用，负责锁屏页面与系统解锁请求；账户凭据验证由 Windows 完成。
 - 应用使用 Microsoft.Extensions.Hosting 和 UWP 生命周期。服务统一在 App.Services.cs 中注册，业务服务优先使用构造函数注入；重复激活和多视图共用应用主机。
+- 主宿主的各视图共享同一份本地磁盘日志；归档仅管理 `LocalState/Logs` 中本写入器的日志，不触碰 NativeHost 的专用诊断文件。
 - 激活时先捕获目标窗口的 Dispatcher；异步初始化后显式返回该窗口的 UI 线程显示页面，不依赖 SynchronizationContext，窗口关闭或应用退出后跳过显示。
 - 主包以 `App` 同时承接开始菜单和锁屏激活。按激活类型和当前窗口宿主识别锁屏视图。
 - 应用设置页通过 SettingsPageInfoAttribute 与 AddSettingsPage<T> 注册，由 UWP Frame 创建具有公开无参构造函数的 SettingsPageBase 子类；系统标题栏返回优先处理设置内容 Frame，再返回根 Frame。
 - 桌面激活显式关闭 ExtendViewIntoTitleBar，以覆盖 UWP 跨启动保存的标题栏扩展状态。
-- 应用在 App 构造时订阅 Application.UnhandledException，将未处理异常标记为已处理并复用当前窗口的 Toast 宿主显示不可自动关闭的错误；Toast 宿主尚未建立时，在窗口内容就绪后补显示。
+- 应用在 App 构造时订阅 Application.UnhandledException，以 Critical 记录原异常和堆栈（主宿主尚未建立时在建立后补记），将异常标记为已处理并复用当前窗口的 Toast 宿主显示不可自动关闭的错误；Toast 宿主尚未建立时，在窗口内容就绪后补显示。
 - 锁屏指针手势从页面收到的未处理 PointerPressed 开始，轻触和上滑均在抬起时判定；取消或失去捕获只回弹。按键等待路由和应用快捷键处理完毕后再兜底，不使用 CoreWindow 或全局加速键抢占组件输入。Tab 和修饰键保留给焦点导航与组合键；卸载后丢弃排队的输入。
 - 锁屏退出动画期间预启动一次性 NativeHost 并连接包内命名管道，预定在动画结束前 80 ms 提交一次解锁指令。NativeHost 向当前会话的 `Local\LockAppHostGlobalUnlockEvent` 发送事件，UWP 等待动画和解锁请求完成后退出，页面提前卸载时沿用一次性解锁和退出流程。管道准备失败时回退文件请求；指令已开始发送后避免重复触发事件。兼容解锁模式直接走退出应用方式。
 - 事件解锁后 UWP 进程会保留已退场的 MainPage；锁屏再次激活时必须替换该页面，不能复用已开始退场的视图。
