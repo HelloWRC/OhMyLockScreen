@@ -187,6 +187,15 @@ public sealed partial class App
             source.Notify();
             await Task.Delay(100);
             Check(nested.All(item => item.Visibility == Visibility.Visible), "Editing keeps empty media visible");
+            var mediaText = nested.Last();
+            var mediaSettings = ((MediaTextComponent)mediaText.Content).Settings;
+            var masked = await CaptureComposedPixelsAsync(mediaText);
+            byte MaxAlpha(byte[] pixels) => pixels.Where((_, index) => index % 4 == 3).Max();
+            Check(MaxAlpha(masked.Pixels) is > 0 and <= 0xAF, "Nested empty-session text stays visible under the editor mask");
+            mediaSettings.HideWhenNoMedia = false;
+            var unmasked = await CaptureComposedPixelsAsync(mediaText);
+            Check(MaxAlpha(unmasked.Pixels) > 0xAF, "Disabling hiding leaves the same placeholder without stripes");
+            mediaSettings.HideWhenNoMedia = true;
             scene.IsEditing = false;
             await Task.Delay(100);
             Check(nested.All(item => !item.IsEditing)

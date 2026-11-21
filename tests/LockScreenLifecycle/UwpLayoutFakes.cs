@@ -200,6 +200,11 @@ namespace OhMyLockScreen.Shared.Controls.Scene
 {
     public sealed partial class ComponentPresenter
     {
+        private void UpdateStripeMask() { }
+        private static bool IsContentCollapsed(global::OhMyLockScreen.Shared.Abstractions.Controls.Scene.ComponentBase component)
+            => component.Visibility == Windows.UI.Xaml.Visibility.Collapsed;
+        private static IDisposable? ShowCollapsedContentInEditor(global::OhMyLockScreen.Shared.Abstractions.Controls.Scene.ComponentBase component, Action publish) => null;
+
         internal void LoadDecorationBorder(Windows.UI.Xaml.Controls.Border border)
             => OnDecorationBorderLoaded(border, new Windows.UI.Xaml.RoutedEventArgs());
 

@@ -12,14 +12,12 @@ namespace OhMyLockScreen.Services.Features.Visibility;
 public sealed class HideByRulesFeature(IRulesetService service) : FeatureBase<ComponentPresenter, HideByRulesSettings>
 {
     private RulesetObservation? _observation;
-    private long _editingToken;
 
     public override void Attach(ComponentPresenter target)
     {
         Detach();
         Target = target;
         Settings.PropertyChanged += OnSettingsReplaced;
-        _editingToken = target.RegisterPropertyChangedCallback(ComponentPresenter.IsEditingProperty, (_, _) => Observe());
         Observe();
     }
 
@@ -30,15 +28,13 @@ public sealed class HideByRulesFeature(IRulesetService service) : FeatureBase<Co
         _observation?.Dispose();
         _observation = null;
         if (Target is not { } target) return;
-        if (target.IsEditing) target.SetVisibilitySuppressed(this, false);
-        else _observation = new(service, Settings.Ruleset, target.Dispatcher, result => target.SetVisibilitySuppressed(this, result));
+        _observation = new(service, Settings.Ruleset, target.Dispatcher, result => target.SetVisibilitySuppressed(this, result));
     }
 
     public override void Detach()
     {
         if (Target is not { } target) return;
         Settings.PropertyChanged -= OnSettingsReplaced;
-        target.UnregisterPropertyChangedCallback(ComponentPresenter.IsEditingProperty, _editingToken);
         _observation?.Dispose();
         _observation = null;
         target.SetVisibilitySuppressed(this, false);

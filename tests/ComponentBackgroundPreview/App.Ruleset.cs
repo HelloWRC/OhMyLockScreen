@@ -95,6 +95,11 @@ public sealed partial class App
             Window.Current.Content = host;
             Window.Current.Activate();
             await Task.Delay(300);
+            await VerifyRuleStripesAsync(presenter, value =>
+            {
+                playing = value;
+                IAppHost.GetRequiredService<IRulesetService>().NotifyStatusChanged();
+            });
             var button = Descendants(panel).OfType<Button>().Single();
             void Open() => InvokeRuleButton(button);
             Open();

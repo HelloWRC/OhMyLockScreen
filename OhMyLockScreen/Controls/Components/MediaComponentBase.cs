@@ -76,7 +76,8 @@ public abstract class MediaComponentBase<TSettings> : ComponentBase<TSettings>
         }
 
         _view.IsEditing = IsEditing;
-        Visibility = Settings.HideWhenNoMedia && !State.HasSession ? Visibility.Collapsed : Visibility.Visible;
+        IsHiddenAtRuntime = Settings.HideWhenNoMedia && !MediaService.State.HasSession;
+        Visibility = !IsEditing && IsHiddenAtRuntime ? Visibility.Collapsed : Visibility.Visible;
         UpdateMedia();
     }
 

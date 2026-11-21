@@ -65,6 +65,7 @@ public sealed partial class ComponentPresenter : ContentPresenter, IBorderable, 
 
             PropertyChanging?.Invoke(this, new PropertyChangingEventArgs(nameof(Border)));
             _border = value;
+            UpdateStripeMask();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Border)));
         }
     }
@@ -285,7 +286,6 @@ public sealed partial class ComponentPresenter : ContentPresenter, IBorderable, 
         }
 
         AttachFeatures();
-        UpdateContentVisibility();
         RefreshContentForeground(force: true);
     }
 }

@@ -17,6 +17,16 @@ public abstract class ComponentBase : ControlWithSettingsBase
         internal set => SetValue(BlobUriConverterProperty, value);
     }
 
+    /// <summary>组件在真实场景中的隐藏意图，与编辑占位内容的可见性无关。</summary>
+    public static readonly DependencyProperty IsHiddenAtRuntimeProperty = DependencyProperty.Register(
+        nameof(IsHiddenAtRuntime), typeof(bool), typeof(ComponentBase), new PropertyMetadata(false));
+
+    public bool IsHiddenAtRuntime
+    {
+        get => GetValue(IsHiddenAtRuntimeProperty) is true;
+        protected set => SetValue(IsHiddenAtRuntimeProperty, value);
+    }
+
     public static readonly DependencyProperty IsEditingProperty = DependencyProperty.Register(
         nameof(IsEditing), typeof(bool), typeof(ComponentBase), new PropertyMetadata(false, OnEditingChanged));
 

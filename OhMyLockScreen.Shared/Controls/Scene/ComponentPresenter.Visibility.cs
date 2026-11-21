@@ -12,9 +12,19 @@ public sealed partial class ComponentPresenter
         nameof(IsEditing), typeof(bool), typeof(ComponentPresenter),
         new PropertyMetadata(false, (sender, _) => ((ComponentPresenter)sender).UpdateContentVisibility()));
 
-    private IDisposable? _contentVisibility;
     private readonly HashSet<object> _hideRequests = new(ReferenceEqualityComparer.Instance);
     private event Action? HideRequestsChanged;
+    private IDisposable? _contentVisibility;
+    internal bool IsHiddenInEditor { get; private set; }
+
+    private void SetHiddenInEditor(bool hidden)
+    {
+        if (IsHiddenInEditor != hidden)
+        {
+            IsHiddenInEditor = hidden;
+            UpdateStripeMask();
+        }
+    }
 
     public void SetVisibilitySuppressed(object owner, bool suppressed)
     {
@@ -31,6 +41,7 @@ public sealed partial class ComponentPresenter
     {
         _contentVisibility?.Dispose();
         _contentVisibility = null;
+        SetHiddenInEditor(false);
     }
 
     private void UpdateContentVisibility()
@@ -42,22 +53,28 @@ public sealed partial class ComponentPresenter
         }
 
         component.IsEditing = IsEditing;
-        if (!IsEditing)
+        var hidden = Observable.Create<bool>(observer =>
         {
-            var changes = Observable.Create<Visibility>(observer =>
+            void Publish() => observer.OnNext(_hideRequests.Count > 0 || component.IsHiddenAtRuntime
+                || IsContentCollapsed(component));
+
+            var editingOverride = IsEditing ? ShowCollapsedContentInEditor(component, Publish) : null;
+            HideRequestsChanged += Publish;
+            var visibilityToken = component.RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => Publish());
+            var hiddenToken = component.RegisterPropertyChangedCallback(ComponentBase.IsHiddenAtRuntimeProperty, (_, _) => Publish());
+            Publish();
+            return Disposable.Create(() =>
             {
-                void Publish() => observer.OnNext(_hideRequests.Count > 0 ? Visibility.Collapsed : component.Visibility);
-                HideRequestsChanged += Publish;
-                var token = component.RegisterPropertyChangedCallback(VisibilityProperty,
-                    (_, _) => Publish());
-                Publish();
-                return Disposable.Create(() =>
-                {
-                    HideRequestsChanged -= Publish;
-                    component.UnregisterPropertyChangedCallback(VisibilityProperty, token);
-                });
+                HideRequestsChanged -= Publish;
+                component.UnregisterPropertyChangedCallback(VisibilityProperty, visibilityToken);
+                component.UnregisterPropertyChangedCallback(ComponentBase.IsHiddenAtRuntimeProperty, hiddenToken);
+                editingOverride?.Dispose();
             });
-            _contentVisibility = DependencyPropertyBindingHelper.Bind(changes, this, VisibilityProperty);
-        }
+        }).DistinctUntilChanged();
+
+        _contentVisibility = IsEditing
+            ? hidden.Subscribe(SetHiddenInEditor)
+            : DependencyPropertyBindingHelper.Bind(hidden.Select(value => value ? Visibility.Collapsed : Visibility.Visible),
+                this, VisibilityProperty);
     }
 }

@@ -7,6 +7,11 @@ using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Services.FeatureHost;
 using OhMyLockScreen.Services.FeatureHost;
 using OhMyLockScreen.Controls.Components;
+using OhMyLockScreen.Models.Features.Visibility;
+using OhMyLockScreen.Services.Features.Visibility;
+using OhMyLockScreen.Shared.Abstractions.Services;
+using OhMyLockScreen.Shared.Extensions.Registry;
+using OhMyLockScreen.Services.Rules;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Services.Media;
 using OhMyLockScreen.Shared;
@@ -54,8 +59,12 @@ internal static class MediaTests
 
         run("Presenter mirrors only the current component and restores visibility on editing and unload", () =>
         {
+            var ruleSatisfied = true;
             IAppHost.Host = new HostBuilder().ConfigureServices(services =>
             {
+                services.AddLogging();
+                services.AddSingleton<IRulesetService, RulesetService>();
+                services.AddRule("hidden", onHandle: _ => ruleSatisfied);
                 services.AddSingleton<FeatureRegistryService>();
                 services.AddSingleton<IFeatureService, FeatureService>();
             }).Build();
@@ -66,15 +75,44 @@ internal static class MediaTests
             presenter.Content = first;
             Check(presenter.Visibility == Visibility.Collapsed, "The component's initial visibility was ignored.");
             presenter.IsEditing = true;
-            Check(presenter.Visibility == Visibility.Visible && first.IsEditing, "Editing did not restore visibility and propagate context.");
+            Check(presenter.Visibility == Visibility.Visible && presenter.IsHiddenInEditor && first.IsEditing,
+                "Editing should mask the empty session, not collapse its placeholder.");
+            first.Load();
+            first.Settings.HideWhenNoMedia = false;
+            Check(!presenter.IsHiddenInEditor && first.Placeholder, "Placeholder alone must not cause stripes.");
+            var rules = IAppHost.GetRequiredService<IRulesetService>();
+            using var rule = new HideByRulesFeature(rules);
+            var settings = new HideByRulesSettings();
+            settings.Ruleset.Groups[0].Rules[0].Id = "hidden";
+            rule.SetSettings(settings);
+            rule.Attach(presenter);
+            Check(presenter.IsHiddenInEditor, "Satisfied rule did not mask a visible component while editing.");
+            var secondOwner = new object();
+            presenter.SetVisibilitySuppressed(secondOwner, true);
+            ruleSatisfied = false;
+            rules.NotifyStatusChanged();
+            presenter.Dispatcher.Drain();
+            Check(presenter.IsHiddenInEditor, "Releasing one hide request cleared the other.");
+            first.Settings.HideWhenNoMedia = true;
+            presenter.SetVisibilitySuppressed(secondOwner, false);
+            Check(presenter.IsHiddenInEditor, "Clearing a rule overrode the component's hidden intent.");
+            service.State = new MediaState { HasSession = true };
+            Check(!presenter.IsHiddenInEditor && !first.Placeholder, "Starting a session retained stripes.");
+            service.State = MediaState.Empty;
+            Check(presenter.IsHiddenInEditor && first.Placeholder, "Ending the session did not restore masked placeholder.");
             presenter.IsEditing = false;
             Check(presenter.Visibility == Visibility.Collapsed, "Preview did not restore synchronization.");
             var second = CreateComponent(new ObservableMediaService { State = new MediaState { HasSession = true } });
+            presenter.IsEditing = true;
             presenter.Content = second;
+            first.Settings.HideWhenNoMedia = false;
+            Check(!presenter.IsHiddenInEditor, "Replacement inherited the old component mask.");
+            presenter.IsEditing = false;
             Check(presenter.Visibility == Visibility.Visible, "Replacement retained the old component's visibility.");
             first.Visibility = Visibility.Visible;
             first.Visibility = Visibility.Collapsed;
             Check(presenter.Visibility == Visibility.Visible, "An old component still controlled the presenter.");
+            first.Unload();
             presenter.Unload();
             Check(ReferenceEquals(presenter.ReadLocalValue(UIElement.VisibilityProperty), DependencyProperty.UnsetValue), "Unloading left a local visibility override.");
         });
