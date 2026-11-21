@@ -28,8 +28,7 @@ public sealed class MediaComponent : MediaComponentBase<MediaComponentSettings>
 
     public MediaComponent(IMediaStateService service) : base(service)
     {
-        var resources = new ResourceDictionary { Source = new Uri("ms-appx:///OhMyLockScreen.Shared/Controls/Media/MediaResources.xaml") };
-        _buttonStyle = (Style)resources["MediaTransportButtonStyle"];
+        _buttonStyle = (Style)Application.Current.Resources["TransparentButton"];
         Content = _root;
     }
 

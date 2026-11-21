@@ -8,11 +8,6 @@
     xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
     xmlns:weatherModels="using:OhMyLockScreen.Shared.Models.Weather">
     <settings:SettingsPageBase.Resources>
-        <Style x:Key="TransparentWeatherButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="8,4" />
-        </Style>
         <Style x:Key="WeatherSection" TargetType="StackPanel">
             <Setter Property="Orientation" Value="Horizontal" />
             <Setter Property="Spacing" Value="4" />
@@ -108,7 +103,7 @@
                                 </StackPanel>
                             </StackPanel>
                             <Grid Grid.Column="2" VerticalAlignment="Center" Width="40" Height="40">
-                                <Button x:Name="RefreshButton" Width="40" Height="40" Style="{StaticResource TransparentWeatherButton}" Click="OnRefresh" AutomationProperties.Name="刷新" ToolTipService.ToolTip="刷新" />
+                                <Button x:Name="RefreshButton" Width="40" Height="40" Padding="8,4" Style="{StaticResource TransparentButton}" Click="OnRefresh" AutomationProperties.Name="刷新" ToolTipService.ToolTip="刷新" />
                                 <muxc:ProgressRing x:Name="RefreshProgress" Width="40" Height="40" Visibility="Collapsed" />
                             </Grid>
                         </Grid>
@@ -133,7 +128,7 @@
                         <toolkit:SettingsCard x:Name="CityPanel" Header="城市选择" Description="选择当前所在的城市，以用于天气查询。">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock x:Name="SelectedCity" VerticalAlignment="Center" />
-                                <Button x:Name="EditCityButton" Margin="6,0,0,0" Style="{StaticResource TransparentWeatherButton}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Click="OnEditCity" AutomationProperties.Name="编辑城市" ToolTipService.ToolTip="编辑城市" />
+                                <Button x:Name="EditCityButton" Margin="6,0,0,0" Padding="8,4" Style="{StaticResource TransparentButton}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Click="OnEditCity" AutomationProperties.Name="编辑城市" ToolTipService.ToolTip="编辑城市" />
                             </StackPanel>
                         </toolkit:SettingsCard>
                         <toolkit:SettingsCard x:Name="CoordinatePanel" Header="位置坐标" Description="输入用于获取天气信息的经纬坐标。" Visibility="Collapsed">
@@ -153,9 +148,9 @@
                                                 <ui:BackdropBlurBrush BlurAmount="8" FallbackColor="{ThemeResource SolidBackgroundFillColorSecondary}" />
                                             </Border.Background>
                                         </Border>
-                                        <Button x:Name="RevealCoordinates" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource TransparentWeatherButton}" Click="OnRevealCoordinates" />
+                                        <Button x:Name="RevealCoordinates" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="8,4" Style="{StaticResource TransparentButton}" Click="OnRevealCoordinates" />
                                     </Grid>
-                                    <Button x:Name="LocateButton" VerticalAlignment="Center" Style="{StaticResource TransparentWeatherButton}" Click="OnLocate" AutomationProperties.Name="自动定位" ToolTipService.ToolTip="自动定位" />
+                                    <Button x:Name="LocateButton" VerticalAlignment="Center" Padding="8,4" Style="{StaticResource TransparentButton}" Click="OnLocate" AutomationProperties.Name="自动定位" ToolTipService.ToolTip="自动定位" />
                                 </StackPanel>
                                 <TextBlock x:Name="CoordinateCity" FontSize="11" Margin="4,2,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 <TextBlock x:Name="CoordinateStatus" AutomationProperties.LiveSetting="Polite" TextWrapping="Wrap" Visibility="Collapsed" />

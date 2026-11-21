@@ -123,7 +123,7 @@
                 <Canvas x:Name="StopHandles" Background="Transparent" />
             </Grid>
             <Grid>
-                <Button x:Name="ReverseButton" Width="40" Height="32" Padding="8" Background="Transparent" BorderThickness="0"
+                <Button x:Name="ReverseButton" Width="40" Height="32" Padding="8" Style="{StaticResource TransparentButton}"
                         Click="OnReverseClick" ToolTipService.ToolTip="反转渐变" AutomationProperties.Name="反转渐变">
                     <icons:FluentIcon Icon="ArrowSync" FontSize="16" />
                 </Button>
