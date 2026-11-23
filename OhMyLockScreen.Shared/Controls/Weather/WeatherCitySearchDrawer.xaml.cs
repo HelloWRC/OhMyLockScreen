@@ -1,4 +1,3 @@
-using FluentIcons.Common;
 using OhMyLockScreen.Shared.Abstractions.Services.Weather;
 using OhMyLockScreen.Shared.Models.Weather;
 using Windows.UI.Core;
@@ -18,7 +17,6 @@ public sealed partial class WeatherCitySearchDrawer : UserControl
     public WeatherCitySearchDrawer()
     {
         InitializeComponent();
-        EmptyIcon.Content = WeatherVisuals.Icon(Icon.BorderNone, 64);
         Loaded += (_, _) => QueueInitialSearch();
         Unloaded += (_, _) => CancelSearch();
     }

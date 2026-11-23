@@ -1,0 +1,29 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI">
+    <Style TargetType="ui:Empty">
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ui:Empty">
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+                        <IconSourceElement
+                            Width="{TemplateBinding IconWidth}"
+                            Height="{TemplateBinding IconHeight}"
+                            HorizontalAlignment="Center"
+                            IconSource="{TemplateBinding Icon}" />
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            Text="{TemplateBinding Text}"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

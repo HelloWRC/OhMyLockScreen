@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:OhMyLockScreen.Shared.Models.Weather"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
     Width="320"
     Margin="16">
     <UserControl.Resources>
@@ -147,9 +148,13 @@
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
-        <StackPanel x:Name="Empty" Grid.Row="1" VerticalAlignment="Center" Margin="0,50" Spacing="8" Visibility="Collapsed">
-            <ContentControl x:Name="EmptyIcon" HorizontalAlignment="Center" />
-            <TextBlock Text="找不到符合条件的城市。请更换搜索关键字，然后再试一次。" TextAlignment="Center" TextWrapping="Wrap" />
-        </StackPanel>
+        <ui:Empty
+            x:Name="Empty"
+            Grid.Row="1"
+            Margin="0,50"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Text="找不到符合条件的城市。请更换搜索关键字，然后再试一次。"
+            Visibility="Collapsed" />
     </Grid>
 </UserControl>

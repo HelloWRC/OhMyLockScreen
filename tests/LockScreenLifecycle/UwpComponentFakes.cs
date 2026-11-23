@@ -317,7 +317,18 @@ namespace Windows.UI.Xaml.Data
 
 namespace Windows.UI.Xaml.Controls
 {
-    public class FontIconSource : DependencyObject
+    public class IconSource : DependencyObject;
+
+    public class BitmapIconSource : IconSource
+    {
+        public Uri? UriSource
+        {
+            get; set;
+        }
+        public bool ShowAsMonochrome { get; set; } = true;
+    }
+
+    public class FontIconSource : IconSource
     {
         public double FontSize
         {

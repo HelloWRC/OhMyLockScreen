@@ -12,6 +12,7 @@ using OhMyLockScreen.Services;
 using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Abstractions.Services.Weather;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Extensions.Registry;
 using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Shared.Models.Scene;
@@ -88,6 +89,25 @@ internal static class WeatherTests
             Check(WeatherPresentation.RainText(-83, false) == "-83min", "Exact remaining rain time lost its sign.");
             Check(WeatherService.GetRainMinutes([1, 1, 0]) == -2 && WeatherService.GetRainMinutes([0, 0, 1]) == 2,
                 "Rain series produced incorrect transitions.");
+        });
+
+        run("Empty control uses independent per-instance default sticker icons and supports custom IconSource", () =>
+        {
+            var first = new Empty();
+            var second = new Empty();
+            Check(Equals(first.DefaultStyleKey, typeof(Empty)), "Empty did not bind its default style key.");
+            Check(first.Text == "啥都没有" && first.IconWidth == 64.0 && first.IconHeight == 64.0,
+                "Empty defaults did not match ClassIsland.");
+            Check(first.Icon is BitmapIconSource
+            {
+                UriSource.OriginalString: "ms-appx:///Assets/Stickers/水月_疑惑.webp",
+                ShowAsMonochrome: false
+            }, "Empty did not initialize its default sticker icon source.");
+            Check(second.Icon is BitmapIconSource && !ReferenceEquals(first.Icon, second.Icon),
+                "Empty instances shared a single IconSource instance.");
+            var custom = new FluentIcons.Uwp.FluentIconSource { Icon = FluentIcons.Common.Icon.Warning, FontSize = 48 };
+            first.Icon = custom;
+            Check(ReferenceEquals(first.Icon, custom), "Empty did not accept a custom IconSource.");
         });
     }
 
