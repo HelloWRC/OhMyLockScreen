@@ -19,6 +19,16 @@ public sealed partial class GridDefinitionsControl : UserControl
     }
 
     public GridDefinitionsControl() => InitializeComponent();
+
+    private void OnModeSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (sender is ComboBox { DataContext: GridElement definition, SelectedIndex: var index }
+            && Enum.IsDefined((GridElementMode)index))
+        {
+            definition.Mode = (GridElementMode)index;
+        }
+    }
+
     private void OnAddClick(object sender, RoutedEventArgs args) => Definitions?.Add(new GridElement());
     private void OnRemoveClick(object sender, RoutedEventArgs args)
     {

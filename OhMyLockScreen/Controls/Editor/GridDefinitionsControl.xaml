@@ -39,7 +39,8 @@
                         </Grid.ColumnDefinitions>
                         <ComboBox
                             HorizontalAlignment="Stretch"
-                            SelectedIndex="{Binding Mode, Mode=TwoWay, Converter={StaticResource EnumIndexConverter}}">
+                            SelectedIndex="{x:Bind Mode, Mode=OneWay, Converter={StaticResource EnumIndexConverter}}"
+                            SelectionChanged="OnModeSelectionChanged">
                             <ComboBoxItem
                                 Content="比例" />
                             <ComboBoxItem
