@@ -57,6 +57,7 @@
 - 音频频谱通过共享 IAudioSpectrumService 按租约连接 NativeHost，避免锁屏 UWP 宿主 loopback 静音；通过当前会话的包内管道传递频谱快照，无客户端后释放采集并自动退出。
 - 规则类型由宿主和插件注册；规则集由调用方持有。规则编辑器可独立托管，运行时判定状态不序列化、不触发场景保存。「按规则隐藏」在编辑时也求值，与组件自身的隐藏意图合并，不改变组件内部显示项。
 - 图层视差特性（`omls.features.layout.parallax`）通过 `ISceneParallaxHost` 共享 `ScenePresenter` 的视差驱动与计时器，并施加在 `LayerPresenter` 模板内层的 `ParallaxTransform` 上，与 `TransformFeature` 独立叠加且不受 `SuppressParallaxWithoutBackground` 抑制。
+- 阴影特性（`omls.features.appearance.shadow`）通过 `IShadowTarget` 面向组件与图层，使用 `DependencyPropertyBindingHelper` 绑定 `ShadowEffect.Shadow` 附加属性，由独立控件 `ShadowDecorator` 在内容后方通过 `LayerVisual`、`RedirectVisual` 与 `AlphaMaskEffect` + `GaussianBlurEffect` 按内容轮廓投影，与 `TransformFeature`、`ParallaxTransform` 及编辑器隐藏条纹遮罩独立共存。
 
 ## 验证原则
 

@@ -13,7 +13,7 @@ using Windows.UI.Xaml.Controls;
 namespace OhMyLockScreen.Shared.Controls.Scene;
 
 /// <summary>根据组件配置创建并显示组件。每个 Presenter 拥有独立控件。</summary>
-public sealed partial class ComponentPresenter : ContentPresenter, IBorderable, ISceneBlobContext
+public sealed partial class ComponentPresenter : ContentPresenter, IBorderable, ISceneBlobContext, IShadowTarget
 {
     public static readonly DependencyProperty BlobUriConverterProperty = DependencyProperty.Register(
         nameof(BlobUriConverter), typeof(SceneBlobUriConverter), typeof(ComponentPresenter),

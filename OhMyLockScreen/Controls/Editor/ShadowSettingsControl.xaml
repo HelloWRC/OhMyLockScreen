@@ -1,0 +1,283 @@
+<local:ShadowSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Editor.ShadowSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:icons="using:FluentIcons.Uwp"
+    Loaded="OnLoaded"
+    Unloaded="OnUnloaded">
+    <local:ShadowSettingsControlBase.Resources>
+        <Style
+            x:Key="ShadowAxisLabelStyle"
+            TargetType="TextBlock">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style
+            x:Key="ShadowOffsetStyle"
+            TargetType="muxc:NumberBox"
+            BasedOn="{StaticResource EditorNumberStyle}">
+            <Setter Property="Minimum" Value="-500" />
+            <Setter Property="Maximum" Value="500" />
+            <Setter Property="SmallChange" Value="1" />
+            <Setter Property="LargeChange" Value="10" />
+        </Style>
+        <Style
+            x:Key="ShadowBlurStyle"
+            TargetType="muxc:NumberBox"
+            BasedOn="{StaticResource EditorNumberStyle}">
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="100" />
+            <Setter Property="SmallChange" Value="1" />
+            <Setter Property="LargeChange" Value="5" />
+            <Setter Property="Width" Value="116" />
+        </Style>
+        <Style
+            x:Key="ShadowOpacityStyle"
+            TargetType="muxc:NumberBox"
+            BasedOn="{StaticResource EditorNumberStyle}">
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="1" />
+            <Setter Property="SmallChange" Value="0.01" />
+            <Setter Property="LargeChange" Value="0.1" />
+            <Setter Property="Width" Value="116" />
+        </Style>
+        <Style
+            x:Key="ShadowPresetButtonStyle"
+            TargetType="ToggleButton">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="AllowFocusOnInteraction" Value="False" />
+        </Style>
+    </local:ShadowSettingsControlBase.Resources>
+
+    <StackPanel
+        Style="{StaticResource EditorFormStyle}"
+        Spacing="12"
+        DataContext="{x:Bind Values, Mode=OneWay}">
+        <!-- 颜色与重置 -->
+        <StackPanel Spacing="6">
+            <Grid>
+                <TextBlock
+                    Text="颜色"
+                    VerticalAlignment="Center" />
+                <Button
+                    x:Name="ResetButton"
+                    HorizontalAlignment="Right"
+                    Width="28"
+                    Height="28"
+                    Style="{StaticResource EditorTransparentIconButtonStyle}"
+                    Command="{x:Bind Values.ResetCommand, Mode=OneWay}"
+                    ToolTipService.ToolTip="重置阴影"
+                    AutomationProperties.Name="重置阴影">
+                    <icons:FluentIcon
+                        Icon="ArrowReset"
+                        FontSize="14" />
+                </Button>
+            </Grid>
+            <Button
+                x:Name="ColorPickerButton"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                Padding="8,6"
+                ToolTipService.ToolTip="选择阴影颜色"
+                AutomationProperties.Name="选择阴影颜色">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border
+                        Width="20"
+                        Height="20"
+                        CornerRadius="4"
+                        BorderThickness="1"
+                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
+                        <Border.Background>
+                            <SolidColorBrush
+                                x:Name="ColorSwatchBrush"
+                                Color="#FF000000" />
+                        </Border.Background>
+                    </Border>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding ColorHex}"
+                        VerticalAlignment="Center" />
+                    <icons:FluentIcon
+                        Grid.Column="2"
+                        Icon="ChevronDown"
+                        FontSize="12"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Grid>
+                <Button.Flyout>
+                    <Flyout
+                        x:Name="ColorFlyout"
+                        Opening="OnColorFlyoutOpening">
+                        <muxc:ColorPicker
+                            x:Name="ShadowColorPicker"
+                            IsAlphaEnabled="False"
+                            IsAlphaSliderVisible="False"
+                            IsAlphaTextInputVisible="False"
+                            IsMoreButtonVisible="False"
+                            ColorSpectrumShape="Box"
+                            ColorSpectrumComponents="HueSaturation"
+                            ColorChanged="OnColorPickerColorChanged"
+                            AutomationProperties.Name="阴影颜色" />
+                    </Flyout>
+                </Button.Flyout>
+            </Button>
+        </StackPanel>
+
+        <!-- 不透明度 -->
+        <StackPanel Spacing="4">
+            <Grid>
+                <TextBlock
+                    Text="不透明度"
+                    VerticalAlignment="Center" />
+                <muxc:NumberBox
+                    x:Name="OpacityInput"
+                    HorizontalAlignment="Right"
+                    Style="{StaticResource ShadowOpacityStyle}"
+                    ToolTipService.ToolTip="阴影不透明度"
+                    AutomationProperties.Name="阴影不透明度"
+                    Value="{Binding Opacity, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            </Grid>
+            <Slider
+                Minimum="0"
+                Maximum="100"
+                StepFrequency="1"
+                Value="{Binding OpacityPercent, Mode=TwoWay}"
+                ToolTipService.ToolTip="阴影不透明度"
+                AutomationProperties.Name="阴影不透明度滑块" />
+        </StackPanel>
+
+        <!-- 模糊半径 -->
+        <StackPanel Spacing="4">
+            <Grid>
+                <TextBlock
+                    Text="模糊半径"
+                    VerticalAlignment="Center" />
+                <muxc:NumberBox
+                    x:Name="BlurRadiusInput"
+                    HorizontalAlignment="Right"
+                    Style="{StaticResource ShadowBlurStyle}"
+                    ToolTipService.ToolTip="模糊半径"
+                    AutomationProperties.Name="模糊半径"
+                    Value="{Binding BlurRadius, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+            </Grid>
+            <Slider
+                Minimum="0"
+                Maximum="100"
+                StepFrequency="1"
+                Value="{Binding BlurRadiusStep, Mode=TwoWay}"
+                ToolTipService.ToolTip="模糊半径"
+                AutomationProperties.Name="模糊半径滑块" />
+        </StackPanel>
+
+        <!-- 偏移 -->
+        <StackPanel Spacing="6">
+            <TextBlock Text="偏移" />
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid ColumnSpacing="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="X"
+                        Style="{StaticResource ShadowAxisLabelStyle}" />
+                    <muxc:NumberBox
+                        x:Name="OffsetXInput"
+                        Grid.Column="1"
+                        Style="{StaticResource ShadowOffsetStyle}"
+                        ToolTipService.ToolTip="水平偏移"
+                        AutomationProperties.Name="水平偏移"
+                        Value="{Binding OffsetX, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                </Grid>
+                <Grid
+                    Grid.Column="1"
+                    ColumnSpacing="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Y"
+                        Style="{StaticResource ShadowAxisLabelStyle}" />
+                    <muxc:NumberBox
+                        x:Name="OffsetYInput"
+                        Grid.Column="1"
+                        Style="{StaticResource ShadowOffsetStyle}"
+                        ToolTipService.ToolTip="竖直偏移"
+                        AutomationProperties.Name="竖直偏移"
+                        Value="{Binding OffsetY, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                </Grid>
+            </Grid>
+        </StackPanel>
+
+        <Rectangle
+            Height="1"
+            Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+        <!-- 预设 -->
+        <StackPanel Spacing="6">
+            <TextBlock Text="预设" />
+            <Grid ColumnSpacing="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ToggleButton
+                    x:Name="SoftPresetButton"
+                    Grid.Column="0"
+                    Content="柔和"
+                    Style="{StaticResource ShadowPresetButtonStyle}"
+                    IsChecked="{Binding IsSoftPreset, Mode=TwoWay}"
+                    ToolTipService.ToolTip="柔和阴影：黑色 50%，模糊 16，偏移 (0, 4)"
+                    AutomationProperties.Name="柔和阴影预设" />
+                <ToggleButton
+                    x:Name="ElevatedPresetButton"
+                    Grid.Column="1"
+                    Content="悬浮"
+                    Style="{StaticResource ShadowPresetButtonStyle}"
+                    IsChecked="{Binding IsElevatedPreset, Mode=TwoWay}"
+                    ToolTipService.ToolTip="悬浮阴影：黑色 42%，模糊 32，偏移 (0, 12)"
+                    AutomationProperties.Name="悬浮阴影预设" />
+                <ToggleButton
+                    x:Name="CrispPresetButton"
+                    Grid.Column="2"
+                    Content="清晰"
+                    Style="{StaticResource ShadowPresetButtonStyle}"
+                    IsChecked="{Binding IsCrispPreset, Mode=TwoWay}"
+                    ToolTipService.ToolTip="清晰阴影：黑色 65%，模糊 6，偏移 (0, 2)"
+                    AutomationProperties.Name="清晰阴影预设" />
+                <ToggleButton
+                    x:Name="GlowPresetButton"
+                    Grid.Column="3"
+                    Content="柔光"
+                    Style="{StaticResource ShadowPresetButtonStyle}"
+                    IsChecked="{Binding IsGlowPreset, Mode=TwoWay}"
+                    ToolTipService.ToolTip="柔光阴影：白色 60%，模糊 24，偏移 (0, 0)"
+                    AutomationProperties.Name="柔光阴影预设" />
+            </Grid>
+        </StackPanel>
+    </StackPanel>
+</local:ShadowSettingsControlBase>

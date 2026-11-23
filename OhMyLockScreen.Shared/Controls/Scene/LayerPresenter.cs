@@ -1,3 +1,4 @@
+using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
 using Windows.UI.Xaml;
@@ -7,7 +8,7 @@ using Windows.UI.Xaml.Media;
 namespace OhMyLockScreen.Shared.Controls.Scene;
 
 /// <summary>通过 ItemsControl 模板呈现图层中的组件。</summary>
-public sealed class LayerPresenter : Control, ISceneBlobContext
+public sealed class LayerPresenter : Control, ISceneBlobContext, IShadowTarget
 {
     public static readonly DependencyProperty BlobUriConverterProperty = DependencyProperty.Register(
         nameof(BlobUriConverter), typeof(SceneBlobUriConverter), typeof(LayerPresenter),

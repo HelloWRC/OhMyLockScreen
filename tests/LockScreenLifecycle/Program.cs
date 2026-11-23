@@ -153,6 +153,13 @@ if (args.Contains("--transform-only"))
     return;
 }
 
+if (args.Contains("--shadow-only"))
+{
+    ShadowFeatureTests.Run(Run);
+    Console.WriteLine($"All {passed} shadow checks passed using simulated UWP controls.");
+    return;
+}
+
 if (args.Contains("--binding-only"))
 {
     DependencyPropertyBindingTests.Run(Run);
@@ -161,6 +168,7 @@ if (args.Contains("--binding-only"))
     LayerParallaxTests.Run(Run);
     BackgroundFeatureTests.Run(Run);
     BorderFeatureTests.Run(Run);
+    ShadowFeatureTests.Run(Run);
     ForegroundFeatureTests.Run(Run);
     TypographyFeatureTests.Run(Run);
     Console.WriteLine($"All {passed} property binding checks passed using simulated UWP controls.");
@@ -222,6 +230,7 @@ BorderFeatureTests.Run(Run);
 ForegroundFeatureTests.Run(Run);
 TypographyFeatureTests.Run(Run);
 FeatureTests.Run(Run);
+ShadowFeatureTests.Run(Run);
 LayoutTests.Run(Run);
 EditorConverterTests.Run(Run);
 await SceneTests.RunManagementAsync(RunAsync);

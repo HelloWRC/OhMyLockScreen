@@ -54,6 +54,12 @@ public sealed partial class App : Application
             return;
         }
 
+        if (args.Arguments.Contains("shadow", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchShadowPreview();
+            return;
+        }
+
         if (args.Arguments.Contains("clock-flash", StringComparison.OrdinalIgnoreCase))
         {
             LaunchClockFlashPreview();
