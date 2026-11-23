@@ -22,6 +22,7 @@ namespace OhMyLockScreen.Controls.Editor
     public sealed class LayoutSettingsControl : LayoutSettingsControlBase;
     public sealed class GridLayoutSettingsControl : GridLayoutSettingsControlBase;
     public sealed class TransformSettingsControl : TransformSettingsControlBase;
+    public sealed class ParallaxSettingsControl : ParallaxSettingsControlBase;
 }
 
 namespace OhMyLockScreen.Controls.Components

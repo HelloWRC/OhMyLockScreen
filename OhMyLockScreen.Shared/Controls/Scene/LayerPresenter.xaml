@@ -7,7 +7,9 @@
             <Setter.Value>
                 <ControlTemplate TargetType="scene:LayerPresenter">
                     <Border
-                        Background="{TemplateBinding Background}">
+                        Background="{TemplateBinding Background}"
+                        RenderTransform="{Binding ParallaxTransform, Mode=OneWay, RelativeSource={RelativeSource Mode=TemplatedParent}}"
+                        RenderTransformOrigin="0.5,0.5">
                         <scene:LayoutControl
                             BlobUriConverter="{TemplateBinding BlobUriConverter}"
                             IsEditing="{TemplateBinding IsEditing}"

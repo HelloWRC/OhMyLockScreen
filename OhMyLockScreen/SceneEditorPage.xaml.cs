@@ -207,6 +207,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         _scenes.ActiveSceneChanged += OnSceneSaved;
         _scenes.SaveFailed += OnSaveFailed;
         EditorPresenter.BackgroundFailed += OnBackgroundFailed;
+        EditorPresenter.LayerParallaxUpdated += OnLayerParallaxUpdated;
         SceneViewport.LayoutUpdated += OnViewportLayoutUpdated;
         _window.CoreWindow.KeyDown += OnEditorKeyDown;
         try
@@ -278,6 +279,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         _scenes.ActiveSceneChanged -= OnSceneSaved;
         _scenes.SaveFailed -= OnSaveFailed;
         EditorPresenter.BackgroundFailed -= OnBackgroundFailed;
+        EditorPresenter.LayerParallaxUpdated -= OnLayerParallaxUpdated;
         SceneViewport.LayoutUpdated -= OnViewportLayoutUpdated;
         if (_window != null)
         {
@@ -343,6 +345,14 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private void OnInspectorChanged(object? sender, EventArgs args) => RefreshInspector();
     private void OnEditorError(object? sender, Exception error) => ShowError(error);
     private void OnBackgroundFailed(object? sender, string message) => ShowMessage("背景加载失败", message);
+
+    private void OnLayerParallaxUpdated(object? sender, EventArgs args)
+    {
+        if (!_selectionPending && ViewModel.ShowSelection)
+        {
+            UpdateSelectionGeometry();
+        }
+    }
     private async void OnSceneSaved(object? sender, SceneChangedEventArgs args)
     {
         await OnViewAsync(() =>

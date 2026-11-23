@@ -56,6 +56,7 @@
 - 设置页通过 `SettingsPageBase.OpenDrawer` 和 `CloseDrawer` 使用 Shared 中的 DrawerHost。每个设置窗口有独立的抽屉，返回优先关闭抽屉。
 - 音频频谱通过共享 IAudioSpectrumService 按租约连接 NativeHost，避免锁屏 UWP 宿主 loopback 静音；通过当前会话的包内管道传递频谱快照，无客户端后释放采集并自动退出。
 - 规则类型由宿主和插件注册；规则集由调用方持有。规则编辑器可独立托管，运行时判定状态不序列化、不触发场景保存。「按规则隐藏」在编辑时也求值，与组件自身的隐藏意图合并，不改变组件内部显示项。
+- 图层视差特性（`omls.features.layout.parallax`）通过 `ISceneParallaxHost` 共享 `ScenePresenter` 的视差驱动与计时器，并施加在 `LayerPresenter` 模板内层的 `ParallaxTransform` 上，与 `TransformFeature` 独立叠加且不受 `SuppressParallaxWithoutBackground` 抑制。
 
 ## 验证原则
 

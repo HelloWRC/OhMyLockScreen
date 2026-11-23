@@ -1,0 +1,18 @@
+<local:ParallaxSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Editor.ParallaxSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor">
+    <StackPanel Style="{StaticResource EditorFormStyle}">
+        <CheckBox
+            Content="覆盖背景视差强度"
+            IsChecked="{x:Bind Settings.OverrideStrength, Mode=TwoWay}" />
+        <Slider
+            Header="{x:Bind FormatStrength(Settings.Strength), Mode=OneWay}"
+            Minimum="0"
+            Maximum="200"
+            StepFrequency="1"
+            Visibility="{x:Bind Settings.OverrideStrength, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+            Value="{x:Bind Settings.Strength, Mode=TwoWay}" />
+    </StackPanel>
+</local:ParallaxSettingsControlBase>

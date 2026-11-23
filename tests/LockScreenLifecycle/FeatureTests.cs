@@ -256,7 +256,7 @@ internal static class FeatureTests
             using var host = (IHost)factory.Invoke(null, null)!;
             var registered = host.Services.GetRequiredService<FeatureRegistryService>().Registered;
             Check(registered.Select(feature => feature.Id).ToHashSet().SetEquals(
-                ["omls.features.layout.layout", "omls.features.layout.grid", "omls.features.layout.transform", "omls.features.appearance.background",
+                ["omls.features.layout.layout", "omls.features.layout.grid", "omls.features.layout.transform", "omls.features.layout.parallax", "omls.features.appearance.background",
                     "omls.features.appearance.border", "omls.features.appearance.foreground",
                     "omls.features.appearance.text", "omls.features.appearance.font", "omls.features.visibility.hideByRules"]),
                 "The app host did not register the built-in features.");

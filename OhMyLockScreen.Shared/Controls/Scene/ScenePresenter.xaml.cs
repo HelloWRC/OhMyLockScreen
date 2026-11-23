@@ -71,6 +71,7 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
     public ScenePresenter()
     {
         InitializeComponent();
+        InitializeParallax();
         InitializeBackgroundLayout();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -236,14 +237,7 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
             AddDoubleAnimation(storyboard, LayersTransform, nameof(TranslateTransform.Y), LayersTransform.Y, _unlockTargetY, UnlockDuration);
             AddDoubleAnimation(storyboard, LayersLayer, nameof(UIElement.Opacity), LayersLayer.Opacity, 0, UnlockDuration);
             AddDoubleAnimation(storyboard, BackgroundViewport, nameof(UIElement.Opacity), BackgroundViewport.Opacity, 0, UnlockDuration);
-            var parallax = BackgroundParallaxTransform;
-            if (parallax.ScaleX != 1 || parallax.TranslateX != 0 || parallax.TranslateY != 0)
-            {
-                AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.ScaleX), parallax.ScaleX, 1, UnlockDuration);
-                AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.ScaleY), parallax.ScaleY, 1, UnlockDuration);
-                AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.TranslateX), parallax.TranslateX, 0, UnlockDuration);
-                AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.TranslateY), parallax.TranslateY, 0, UnlockDuration);
-            }
+            AddParallaxUnlockAnimations(storyboard);
 
             storyboard.Begin();
         }

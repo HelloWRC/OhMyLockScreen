@@ -64,7 +64,8 @@
                         <local:LayerPresenter
                             Layer="{Binding}"
                             BlobUriConverter="{Binding BlobUriConverter, ElementName=RootScenePresenter, Mode=OneWay}"
-                            IsEditing="{Binding IsEditing, ElementName=RootScenePresenter, Mode=OneWay}" />
+                            IsEditing="{Binding IsEditing, ElementName=RootScenePresenter, Mode=OneWay}"
+                            ParallaxHost="{Binding ParallaxHost, ElementName=RootScenePresenter, Mode=OneWay}" />
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
