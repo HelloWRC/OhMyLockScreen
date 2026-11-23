@@ -5,7 +5,41 @@
     xmlns:local="using:OhMyLockScreen.Controls.Components"
     Loaded="OnLoaded"
     Unloaded="OnUnloaded">
-    <TextBlock
-        x:Name="TextContent"
-        Text="{x:Bind DisplayText, Mode=OneWay}" />
+    <!-- 拆分为独立 TextBlock 并通过 Opacity 控制分隔符显隐，避免替换字符导致任意字体宽度抖动，同时兼容 AcrylicBrush 前景。 -->
+    <StackPanel
+        x:Name="PartsPanel"
+        Orientation="Horizontal"
+        HorizontalAlignment="{x:Bind ToHorizontalAlignment(TextContent.TextAlignment), Mode=OneWay}">
+        <TextBlock
+            x:Name="TextContent"
+            Text="{x:Bind HoursText, Mode=OneWay}" />
+        <TextBlock
+            x:Name="MinuteSeparator"
+            Text=":"
+            Opacity="{x:Bind SeparatorOpacity, Mode=OneWay}"
+            LineHeight="{x:Bind TextContent.LineHeight, Mode=OneWay}"
+            LineStackingStrategy="{x:Bind TextContent.LineStackingStrategy, Mode=OneWay}"
+            TextDecorations="{x:Bind TextContent.TextDecorations, Mode=OneWay}" />
+        <TextBlock
+            x:Name="MinutesContent"
+            Text="{x:Bind MinutesText, Mode=OneWay}"
+            LineHeight="{x:Bind TextContent.LineHeight, Mode=OneWay}"
+            LineStackingStrategy="{x:Bind TextContent.LineStackingStrategy, Mode=OneWay}"
+            TextDecorations="{x:Bind TextContent.TextDecorations, Mode=OneWay}" />
+        <TextBlock
+            x:Name="SecondSeparator"
+            Text=":"
+            Opacity="{x:Bind SeparatorOpacity, Mode=OneWay}"
+            Visibility="{x:Bind SecondsVisibility, Mode=OneWay}"
+            LineHeight="{x:Bind TextContent.LineHeight, Mode=OneWay}"
+            LineStackingStrategy="{x:Bind TextContent.LineStackingStrategy, Mode=OneWay}"
+            TextDecorations="{x:Bind TextContent.TextDecorations, Mode=OneWay}" />
+        <TextBlock
+            x:Name="SecondsContent"
+            Text="{x:Bind SecondsText, Mode=OneWay}"
+            Visibility="{x:Bind SecondsVisibility, Mode=OneWay}"
+            LineHeight="{x:Bind TextContent.LineHeight, Mode=OneWay}"
+            LineStackingStrategy="{x:Bind TextContent.LineStackingStrategy, Mode=OneWay}"
+            TextDecorations="{x:Bind TextContent.TextDecorations, Mode=OneWay}" />
+    </StackPanel>
 </local:ClockComponentBase>

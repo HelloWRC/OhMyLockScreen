@@ -52,6 +52,12 @@ public sealed partial class App : Application
             return;
         }
 
+        if (args.Arguments.Contains("clock-flash", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchClockFlashPreview();
+            return;
+        }
+
         if (args.Arguments.Contains("acrylic-foreground", StringComparison.OrdinalIgnoreCase))
         {
             LaunchAcrylicForegroundPreview();

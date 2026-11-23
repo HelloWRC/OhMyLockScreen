@@ -457,26 +457,39 @@ internal static class ComponentTests
             })!;
             component.Load();
             var timer = DispatcherTimer.LastCreated!;
-            Check(component.DisplayText == "23:59" && timer.IsEnabled &&
+            Check(component.DisplayText == "23:59" && component.HoursText == "23" && component.MinutesText == "59" &&
+                component.SecondsText == "" && component.SecondsVisibility == Visibility.Collapsed &&
+                component.SeparatorOpacity == 1 && timer.IsEnabled &&
                 timer.Interval == TimeSpan.FromMilliseconds(500) && timer.TickSubscribers == 1,
                 "The clock did not initialize its local time or timer.");
             settings.ShowSeconds = true;
-            Check(component.DisplayText == "23:59:59", "Clock settings did not refresh the displayed time.");
+            Check(component.DisplayText == "23:59:59" && component.SecondsText == "59" &&
+                component.SecondsVisibility == Visibility.Visible,
+                "Clock settings did not refresh the displayed time.");
             timeProvider.UtcNow = timeProvider.UtcNow.AddSeconds(1);
             timer.Advance();
-            Check(component.DisplayText == "00:00:00", "The clock did not update across midnight.");
+            Check(component.DisplayText == "00:00:00" && component.HoursText == "00" && component.MinutesText == "00" && component.SecondsText == "00",
+                "The clock did not update across midnight.");
             settings.FlashSeparator = true;
             timeProvider.UtcNow = timeProvider.UtcNow.AddMilliseconds(500);
             timer.Advance();
-            Check(component.DisplayText == "00\u200800\u200800", "The clock separator did not flash.");
+            Check(component.DisplayText == "00:00:00" && component.SeparatorOpacity == 0,
+                "The clock separator did not flash transparently while preserving the colon glyph.");
+            settings.FlashSeparator = false;
+            Check(component.SeparatorOpacity == 1,
+                "Disabling separator flash did not restore separator opacity.");
+            settings.FlashSeparator = true;
+            Check(component.SeparatorOpacity == 0,
+                "Re-enabling separator flash during the second half-second did not hide the separator.");
             component.Unload();
             settings.ShowSeconds = false;
             timeProvider.UtcNow = timeProvider.UtcNow.AddMinutes(1);
             timer.Advance();
-            Check(!timer.IsEnabled && component.DisplayText == "00\u200800\u200800",
+            Check(!timer.IsEnabled && component.DisplayText == "00:00:00" && component.SeparatorOpacity == 0,
                 "An unloaded clock still observed settings or timer ticks.");
             component.Load();
-            Check(component.DisplayText == "00\u200801" && timer.IsEnabled && timer.TickSubscribers == 1,
+            Check(component.DisplayText == "00:01" && component.SecondsText == "" && component.SecondsVisibility == Visibility.Collapsed &&
+                component.SeparatorOpacity == 0 && timer.IsEnabled && timer.TickSubscribers == 1,
                 "Reloading the clock did not refresh its time or duplicated its timer.");
             component.Unload();
         });

@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Globalization;
 using OhMyLockScreen.Models.Scene;
-using OhMyLockScreen.Shared.Attributes.Scene;
 using OhMyLockScreen.Shared.Abstractions.Controls;
+using OhMyLockScreen.Shared.Attributes.Scene;
 using Windows.UI.Xaml;
 
 namespace OhMyLockScreen.Controls.Components;
@@ -21,6 +21,11 @@ public sealed partial class ClockComponent : ClockComponentBase, ITextStyleTarge
     };
     private ClockComponentSettings? _observed;
     private bool _loaded;
+    public string HoursText { get; private set; } = "";
+    public string MinutesText { get; private set; } = "";
+    public string SecondsText { get; private set; } = "";
+    public Visibility SecondsVisibility { get; private set; } = Visibility.Collapsed;
+    public double SeparatorOpacity { get; private set; } = 1;
     public string DisplayText { get; private set; } = "";
 
     public ClockComponent(TimeProvider timeProvider)
@@ -68,13 +73,40 @@ public sealed partial class ClockComponent : ClockComponentBase, ITextStyleTarge
 
     private void OnPropertyChanged(object? sender, PropertyChangedEventArgs args) => Refresh();
     private void OnTick(object? sender, object args) => Refresh();
+
     private void Refresh()
     {
         var now = _timeProvider.GetLocalNow();
-        var text = now.ToString(Settings.ShowSeconds ? "HH:mm:ss" : "HH:mm", TimeCulture);
-        if (Settings.FlashSeparator && now.Millisecond >= 500)
+        var showSeconds = Settings.ShowSeconds;
+        var hours = now.ToString("HH", TimeCulture);
+        var minutes = now.ToString("mm", TimeCulture);
+        var seconds = showSeconds ? now.ToString("ss", TimeCulture) : "";
+        var secondsVisibility = showSeconds ? Visibility.Visible : Visibility.Collapsed;
+        var text = showSeconds ? $"{hours}:{minutes}:{seconds}" : $"{hours}:{minutes}";
+        var separatorOpacity = Settings.FlashSeparator && now.Millisecond >= 500 ? 0d : 1d;
+
+        if (HoursText != hours)
         {
-            text = text.Replace(':', '\u2008');
+            HoursText = hours;
+            OnPropertyChanged(nameof(HoursText));
+        }
+
+        if (MinutesText != minutes)
+        {
+            MinutesText = minutes;
+            OnPropertyChanged(nameof(MinutesText));
+        }
+
+        if (SecondsText != seconds)
+        {
+            SecondsText = seconds;
+            OnPropertyChanged(nameof(SecondsText));
+        }
+
+        if (SecondsVisibility != secondsVisibility)
+        {
+            SecondsVisibility = secondsVisibility;
+            OnPropertyChanged(nameof(SecondsVisibility));
         }
 
         if (DisplayText != text)
@@ -82,5 +114,18 @@ public sealed partial class ClockComponent : ClockComponentBase, ITextStyleTarge
             DisplayText = text;
             OnPropertyChanged(nameof(DisplayText));
         }
+
+        if (SeparatorOpacity != separatorOpacity)
+        {
+            SeparatorOpacity = separatorOpacity;
+            OnPropertyChanged(nameof(SeparatorOpacity));
+        }
     }
+
+    private HorizontalAlignment ToHorizontalAlignment(TextAlignment alignment) => alignment switch
+    {
+        TextAlignment.Center => HorizontalAlignment.Center,
+        TextAlignment.Right => HorizontalAlignment.Right,
+        _ => HorizontalAlignment.Left
+    };
 }
