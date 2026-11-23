@@ -45,13 +45,18 @@
         </Style>
     </UserControl.Resources>
     <StackPanel x:Name="EditorPanel" Padding="8">
-        <toolkit:Segmented
+        <local:AccessibleSegmented
             x:Name="TypeSelector"
             Margin="0,4"
             HorizontalAlignment="Stretch"
             SelectionMode="Single"
             SelectionChanged="OnTypeChanged"
             AutomationProperties.Name="笔刷类型">
+            <local:AccessibleSegmented.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <toolkit:EqualPanel HorizontalAlignment="Stretch" Spacing="1" />
+                </ItemsPanelTemplate>
+            </local:AccessibleSegmented.ItemsPanel>
             <toolkit:SegmentedItem MinWidth="0" Padding="8,4" ToolTipService.ToolTip="空" AutomationProperties.Name="空">
                 <toolkit:SegmentedItem.Icon>
                     <icons:FluentIcon Icon="ColorOff" FontSize="20" />
@@ -82,7 +87,7 @@
                     <icons:FluentIcon Icon="CircleHalfFill" FontSize="20" />
                 </toolkit:SegmentedItem.Icon>
             </toolkit:SegmentedItem>
-        </toolkit:Segmented>
+        </local:AccessibleSegmented>
         <TextBlock x:Name="ErrorText" Visibility="Collapsed" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
         <Pivot
             x:Name="AcrylicColorSelector"

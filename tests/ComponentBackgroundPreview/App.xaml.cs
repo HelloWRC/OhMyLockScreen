@@ -23,6 +23,8 @@ using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Automation;
+using Windows.UI.Xaml.Automation.Peers;
+using Windows.UI.Xaml.Automation.Provider;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
 
@@ -239,6 +241,12 @@ public sealed partial class App : Application
             && picker.Visibility == Visibility.Visible && picker.Color == Colors.Red
             && opacity.Value == 0.75 && opacity.Text.Contains('%'),
             "The inspector displays the latest bound brush after its native controls load");
+        Check(FrameworkElementAutomationPeer.CreatePeerForElement(selector) is SelectorAutomationPeer peer
+            && peer.GetPattern(PatternInterface.Selection) is ISelectionProvider,
+            "The brush type selector exposes a native SelectorAutomationPeer for UI Automation");
+        Check(selector.ItemsPanelRoot is CommunityToolkit.WinUI.Controls.EqualPanel { HorizontalAlignment: HorizontalAlignment.Stretch }
+            && selector.ActualWidth >= 300,
+            "The brush type selector preserves stretched EqualPanel layout");
 
         void ReplaceBrushOnFirstLoad(object sender, RoutedEventArgs args)
         {
