@@ -6,6 +6,7 @@ using OhMyLockScreen.Services.FeatureHost;
 using OhMyLockScreen.Services.Features.Appearance;
 using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Controls.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Extensions.FeatureHost;
 using OhMyLockScreen.Shared.FeatureHost;
 using OhMyLockScreen.Shared.Models.FeatureHost;
@@ -89,13 +90,14 @@ internal static class ForegroundFeatureTests
         run("Foreground stays on a presenter instead of redirecting to its decoration border", () =>
         {
             var target = new ComponentPresenter();
-            var border = new Border();
-            target.LoadDecorationBorder(border);
+            using var borderLease = target.Decorators.AcquireShared(
+                DecoratorKeys.Border, static () => new Border(), DecoratorPriorities.Border);
             var settings = new ForegroundFeatureSettings { Foreground = new SolidColorBrush() };
             using var feature = new ForegroundFeature();
             feature.SetSettings(settings);
             feature.Attach(target);
-            Check(ReferenceEquals(target.Foreground, settings.Foreground),
+            Check(ReferenceEquals(target.Foreground, settings.Foreground)
+                && borderLease.Element.Background == null,
                 "Foreground target resolution redirected to the decoration border.");
         });
 

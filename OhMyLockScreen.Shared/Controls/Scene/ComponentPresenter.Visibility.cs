@@ -1,6 +1,7 @@
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using OhMyLockScreen.Shared.Abstractions.Controls.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers;
 using Windows.UI.Xaml;
 
@@ -10,12 +11,20 @@ public sealed partial class ComponentPresenter
 {
     public static readonly DependencyProperty IsEditingProperty = DependencyProperty.Register(
         nameof(IsEditing), typeof(bool), typeof(ComponentPresenter),
-        new PropertyMetadata(false, (sender, _) => ((ComponentPresenter)sender).UpdateContentVisibility()));
+        new PropertyMetadata(false, (sender, _) => ((ComponentPresenter)sender).OnIsEditingChanged()));
 
     private readonly HashSet<object> _hideRequests = new(ReferenceEqualityComparer.Instance);
     private event Action? HideRequestsChanged;
     private IDisposable? _contentVisibility;
+    private StripeMaskDecorator? _stripeMask;
+    private IDecoratorRegistration? _stripeMaskRegistration;
     internal bool IsHiddenInEditor { get; private set; }
+
+    private void OnIsEditingChanged()
+    {
+        UpdateStripeMask();
+        UpdateContentVisibility();
+    }
 
     private void SetHiddenInEditor(bool hidden)
     {
@@ -24,6 +33,25 @@ public sealed partial class ComponentPresenter
             IsHiddenInEditor = hidden;
             UpdateStripeMask();
         }
+    }
+
+    private void UpdateStripeMask()
+    {
+        if (!_isLoaded || !IsEditing)
+        {
+            _stripeMaskRegistration?.Dispose();
+            _stripeMaskRegistration = null;
+            _stripeMask = null;
+            return;
+        }
+
+        if (_stripeMask == null)
+        {
+            _stripeMask = new StripeMaskDecorator();
+            _stripeMaskRegistration = Decorators.Register(_stripeMask, DecoratorPriorities.EditorOverlay);
+        }
+
+        _stripeMask.IsMaskActive = IsHiddenInEditor;
     }
 
     public void SetVisibilitySuppressed(object owner, bool suppressed)

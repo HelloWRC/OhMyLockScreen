@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
 using Windows.Foundation;
@@ -12,8 +14,9 @@ using Windows.UI.Xaml.Media.Animation;
 
 namespace OhMyLockScreen.Shared.Controls.Scene;
 
-public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
+public sealed partial class ScenePresenter : UserControl, ISceneBlobContext, IDecoratorHost
 {
+    public DecoratorChain Decorators { get; } = new();
     public static readonly DependencyProperty BlobUriConverterProperty = DependencyProperty.Register(
         nameof(BlobUriConverter), typeof(SceneBlobUriConverter), typeof(ScenePresenter), new PropertyMetadata(null));
 
@@ -206,6 +209,11 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
+        if (IsLoaded)
+        {
+            return;
+        }
+
         IsActive = false;
         RefreshParallaxStrength();
         DetachParallaxTimer();

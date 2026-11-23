@@ -1,10 +1,9 @@
-using System.Reactive.Linq;
-using DynamicData.Binding;
 using OhMyLockScreen.Models.Features.Appearance;
 using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.FeatureHost;
 using OhMyLockScreen.Shared.Attributes.FeatureHost;
 using OhMyLockScreen.Shared.Controls.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Shared.Helpers.UI;
 using Windows.UI.Xaml;
@@ -16,12 +15,12 @@ namespace OhMyLockScreen.Services.Features.Appearance;
 public sealed class BackgroundFeature : FeatureBase<FrameworkElement, BackgroundFeatureSettings>
 {
     private IDisposable? _binding;
-    private IDisposable? _borderSubscription;
+    private ISharedDecoratorRegistration<Border>? _borderLease;
 
     internal static FrameworkElement? ResolveBackgroundTarget(FrameworkElement? target) => target switch
     {
-        IBorderable borderable => borderable.Border,
         Control control => control,
+        IDecoratorHost host => host.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var border) ? border : target,
         _ => null
     };
 
@@ -34,14 +33,17 @@ public sealed class BackgroundFeature : FeatureBase<FrameworkElement, Background
 
         try
         {
-            if (target is IBorderable borderable)
+            if (target is Control control)
             {
-                _borderSubscription = borderable.WhenValueChanged(source => source.Border)
-                    .Subscribe(border => BindBackground(settings, border));
+                BindBackground(settings, control, Control.BackgroundProperty);
             }
-            else
+            else if (target is IDecoratorHost host)
             {
-                BindBackground(settings, ResolveBackgroundTarget(target));
+                var lease = _borderLease = host.Decorators.AcquireShared(
+                    DecoratorKeys.Border,
+                    static () => new Border(),
+                    DecoratorPriorities.Border);
+                BindBackground(settings, lease.Element, Border.BackgroundProperty);
             }
         }
         catch
@@ -53,36 +55,31 @@ public sealed class BackgroundFeature : FeatureBase<FrameworkElement, Background
 
     public override void Detach()
     {
-        _borderSubscription?.Dispose();
-        _borderSubscription = null;
         _binding?.Dispose();
         _binding = null;
+        _borderLease?.Dispose();
+        _borderLease = null;
         Target = null;
     }
 
-    private void BindBackground(BackgroundFeatureSettings settings, FrameworkElement? target)
+    private void BindBackground(BackgroundFeatureSettings settings, FrameworkElement target, DependencyProperty property)
     {
-        _binding?.Dispose();
-        _binding = null;
-
-        var property = target switch
-        {
-            Border => Windows.UI.Xaml.Controls.Border.BackgroundProperty,
-            Control => Control.BackgroundProperty,
-            _ => null
-        };
-        if (property != null)
-        {
-            _binding = DependencyPropertyBindingHelper.Bind(settings, source => source.Background, target!, property,
-                brush => SceneImageBrush.Resolve(brush, (Target as ISceneBlobContext)?.BlobUriConverter));
-        }
+        _binding = DependencyPropertyBindingHelper.Bind(settings, source => source.Background, target, property,
+            brush => SceneImageBrush.Resolve(brush, (Target as ISceneBlobContext)?.BlobUriConverter));
     }
 
     protected override void OnSettingsChanged()
     {
         if (Target is { } target)
         {
-            Attach(target);
+            if (SettingsInternal == null)
+            {
+                Detach();
+            }
+            else
+            {
+                Attach(target);
+            }
         }
     }
 }

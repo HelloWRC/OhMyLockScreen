@@ -100,7 +100,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private bool _inspectorAgain;
     private bool _selectionPending;
     private IFeatureContainer? _featureTarget;
-    private IBorderable? _featureBorderHost;
+    private IDecoratorHost? _featureDecoratorHost;
     private uint? _dragPointer;
     private bool _resizing;
     private bool _dragChanged;
@@ -1131,17 +1131,17 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
                 : FindModelPresenter(ViewModel.SelectedModel!);
         }
 
-        var borderHost = presenter as IBorderable;
-        if (!ReferenceEquals(_featureBorderHost, borderHost))
+        var decoratorHost = presenter as IDecoratorHost;
+        if (!ReferenceEquals(_featureDecoratorHost, decoratorHost))
         {
-            if (_featureBorderHost != null)
+            if (_featureDecoratorHost != null)
             {
-                _featureBorderHost.PropertyChanged -= OnFeatureBorderChanged;
+                _featureDecoratorHost.Decorators.Changed -= OnFeatureDecoratorsChanged;
             }
-            _featureBorderHost = borderHost;
-            if (_featureBorderHost != null)
+            _featureDecoratorHost = decoratorHost;
+            if (_featureDecoratorHost != null)
             {
-                _featureBorderHost.PropertyChanged += OnFeatureBorderChanged;
+                _featureDecoratorHost.Decorators.Changed += OnFeatureDecoratorsChanged;
             }
         }
 
@@ -1172,13 +1172,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         }
     }
 
-    private void OnFeatureBorderChanged(object? sender, PropertyChangedEventArgs args)
-    {
-        if (string.IsNullOrEmpty(args.PropertyName) || args.PropertyName == nameof(IBorderable.Border))
-        {
-            RefreshFeatureEditorTargets();
-        }
-    }
+    private void OnFeatureDecoratorsChanged(object? sender, EventArgs args) => RefreshFeatureEditorTargets();
 
     private void OnAddFeatureMenuOpening(object sender, object args)
     {

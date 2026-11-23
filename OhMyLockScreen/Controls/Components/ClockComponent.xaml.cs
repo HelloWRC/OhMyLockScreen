@@ -52,6 +52,11 @@ public sealed partial class ClockComponent : ClockComponentBase, ITextStyleTarge
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
+        if (IsLoaded)
+        {
+            return;
+        }
+
         _loaded = false;
         _timer.Stop();
         ObserveSettings();

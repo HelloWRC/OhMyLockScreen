@@ -56,8 +56,9 @@
 - 设置页通过 `SettingsPageBase.OpenDrawer` 和 `CloseDrawer` 使用 Shared 中的 DrawerHost。每个设置窗口有独立的抽屉，返回优先关闭抽屉。
 - 音频频谱通过共享 IAudioSpectrumService 按租约连接 NativeHost，避免锁屏 UWP 宿主 loopback 静音；通过当前会话的包内管道传递频谱快照，无客户端后释放采集并自动退出。
 - 规则类型由宿主和插件注册；规则集由调用方持有。规则编辑器可独立托管，运行时判定状态不序列化、不触发场景保存。「按规则隐藏」在编辑时也求值，与组件自身的隐藏意图合并，不改变组件内部显示项。
-- 图层视差特性（`omls.features.layout.parallax`）通过 `ISceneParallaxHost` 共享 `ScenePresenter` 的视差驱动与计时器，并施加在 `LayerPresenter` 模板内层的 `ParallaxTransform` 上，与 `TransformFeature` 独立叠加且不受 `SuppressParallaxWithoutBackground` 抑制。
-- 阴影特性（`omls.features.appearance.shadow`）通过 `IShadowTarget` 面向组件与图层，使用 `DependencyPropertyBindingHelper` 绑定 `ShadowEffect.Shadow` 附加属性，由独立控件 `ShadowDecorator` 在内容后方通过 `LayerVisual`、`RedirectVisual` 与 `AlphaMaskEffect` + `GaussianBlurEffect` 按内容轮廓投影，与 `TransformFeature`、`ParallaxTransform` 及编辑器隐藏条纹遮罩独立共存。
+- `ScenePresenter`、`LayerPresenter` 与 `ComponentPresenter` 均实现 `IDecoratorHost`，由通用单子节点链式装饰器 `ChainedDecorator`/`DecoratorChain` 按优先级升序（值越小越靠外）动态组合外部包装层；链更新保留外层未变前缀，可位于其子树内的装饰器、呈现器与组件在 `Unloaded` 中以 `IsLoaded` 防护 UWP 同帧重挂投递的过期卸载事件。`AcquireShared` 按键引用计数复用同一装饰节点（如 `ComponentPresenter` 上的 `BackgroundFeature` 与 `BorderFeature` 共享 `DecoratorKeys.Border`），编辑器隐藏条纹遮罩（`StripeMaskDecorator`）通过实现 `IVisualRedirectSourceProvider` 配合外层 `ShadowDecorator` 避免嵌套 `RedirectVisual` 丢失。
+- 图层视差特性（`omls.features.layout.parallax`）通过 `ISceneParallaxHost` 共享 `ScenePresenter` 的视差驱动与计时器，直接观察 `LayerPresenter.ParallaxHost` 并在 `LayerPresenter.Decorators` 注册带 `CompositeTransform` 的视差包装层（优先级 `DecoratorPriorities.Parallax`），与 `TransformFeature` 独立叠加且不受 `SuppressParallaxWithoutBackground` 抑制。
+- 阴影特性（`omls.features.appearance.shadow`）面向 `IDecoratorHost`（覆盖场景、图层与组件），在目标 `Decorators` 注册 `ShadowDecorator`（优先级 `DecoratorPriorities.Shadow`）并绑定 `ShadowSpec`，在内容后方通过 `LayerVisual`、`RedirectVisual` 与 `AlphaMaskEffect` + `GaussianBlurEffect` 按内容轮廓投影，与 `TransformFeature`、视差包装层及编辑器隐藏条纹遮罩独立共存。
 
 ## 验证原则
 

@@ -38,7 +38,13 @@ public sealed class WebView2Component : ComponentBase<WebView2ComponentSettings>
         IsEnabled = false;
         IsTabStop = false;
         Loaded += OnLoaded;
-        Unloaded += (_, _) => Deactivate();
+        Unloaded += (_, _) =>
+        {
+            if (!IsLoaded)
+            {
+                Deactivate();
+            }
+        };
     }
 
     protected override void OnSettingsChanged()

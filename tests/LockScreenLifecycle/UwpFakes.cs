@@ -878,11 +878,34 @@ namespace Windows.UI.Xaml.Controls
             get => (Windows.UI.Xaml.Media.Brush?)GetValue(BackgroundProperty);
             set => SetValue(BackgroundProperty, value);
         }
+
+        public static readonly DependencyProperty ChildProperty = DependencyProperty.Register(
+            nameof(Child), typeof(UIElement), typeof(Border), new PropertyMetadata(null,
+                (sender, args) => AttachSingleParentChild(sender, args.OldValue, args.NewValue)));
+
+        public UIElement? Child
+        {
+            get => (UIElement?)GetValue(ChildProperty);
+            set => SetValue(ChildProperty, value);
+        }
     }
 
-    public sealed class Viewbox
+    public sealed class Viewbox : FrameworkElement
     {
-        public double MaxWidth
+        private UIElement? _child;
+
+        public UIElement? Child
+        {
+            get => _child;
+            set
+            {
+                var previous = _child;
+                AttachSingleParentChild(this, previous, value);
+                _child = value;
+            }
+        }
+
+        public new double MaxWidth
         {
             get; set;
         }

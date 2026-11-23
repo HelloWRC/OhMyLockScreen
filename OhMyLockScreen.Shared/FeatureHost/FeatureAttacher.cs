@@ -7,6 +7,7 @@ using DynamicData;
 using DynamicData.Binding;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Models.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
@@ -198,6 +199,7 @@ public sealed class FeatureAttacher : ObservableObject, IDisposable
         }
 
         _isUpdating = true;
+        using var _ = (_host as IDecoratorHost)?.Decorators.DeferUpdates();
         try
         {
             while (_updateRequested)

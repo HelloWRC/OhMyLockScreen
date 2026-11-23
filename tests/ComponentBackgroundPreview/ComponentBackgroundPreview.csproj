@@ -33,6 +33,7 @@
     <Compile Include="../../OhMyLockScreen/Services/Features/Layout/LayoutFeature.cs" Link="Services/LayoutFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Layout/GridLayoutFeature.cs" Link="Services/GridLayoutFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Layout/TransformFeature.cs" Link="Services/TransformFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Layout/ParallaxFeature.cs" Link="Services/ParallaxFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/SceneLayoutEditing.cs" Link="Services/SceneLayoutEditing.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/SceneBlobStorageService.cs" Link="Services/SceneBlobStorageService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/SceneService.cs" Link="Services/SceneService.cs" />

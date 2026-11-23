@@ -94,7 +94,14 @@ public sealed class AudioSpectrumComponent : ComponentBase<AudioSpectrumComponen
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
-        => Deactivate();
+    {
+        if (IsLoaded)
+        {
+            return;
+        }
+
+        Deactivate();
+    }
 
     private void OnWindowClosed(object sender, CoreWindowEventArgs args)
         => Deactivate();

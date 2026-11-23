@@ -81,7 +81,7 @@ public sealed partial class App
             root.UpdateLayout();
             await Task.Delay(80);
             presenter = FindDropVisual<ComponentPresenter>(surface)!;
-            editor.TargetElement = presenter.Border;
+            editor.TargetElement = presenter;
             await VerifyAsync("before reorder");
             editor.TargetElement = null;
             root.Children.Remove(editor);

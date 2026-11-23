@@ -104,6 +104,11 @@ public sealed class WeatherComponent : ComponentBase<WeatherComponentSettings>, 
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
+        if (IsLoaded)
+        {
+            return;
+        }
+
         _loaded = false;
         LayoutUpdated -= OnForegroundLayoutUpdated;
         ++_generation;

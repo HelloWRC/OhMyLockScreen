@@ -1,11 +1,9 @@
 using System.Reactive.Disposables;
-using System.Reactive.Linq;
-using DynamicData.Binding;
 using OhMyLockScreen.Models.Features.Appearance;
-using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.FeatureHost;
 using OhMyLockScreen.Shared.Attributes.FeatureHost;
 using OhMyLockScreen.Shared.Controls.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Shared.Helpers.UI;
 using Windows.UI.Xaml.Controls;
@@ -13,12 +11,12 @@ using Windows.UI.Xaml.Controls;
 namespace OhMyLockScreen.Services.Features.Appearance;
 
 [FeatureInfo("omls.features.appearance.border", "边框")]
-public sealed class BorderFeature : FeatureBase<IBorderable, BorderFeatureSettings>
+public sealed class BorderFeature : FeatureBase<ComponentPresenter, BorderFeatureSettings>
 {
     private readonly CompositeDisposable _bindings = new();
-    private IDisposable? _borderSubscription;
+    private ISharedDecoratorRegistration<Border>? _borderLease;
 
-    public override void Attach(IBorderable target)
+    public override void Attach(ComponentPresenter target)
     {
         ArgumentNullException.ThrowIfNull(target);
         Detach();
@@ -27,34 +25,12 @@ public sealed class BorderFeature : FeatureBase<IBorderable, BorderFeatureSettin
 
         try
         {
-            _borderSubscription = target.WhenValueChanged(source => source.Border)
-                .Subscribe(border => BindBorder(settings, border));
-        }
-        catch
-        {
-            Detach();
-            throw;
-        }
-    }
+            var lease = _borderLease = target.Decorators.AcquireShared(
+                DecoratorKeys.Border,
+                static () => new Border(),
+                DecoratorPriorities.Border);
+            var border = lease.Element;
 
-    public override void Detach()
-    {
-        _borderSubscription?.Dispose();
-        _borderSubscription = null;
-        _bindings.Clear();
-        Target = null;
-    }
-
-    private void BindBorder(BorderFeatureSettings settings, Border? border)
-    {
-        _bindings.Clear();
-        if (border == null)
-        {
-            return;
-        }
-
-        try
-        {
             _bindings.Add(DependencyPropertyBindingHelper.Bind(
                 settings, source => source.BorderBrush, border, Border.BorderBrushProperty,
                 brush => SceneImageBrush.Resolve(brush, (Target as ISceneBlobContext)?.BlobUriConverter)));
@@ -67,16 +43,31 @@ public sealed class BorderFeature : FeatureBase<IBorderable, BorderFeatureSettin
         }
         catch
         {
-            _bindings.Clear();
+            Detach();
             throw;
         }
+    }
+
+    public override void Detach()
+    {
+        _bindings.Clear();
+        _borderLease?.Dispose();
+        _borderLease = null;
+        Target = null;
     }
 
     protected override void OnSettingsChanged()
     {
         if (Target is { } target)
         {
-            Attach(target);
+            if (SettingsInternal == null)
+            {
+                Detach();
+            }
+            else
+            {
+                Attach(target);
+            }
         }
     }
 }

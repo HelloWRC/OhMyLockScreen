@@ -8,24 +8,14 @@
     VerticalContentAlignment="Stretch">
     <ContentPresenter.ContentTemplate>
         <DataTemplate>
-            <ui:ShadowDecorator
-                ShadowSpec="{Binding Path=(ui:ShadowEffect.Shadow), ElementName=RootPresenter, Mode=OneWay}"
-                SourceElement="{Binding ElementName=DecorationBorder}">
-                <Grid x:Name="StripeHost">
-                    <Grid x:Name="OriginalContent">
-                        <Border
-                            x:Name="DecorationBorder"
-                            Loaded="OnDecorationBorderLoaded"
-                            Unloaded="OnDecorationBorderUnloaded">
-                            <ContentPresenter
-                                Content="{Binding Content, ElementName=RootPresenter, Mode=OneWay}"
-                                Foreground="{Binding ContentForeground, ElementName=RootPresenter, Mode=OneWay}"
-                                HorizontalContentAlignment="Stretch"
-                                VerticalContentAlignment="Stretch" />
-                        </Border>
-                    </Grid>
-                </Grid>
-            </ui:ShadowDecorator>
+            <ui:ChainedDecorator
+                Chain="{Binding Decorators, ElementName=RootPresenter, Mode=OneWay}">
+                <ContentPresenter
+                    Content="{Binding Content, ElementName=RootPresenter, Mode=OneWay}"
+                    Foreground="{Binding ContentForeground, ElementName=RootPresenter, Mode=OneWay}"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch" />
+            </ui:ChainedDecorator>
         </DataTemplate>
     </ContentPresenter.ContentTemplate>
 </ContentPresenter>

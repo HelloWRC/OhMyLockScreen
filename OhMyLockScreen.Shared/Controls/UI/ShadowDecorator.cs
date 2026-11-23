@@ -24,6 +24,7 @@ public sealed class ShadowDecorator : ContentControl
         typeof(ShadowDecorator),
         new PropertyMetadata(null, (sender, _) => ((ShadowDecorator)sender).SyncShadow()));
 
+    private readonly List<IVisualRedirectSourceProvider> _observedProviders = [];
     private FrameworkElement? _shadowHost;
     private FrameworkElement? _contentPresenter;
     private FrameworkElement? _activeHost;
@@ -51,6 +52,7 @@ public sealed class ShadowDecorator : ContentControl
     public ShadowDecorator()
     {
         DefaultStyleKey = typeof(ShadowDecorator);
+        RegisterPropertyChangedCallback(ContentProperty, (_, _) => SyncShadow());
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -72,26 +74,38 @@ public sealed class ShadowDecorator : ContentControl
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
+        if (IsLoaded)
+        {
+            _isLoaded = true;
+            SyncShadow();
+            return;
+        }
+
         _isLoaded = false;
         ReleaseShadow();
     }
 
     private void SyncShadow()
     {
-        var effectiveSource = SourceElement ?? _contentPresenter;
         if (ShadowSpec is not { } spec
             || !_isLoaded
             || _shadowHost is not { } host
-            || effectiveSource is not { } source
             || !CompositionCapabilities.GetForCurrentView().AreEffectsSupported())
         {
             ReleaseShadow();
             return;
         }
 
+        var effectiveSource = ResolveEffectiveSource();
+        if (effectiveSource is not { } source)
+        {
+            ReleaseShadowVisualsOnly();
+            return;
+        }
+
         if (!ReferenceEquals(_activeHost, host) || !ReferenceEquals(_activeSource, source) || _layer == null)
         {
-            ReleaseShadow();
+            ReleaseShadowVisualsOnly();
             if (!CreateShadowVisuals(host, source))
             {
                 return;
@@ -99,6 +113,52 @@ public sealed class ShadowDecorator : ContentControl
         }
 
         ApplySpec(spec);
+    }
+
+    private void OnRedirectSourceChanged(object? sender, EventArgs args) => SyncShadow();
+
+    private FrameworkElement? ResolveEffectiveSource()
+    {
+        ReleaseObservedProviders();
+        if (SourceElement != null)
+        {
+            return SourceElement;
+        }
+
+        if (Content is not IVisualRedirectSourceProvider)
+        {
+            return _contentPresenter;
+        }
+
+        object? current = Content;
+        while (current is IVisualRedirectSourceProvider provider)
+        {
+            if (_observedProviders.Contains(provider))
+            {
+                return null;
+            }
+
+            _observedProviders.Add(provider);
+            provider.VisualRedirectSourceChanged += OnRedirectSourceChanged;
+            current = provider.VisualRedirectSource;
+        }
+
+        return current as FrameworkElement;
+    }
+
+    private void ReleaseObservedProviders()
+    {
+        if (_observedProviders.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var provider in _observedProviders)
+        {
+            provider.VisualRedirectSourceChanged -= OnRedirectSourceChanged;
+        }
+
+        _observedProviders.Clear();
     }
 
     private bool CreateShadowVisuals(FrameworkElement host, FrameworkElement source)
@@ -210,6 +270,12 @@ public sealed class ShadowDecorator : ContentControl
     }
 
     private void ReleaseShadow()
+    {
+        ReleaseObservedProviders();
+        ReleaseShadowVisualsOnly();
+    }
+
+    private void ReleaseShadowVisualsOnly()
     {
         var host = _activeHost;
         var resources = _resources;

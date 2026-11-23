@@ -6,17 +6,17 @@ using OhMyLockScreen.Shared.Abstractions.FeatureHost;
 using OhMyLockScreen.Shared.Attributes.FeatureHost;
 using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers;
-using Windows.UI.Xaml;
 
 namespace OhMyLockScreen.Services.Features.Appearance;
 
 [FeatureInfo(Id, "阴影")]
-public sealed class ShadowFeature : FeatureBase<IShadowTarget, ShadowFeatureSettings>
+public sealed class ShadowFeature : FeatureBase<IDecoratorHost, ShadowFeatureSettings>
 {
     public const string Id = "omls.features.appearance.shadow";
     private IDisposable? _binding;
+    private IDecoratorRegistration? _registration;
 
-    public override void Attach(IShadowTarget target)
+    public override void Attach(IDecoratorHost target)
     {
         ArgumentNullException.ThrowIfNull(target);
         Detach();
@@ -25,19 +25,18 @@ public sealed class ShadowFeature : FeatureBase<IShadowTarget, ShadowFeatureSett
 
         try
         {
-            if (target is DependencyObject dependencyTarget)
-            {
-                var spec = Observable.CombineLatest(
-                    settings.WhenValueChanged(source => source.Color),
-                    settings.WhenValueChanged(source => source.Opacity),
-                    settings.WhenValueChanged(source => source.BlurRadius),
-                    settings.WhenValueChanged(source => source.OffsetX),
-                    settings.WhenValueChanged(source => source.OffsetY),
-                    (color, opacity, blurRadius, offsetX, offsetY)
-                        => new ShadowEffectSpec(color, opacity, blurRadius, offsetX, offsetY))
-                    .DistinctUntilChanged();
-                _binding = DependencyPropertyBindingHelper.Bind(spec, dependencyTarget, ShadowEffect.ShadowProperty);
-            }
+            var decorator = new ShadowDecorator();
+            _registration = target.Decorators.Register(decorator, DecoratorPriorities.Shadow);
+            var spec = Observable.CombineLatest(
+                settings.WhenValueChanged(source => source.Color),
+                settings.WhenValueChanged(source => source.Opacity),
+                settings.WhenValueChanged(source => source.BlurRadius),
+                settings.WhenValueChanged(source => source.OffsetX),
+                settings.WhenValueChanged(source => source.OffsetY),
+                (color, opacity, blurRadius, offsetX, offsetY)
+                    => new ShadowEffectSpec(color, opacity, blurRadius, offsetX, offsetY))
+                .DistinctUntilChanged();
+            _binding = DependencyPropertyBindingHelper.Bind(spec, decorator, ShadowDecorator.ShadowSpecProperty);
         }
         catch
         {
@@ -50,6 +49,8 @@ public sealed class ShadowFeature : FeatureBase<IShadowTarget, ShadowFeatureSett
     {
         _binding?.Dispose();
         _binding = null;
+        _registration?.Dispose();
+        _registration = null;
         Target = null;
     }
 

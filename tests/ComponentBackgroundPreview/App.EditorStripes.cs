@@ -1,5 +1,6 @@
 using Microsoft.Graphics.Canvas;
 using OhMyLockScreen.Shared.Controls.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using Windows.Foundation;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
@@ -35,7 +36,11 @@ public sealed partial class App
 
     private async Task VerifyRuleStripesAsync(ComponentPresenter presenter, Action<bool> setRule)
     {
-        var border = presenter.Border!;
+        Check(presenter.Decorators.Elements.OfType<StripeMaskDecorator>().SingleOrDefault() != null,
+            "Editing component registers StripeMaskDecorator in Decorators");
+        using var borderLease = presenter.Decorators.AcquireShared(
+            DecoratorKeys.Border, static () => new Border(), DecoratorPriorities.Border);
+        var border = borderLease.Element;
         border.BorderThickness = new Thickness(4);
         border.BorderBrush = new SolidColorBrush(Colors.White);
         presenter.Height = 48;

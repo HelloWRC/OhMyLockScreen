@@ -130,6 +130,11 @@ public sealed partial class LayoutControl : ItemsControl
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
+        if (IsLoaded)
+        {
+            return;
+        }
+
         _isLoaded = false;
         LayoutUpdated -= OnLayoutUpdated;
         _configuredPanel = null;

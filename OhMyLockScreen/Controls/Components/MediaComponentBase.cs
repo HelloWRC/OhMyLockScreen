@@ -47,6 +47,11 @@ public abstract class MediaComponentBase<TSettings> : ComponentBase<TSettings>
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
+        if (IsLoaded)
+        {
+            return;
+        }
+
         _loaded = false;
         _view.Dispose();
         ObserveSettings();

@@ -38,6 +38,11 @@ internal sealed class BackgroundVideoView : Grid, IVideoView, IDisposable
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
+        if (IsLoaded)
+        {
+            return;
+        }
+
         _loaded = false;
         ReleaseSwapChain();
     }

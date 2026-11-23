@@ -37,6 +37,11 @@ public sealed partial class DateComponent : DateComponentBase, ITextStyleTarget
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
+        if (IsLoaded)
+        {
+            return;
+        }
+
         _timer.Stop();
     }
 

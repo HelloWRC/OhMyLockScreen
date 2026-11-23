@@ -70,6 +70,11 @@ public sealed class SystemStatusComponent : ComponentBase<SystemStatusComponentS
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
+        if (IsLoaded)
+        {
+            return;
+        }
+
         _loaded = false;
         ++_generation;
         _service.Changed -= OnStateChanged;

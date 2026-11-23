@@ -14,6 +14,7 @@ using OhMyLockScreen.Shared.Models.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
 using OhMyLockScreen.Shared.Services.FeatureHost;
 using Windows.Devices.Input;
+using Windows.Foundation;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
@@ -105,46 +106,50 @@ internal static class LayerParallaxTests
                 Check(ActiveParallaxTimers == 1, "Layer and background did not share a single parallax timer.");
 
                 AdvanceParallaxClockTo(16);
-                CheckNear(layer.ParallaxTransform.ScaleX, presenter.ParallaxTransform.ScaleX,
+                var parallaxBorder = GetParallaxBorder(layer);
+                var layerParallax = GetParallaxTransform(layer);
+                Check(parallaxBorder.RenderTransformOrigin == new Point(0.5, 0.5),
+                    "Layer parallax wrapper did not center its RenderTransformOrigin.");
+                CheckNear(layerParallax.ScaleX, presenter.ParallaxTransform.ScaleX,
                     "Initial layer zoom did not match background parallax.");
 
                 input.MovePointer(mouse, new(1024, 0), 0, handled: true);
                 AdvanceParallaxClockTo(32);
-                CheckNear(layer.ParallaxTransform.TranslateX, presenter.ParallaxTransform.TranslateX,
+                CheckNear(layerParallax.TranslateX, presenter.ParallaxTransform.TranslateX,
                     "Layer easing did not match background at 32ms.");
                 SettleAt(48);
-                CheckNear(layer.ParallaxTransform.TranslateX, 4.104783, "Layer right-edge offset did not match osu!lazer.");
-                CheckNear(layer.ParallaxTransform.TranslateY, -2.449916, "Layer top-edge offset did not match osu!lazer.");
-                Check(layer.ParallaxTransform.ScaleX == 1.02, "Layer default zoom was not 102%.");
+                CheckNear(layerParallax.TranslateX, 4.104783, "Layer right-edge offset did not match osu!lazer.");
+                CheckNear(layerParallax.TranslateY, -2.449916, "Layer top-edge offset did not match osu!lazer.");
+                Check(layerParallax.ScaleX == 1.02, "Layer default zoom was not 102%.");
 
                 scene.Background.ParallaxStrength = 200;
                 SettleAt(1300);
-                CheckNear(layer.ParallaxTransform.TranslateX, 8.209566, "Layer did not follow updated background strength.");
-                Check(layer.ParallaxTransform.ScaleY == 1.04, "Layer zoom did not follow updated background strength.");
+                CheckNear(layerParallax.TranslateX, 8.209566, "Layer did not follow updated background strength.");
+                Check(layerParallax.ScaleY == 1.04, "Layer zoom did not follow updated background strength.");
 
                 scene.Background = new BackgroundSettings { ParallaxStrength = 50 };
                 SettleAt(2600);
-                CheckNear(layer.ParallaxTransform.TranslateX, 2.0523915, "Layer did not follow replaced BackgroundSettings.");
+                CheckNear(layerParallax.TranslateX, 2.0523915, "Layer did not follow replaced BackgroundSettings.");
 
                 input.MovePointer(mouse, new(99999, 384), 0);
                 SettleAt(3900);
-                CheckNear(layer.ParallaxTransform.TranslateX, 5.12, "Distant input exceeded 50% overscan.");
+                CheckNear(layerParallax.TranslateX, 5.12, "Distant input exceeded 50% overscan.");
 
                 input.ExitPointer(mouse, new(1500, 384));
-                CheckNear(layer.ParallaxTransform.TranslateX, 5.12, "Leaving input surface reset layer parallax.");
+                CheckNear(layerParallax.TranslateX, 5.12, "Leaving input surface reset layer parallax.");
                 Check(ActiveParallaxTimers == 0, "Leaving input surface started a timer.");
 
                 input.MovePointer(mouse, new(512, 384), 0);
                 SettleAt(5200);
-                Check(layer.ParallaxTransform.TranslateX == 0 && layer.ParallaxTransform.TranslateY == 0,
+                Check(layerParallax.TranslateX == 0 && layerParallax.TranslateY == 0,
                     "Returning pointer to center did not zero layer offset.");
 
                 presenter.BackgroundViewportElement.Resize(1920, 1080);
                 input.MovePointer(mouse, new(1920, 1080), 0);
                 SettleAt(6500);
-                CheckNear(layer.ParallaxTransform.TranslateX, presenter.ParallaxTransform.TranslateX,
+                CheckNear(layerParallax.TranslateX, presenter.ParallaxTransform.TranslateX,
                     "Widescreen layer horizontal offset diverged from background.");
-                CheckNear(layer.ParallaxTransform.TranslateY, presenter.ParallaxTransform.TranslateY,
+                CheckNear(layerParallax.TranslateY, presenter.ParallaxTransform.TranslateY,
                     "Widescreen layer vertical offset diverged from background.");
 
                 input.MovePointer(new Pointer(2, PointerDeviceType.Touch), new(0, 0), 0);
@@ -179,29 +184,32 @@ internal static class LayerParallaxTests
             {
                 presenter.SceneRootElement.MovePointer(mouse, new(1024, 0), 0);
                 SettleAt(0);
+                var firstParallax = GetParallaxTransform(first);
+                var secondParallax = GetParallaxTransform(second);
+                var thirdParallax = GetParallaxTransform(third);
                 CheckNear(presenter.ParallaxTransform.TranslateX, 4.104783, "Background strength was unexpected.");
-                CheckNear(first.ParallaxTransform.TranslateX, 8.209566, "200% override layer did not double the offset.");
-                CheckNear(second.ParallaxTransform.TranslateX, 2.0523915, "50% override layer did not halve the offset.");
-                Check(third.ParallaxTransform.TranslateX == 0 && third.ParallaxTransform.ScaleX == 1,
+                CheckNear(firstParallax.TranslateX, 8.209566, "200% override layer did not double the offset.");
+                CheckNear(secondParallax.TranslateX, 2.0523915, "50% override layer did not halve the offset.");
+                Check(thirdParallax.TranslateX == 0 && thirdParallax.ScaleX == 1,
                     "0% override layer did not stay stationary.");
 
                 scene.Background.ParallaxStrength = 150;
                 SettleAt(1300);
                 CheckNear(presenter.ParallaxTransform.TranslateX, 6.1571745, "Background did not update to 150%.");
-                CheckNear(first.ParallaxTransform.TranslateX, 8.209566, "Overridden 200% layer unexpectedly followed background.");
-                CheckNear(second.ParallaxTransform.TranslateX, 2.0523915, "Overridden 50% layer unexpectedly followed background.");
+                CheckNear(firstParallax.TranslateX, 8.209566, "Overridden 200% layer unexpectedly followed background.");
+                CheckNear(secondParallax.TranslateX, 2.0523915, "Overridden 50% layer unexpectedly followed background.");
 
                 secondSettings.Strength = 100;
                 SettleAt(2600);
-                CheckNear(second.ParallaxTransform.TranslateX, 4.104783, "Updating override strength did not move the layer.");
+                CheckNear(secondParallax.TranslateX, 4.104783, "Updating override strength did not move the layer.");
 
                 firstSettings.OverrideStrength = false;
                 SettleAt(3900);
-                CheckNear(first.ParallaxTransform.TranslateX, 6.1571745, "Disabling override did not resume following background.");
+                CheckNear(firstParallax.TranslateX, 6.1571745, "Disabling override did not resume following background.");
 
                 thirdSettings.OverrideStrength = false;
                 SettleAt(5200);
-                CheckNear(third.ParallaxTransform.TranslateX, 6.1571745, "Disabling 0% override did not resume following background.");
+                CheckNear(thirdParallax.TranslateX, 6.1571745, "Disabling 0% override did not resume following background.");
             }
             finally
             {
@@ -230,9 +238,9 @@ internal static class LayerParallaxTests
                 SettleAt(0);
                 Check(presenter.ParallaxTransform.TranslateX == 0 && presenter.ParallaxTransform.ScaleX == 1,
                     "Background was not suppressed in editor None mode.");
-                CheckNear(following.ParallaxTransform.TranslateX, 6.1571745,
+                CheckNear(GetParallaxTransform(following).TranslateX, 6.1571745,
                     "Layer following background strength was suppressed in None mode.");
-                CheckNear(overridden.ParallaxTransform.TranslateX, 2.0523915,
+                CheckNear(GetParallaxTransform(overridden).TranslateX, 2.0523915,
                     "Overridden layer was suppressed in None mode.");
             }
             finally
@@ -271,17 +279,20 @@ internal static class LayerParallaxTests
                 presenter.SceneRootElement.MovePointer(new Pointer(1, PointerDeviceType.Mouse), new(1024, 0), 0);
                 SettleAt(0);
 
+                var parallaxTransform = GetParallaxTransform(layer);
                 Check(layer.RenderTransform is CompositeTransform userTransform
                     && userTransform.TranslateX == 32 && userTransform.Rotation == 15 && userTransform.ScaleX == 1.25,
                     "TransformFeature on LayerPresenter was disturbed by layer parallax.");
-                Check(!ReferenceEquals(layer.RenderTransform, layer.ParallaxTransform)
-                    && layer.ParallaxTransform.ScaleX == 1.02
-                    && Math.Abs(layer.ParallaxTransform.TranslateX - 4.104783) < 0.00001,
+                Check(!ReferenceEquals(layer.RenderTransform, parallaxTransform)
+                    && parallaxTransform.ScaleX == 1.02
+                    && Math.Abs(parallaxTransform.TranslateX - 4.104783) < 0.00001,
                     "Layer ParallaxTransform did not apply independently of RenderTransform.");
 
                 layerModel.Features.Remove(parallaxInfo);
-                Check(layer.ParallaxTransform.ScaleX == 1 && layer.ParallaxTransform.TranslateX == 0,
-                    "Removing ParallaxFeature did not reset ParallaxTransform.");
+                Check(layer.Decorators.Elements.Count == 0
+                    && parallaxTransform.ScaleX == 1
+                    && parallaxTransform.TranslateX == 0,
+                    "Removing ParallaxFeature did not unregister decorator wrapper or reset transform.");
                 Check(layer.RenderTransform is CompositeTransform stillUser && stillUser.TranslateX == 32 && stillUser.Rotation == 15,
                     "Removing ParallaxFeature affected TransformFeature.");
 
@@ -290,7 +301,7 @@ internal static class LayerParallaxTests
                 layerModel.Features.Remove(transformInfo);
                 Check(layer.RenderTransform == null, "Removing TransformFeature did not restore RenderTransform.");
                 SettleAt(2600);
-                CheckNear(layer.ParallaxTransform.TranslateX, 4.104783, "Removing TransformFeature disturbed ParallaxTransform.");
+                CheckNear(GetParallaxTransform(layer).TranslateX, 4.104783, "Removing TransformFeature disturbed ParallaxTransform.");
             }
             finally
             {
@@ -312,42 +323,43 @@ internal static class LayerParallaxTests
             {
                 presenter.SceneRootElement.MovePointer(new Pointer(1, PointerDeviceType.Mouse), new(1024, 0), 0);
                 SettleAt(0);
-                var x = layer.ParallaxTransform.TranslateX;
-                var y = layer.ParallaxTransform.TranslateY;
-                var zoom = layer.ParallaxTransform.ScaleX - 1;
+                var parallax = GetParallaxTransform(layer);
+                var x = parallax.TranslateX;
+                var y = parallax.TranslateY;
+                var zoom = parallax.ScaleX - 1;
                 CheckNear(x, 8.209566, "Layer did not settle before unlock drag.");
 
                 presenter.SetUnlockDragOffset(90);
-                CheckNear(layer.ParallaxTransform.TranslateX, x * 0.5, "Layer horizontal parallax did not follow drag.");
-                CheckNear(layer.ParallaxTransform.TranslateY, y * 0.5, "Layer vertical parallax did not follow drag.");
-                CheckNear(layer.ParallaxTransform.ScaleX, 1 + zoom * 0.5, "Layer zoom did not follow drag.");
+                CheckNear(parallax.TranslateX, x * 0.5, "Layer horizontal parallax did not follow drag.");
+                CheckNear(parallax.TranslateY, y * 0.5, "Layer vertical parallax did not follow drag.");
+                CheckNear(parallax.ScaleX, 1 + zoom * 0.5, "Layer zoom did not follow drag.");
 
                 presenter.PlayUnlockReturnAnimation();
                 var rebound = Storyboard.LastCreated!;
                 rebound.Advance(TimeSpan.FromMilliseconds(45));
                 var opacity = presenter.BackgroundViewportElement.Opacity;
-                CheckNear(layer.ParallaxTransform.TranslateX, x * opacity, "Layer did not follow rebound opacity.");
+                CheckNear(parallax.TranslateX, x * opacity, "Layer did not follow rebound opacity.");
                 rebound.Advance(TimeSpan.FromMilliseconds(135));
-                CheckNear(layer.ParallaxTransform.TranslateX, x, "Rebound did not restore layer parallax.");
+                CheckNear(parallax.TranslateX, x, "Rebound did not restore layer parallax.");
 
                 app.Suspend();
-                Check(layer.ParallaxTransform.TranslateX == 0 && layer.ParallaxTransform.TranslateY == 0 && ActiveParallaxTimers == 0,
+                Check(parallax.TranslateX == 0 && parallax.TranslateY == 0 && ActiveParallaxTimers == 0,
                     "Suspending did not reset layer parallax offset or stop timer.");
 
                 app.Resume();
                 presenter.Dispatcher.Drain();
                 SettleAt(1300);
-                CheckNear(layer.ParallaxTransform.TranslateX, x, "Resuming did not restore layer parallax.");
+                CheckNear(parallax.TranslateX, x, "Resuming did not restore layer parallax.");
 
                 var dismissal = presenter.PlayUnlockAnimationAsync();
                 var unlock = Storyboard.LastCreated!;
                 unlock.Advance(TimeSpan.FromMilliseconds(75));
-                Check(layer.ParallaxTransform.TranslateX > 0 && layer.ParallaxTransform.TranslateX < x,
+                Check(parallax.TranslateX > 0 && parallax.TranslateX < x,
                     "Unlock animation did not smoothly reset layer parallax.");
                 unlock.Advance(TimeSpan.FromMilliseconds(225));
                 Check(dismissal.IsCompletedSuccessfully
-                    && layer.ParallaxTransform.TranslateX == 0
-                    && layer.ParallaxTransform.ScaleX == 1,
+                    && parallax.TranslateX == 0
+                    && parallax.ScaleX == 1,
                     "Completed dismissal did not reset layer parallax to identity.");
             }
             finally
@@ -366,6 +378,7 @@ internal static class LayerParallaxTests
             presenter.Load();
             try
             {
+                var parallax = GetParallaxTransform(layer);
                 presenter.SceneRootElement.MovePointer(new Pointer(1, PointerDeviceType.Mouse), new(1024, 0), 0);
                 Check(ActiveParallaxTimers == 1, "Pending hover animation did not start.");
 
@@ -373,7 +386,7 @@ internal static class LayerParallaxTests
                 var storyboard = Storyboard.LastCreated!;
                 AdvanceParallaxClockTo(75);
                 storyboard.Advance(TimeSpan.FromMilliseconds(75));
-                Check(ActiveParallaxTimers == 0 && layer.ParallaxTransform.ScaleX == 1 && layer.ParallaxTransform.TranslateX == 0,
+                Check(ActiveParallaxTimers == 0 && parallax.ScaleX == 1 && parallax.TranslateX == 0,
                     "Unlock made a pending layer parallax target visible.");
                 storyboard.Advance(TimeSpan.FromMilliseconds(225));
                 Check(dismissal.IsCompletedSuccessfully, "Unlock animation did not finish.");
@@ -401,10 +414,12 @@ internal static class LayerParallaxTests
                 Features = [new FeatureInfo { Id = FeatureId }]
             };
             var layer = new LayerPresenter { Layer = layerModel };
+            Check(layer.Decorators.Elements.Count == 0, "Unloaded layer exposed parallax decorator before Load.");
 
             // Load layer before host is assigned and before scenes are loaded.
             layer.Load();
-            Check(layer.ParallaxTransform.ScaleX == 1 && layer.ParallaxTransform.TranslateX == 0 && updateEvents == 0,
+            var parallax = GetParallaxTransform(layer);
+            Check(parallax.ScaleX == 1 && parallax.TranslateX == 0 && updateEvents == 0,
                 "Unbound layer moved without a host.");
 
             firstScene.Load();
@@ -416,7 +431,7 @@ internal static class LayerParallaxTests
             layer.ParallaxHost = firstScene.ParallaxHost;
             SettleAt(1300);
             var eventsWithLayer = updateEvents;
-            CheckNear(layer.ParallaxTransform.TranslateX, 4.104783, "Late ParallaxHost binding did not move the layer.");
+            CheckNear(parallax.TranslateX, 4.104783, "Late ParallaxHost binding did not move the layer.");
             Check(eventsWithLayer > 0, "LayerParallaxUpdated did not fire while layer parallax eased.");
 
             // Idle ticks or scene ticks after layer settled must not emit extra LayerParallaxUpdated events.
@@ -430,11 +445,14 @@ internal static class LayerParallaxTests
             layer.ParallaxHost = secondScene.ParallaxHost;
             Check(updateEvents == eventsWithLayer + 1, "Switching ParallaxHost did not reset old registration and notify.");
             SettleAt(5200);
-            CheckNear(layer.ParallaxTransform.TranslateX, 8.209566, "Switching ParallaxHost did not follow the new scene.");
+            CheckNear(parallax.TranslateX, 8.209566, "Switching ParallaxHost did not follow the new scene.");
 
             layer.Unload();
-            Check(layer.ParallaxTransform.ScaleX == 1 && layer.ParallaxTransform.TranslateX == 0 && ActiveParallaxTimers == 0,
-                "Unloading LayerPresenter did not reset transform or clear timers.");
+            Check(layer.Decorators.Elements.Count == 0
+                && parallax.ScaleX == 1
+                && parallax.TranslateX == 0
+                && ActiveParallaxTimers == 0,
+                "Unloading LayerPresenter did not unregister decorator wrapper, reset transform, or clear timers.");
 
             firstScene.Unload();
             secondScene.Unload();
@@ -442,6 +460,12 @@ internal static class LayerParallaxTests
                 "Unloading scenes left parallax timer handlers attached.");
         });
     }
+
+    private static Border GetParallaxBorder(LayerPresenter layer)
+        => layer.Decorators.Elements.OfType<Border>().Single();
+
+    private static CompositeTransform GetParallaxTransform(LayerPresenter layer)
+        => (CompositeTransform)GetParallaxBorder(layer).RenderTransform!;
 
     private static LayerPresenter CreateLoadedLayer(ScenePresenter presenter, ParallaxFeatureSettings settings)
     {

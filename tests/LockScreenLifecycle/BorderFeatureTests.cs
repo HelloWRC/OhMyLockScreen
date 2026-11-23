@@ -3,9 +3,9 @@ using OhMyLockScreen.Controls.Editor;
 using OhMyLockScreen.Models.Features.Appearance;
 using OhMyLockScreen.Services.FeatureHost;
 using OhMyLockScreen.Services.Features.Appearance;
-using OhMyLockScreen.Shared.Abstractions.Controls;
 using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Controls.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Extensions.FeatureHost;
 using OhMyLockScreen.Shared.FeatureHost;
 using OhMyLockScreen.Shared.Models.FeatureHost;
@@ -42,87 +42,130 @@ internal static class BorderFeatureTests
                 "New features did not capture independent current theme colors.");
         });
 
-        run("Border properties synchronize immediately and detach restores all original values", () =>
+        run("Border properties synchronize immediately to shared decorator border and detach restores and removes it", () =>
         {
-            var border = OriginalBorder();
-            var original = Snapshot(border);
             var presenter = new ComponentPresenter();
-            presenter.LoadDecorationBorder(border);
             var settings = new BorderFeatureSettings();
             using var feature = new BorderFeature();
             feature.SetSettings(settings);
             feature.Attach(presenter);
-            Check(Snapshot(border) == Snapshot(settings), "Initial border values were not applied.");
+            if (!presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var border))
+            {
+                throw new Exception("Initial shared border was not acquired.");
+            }
+
+            Check(Snapshot(border) == Snapshot(settings),
+                "Initial shared border did not apply border settings.");
+
             settings.BorderBrush = new LinearGradientBrush();
             settings.BorderThickness = new Thickness(1.5, 2.5, 3.5, 4.5);
             settings.CornerRadius = new CornerRadius(5.5, 6.5, 7.5, 8.5);
             settings.Padding = new Thickness(9.5, 10.5, 11.5, 12.5);
-            Check(Snapshot(border) == Snapshot(settings), "Border changes did not reach the decoration border.");
+            Check(Snapshot(border) == Snapshot(settings), "Border changes did not reach the shared decorator border.");
+
             settings.BorderBrush = null;
             Check(border.BorderBrush == null, "Clearing the brush did not clear the outline.");
+
             feature.Detach();
             feature.Detach();
             settings.BorderThickness = new Thickness(100);
-            Check(Snapshot(border) == original && feature.Target == null,
-                "Detach retained a binding or failed to restore the border.");
+            Check(Snapshot(border) == default
+                && feature.Target == null
+                && !presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _)
+                && presenter.Decorators.Elements.Count == 0,
+                "Detach retained a binding, failed to restore defaults, or left shared border registered.");
         });
 
-        run("Border delayed realization, replacement and unload restore obsolete instances", () =>
+        run("BorderFeature and BackgroundFeature share one Border instance and survive independent detaches", () =>
         {
             var presenter = new ComponentPresenter();
-            var settings = new BorderFeatureSettings();
-            using var feature = new BorderFeature();
-            feature.SetSettings(settings);
-            feature.Attach(presenter);
-            settings.Padding = new Thickness(7, 8, 9, 10);
-            var first = OriginalBorder();
-            var original = Snapshot(first);
-            presenter.LoadDecorationBorder(first);
-            Check(Snapshot(first) == Snapshot(settings), "A delayed border missed the latest settings.");
-            presenter.LoadDecorationBorder(first);
-            var second = new Border();
-            presenter.LoadDecorationBorder(second);
-            presenter.UnloadDecorationBorder(first);
-            settings.CornerRadius = new CornerRadius(12, 13, 14, 15);
-            Check(Snapshot(first) == original && Snapshot(second) == Snapshot(settings),
-                "Border replacement or stale unload retained an obsolete binding.");
-            presenter.UnloadDecorationBorder(second);
-            Check(Snapshot(second) == default && presenter.Border == null,
-                "Unloading the border failed to restore it.");
-            presenter.LoadDecorationBorder(second);
-            Check(Snapshot(second) == Snapshot(settings), "Reload did not apply current settings.");
-            feature.Dispose();
-            feature.Dispose();
-            presenter.LoadDecorationBorder(first);
-            settings.Padding = default;
-            Check(Snapshot(first) == original && Snapshot(second) == default,
-                "Disposal retained border notifications or settings bindings.");
+            var borderSettings = new BorderFeatureSettings
+            {
+                BorderBrush = new SolidColorBrush(Colors.White),
+                BorderThickness = new Thickness(2),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(8)
+            };
+            var bgBrush = new SolidColorBrush(Colors.Black);
+            var backgroundSettings = new BackgroundFeatureSettings { Background = bgBrush };
+
+            using var borderFeature = new BorderFeature();
+            using var backgroundFeature = new BackgroundFeature();
+            borderFeature.SetSettings(borderSettings);
+            backgroundFeature.SetSettings(backgroundSettings);
+
+            backgroundFeature.Attach(presenter);
+            if (!presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var firstBorder))
+            {
+                throw new Exception("BackgroundFeature did not acquire shared Border.");
+            }
+
+            borderFeature.Attach(presenter);
+            Check(presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var secondBorder)
+                && ReferenceEquals(firstBorder, secondBorder)
+                && presenter.Decorators.Elements.Count == 1
+                && ReferenceEquals(firstBorder.Background, bgBrush)
+                && Snapshot(firstBorder) == Snapshot(borderSettings),
+                "BorderFeature did not reuse the exact same shared Border instance.");
+
+            backgroundFeature.Detach();
+            Check(presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var afterBgDetach)
+                && ReferenceEquals(afterBgDetach, firstBorder)
+                && afterBgDetach.Background == null
+                && Snapshot(afterBgDetach) == Snapshot(borderSettings),
+                "Detaching BackgroundFeature prematurely removed BorderFeature's shared Border.");
+
+            backgroundFeature.Attach(presenter);
+            Check(ReferenceEquals(firstBorder.Background, bgBrush),
+                "Reattaching BackgroundFeature did not reuse the remaining shared Border.");
+
+            borderFeature.Detach();
+            Check(presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var afterBorderDetach)
+                && ReferenceEquals(afterBorderDetach, firstBorder)
+                && Snapshot(afterBorderDetach) == default
+                && ReferenceEquals(afterBorderDetach.Background, bgBrush),
+                "Detaching BorderFeature cleared BackgroundFeature's background or removed active shared Border.");
+
+            backgroundFeature.Detach();
+            Check(!presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _)
+                && presenter.Decorators.Elements.Count == 0,
+                "Detaching final shared Border lease did not remove it from Decorators.");
         });
 
         run("Border settings replacement and reattachment release obsolete settings and hosts", () =>
         {
             var first = new ComponentPresenter();
-            var firstBorder = OriginalBorder();
-            var original = Snapshot(firstBorder);
-            first.LoadDecorationBorder(firstBorder);
             var second = new ComponentPresenter();
-            var secondBorder = new Border();
-            second.LoadDecorationBorder(secondBorder);
             var settings = new BorderFeatureSettings();
             var replacement = new BorderFeatureSettings { Padding = new Thickness(24) };
+
             using var feature = new BorderFeature();
             feature.SetSettings(settings);
             feature.Attach(first);
+            if (!first.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var firstBorder))
+            {
+                throw new Exception("First presenter did not acquire shared border.");
+            }
+
             feature.SetSettings(replacement);
             settings.BorderThickness = new Thickness(42);
-            Check(Snapshot(firstBorder) == Snapshot(replacement), "Old settings still controlled the border.");
+            if (!first.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var firstUpdatedBorder))
+            {
+                throw new Exception("First presenter lost shared border after SetSettings.");
+            }
+
+            Check(Snapshot(firstBorder) == default
+                && Snapshot(firstUpdatedBorder) == Snapshot(replacement),
+                "Old settings still controlled the border.");
+
             feature.Attach(second);
             feature.Attach(second);
             replacement.CornerRadius = new CornerRadius(8);
-            first.LoadDecorationBorder(new Border());
-            Check(Snapshot(firstBorder) == original && Snapshot(secondBorder) == Snapshot(replacement)
-                && first.Border!.BorderBrush == null,
-                "Reattachment retained old settings, host notifications or border values.");
+            Check(!first.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _)
+                && Snapshot(firstUpdatedBorder) == default
+                && second.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var secondBorder)
+                && Snapshot(secondBorder!) == Snapshot(replacement),
+                "Reattachment retained old host border, old settings, or failed to bind new host.");
         });
 
         run("Removing a border feature restores independent views sharing one settings model", () =>
@@ -134,33 +177,37 @@ internal static class BorderFeatureTests
                 Features = [new FeatureInfo { Id = FeatureId, Settings = settings }]
             };
             var first = new ComponentPresenter();
-            var firstBorder = OriginalBorder();
-            var original = Snapshot(firstBorder);
-            first.LoadDecorationBorder(firstBorder);
             var second = new ComponentPresenter();
-            var secondBorder = new Border();
-            second.LoadDecorationBorder(secondBorder);
             var service = provider.GetRequiredService<IFeatureService>();
             var registry = provider.GetRequiredService<FeatureRegistryService>();
             using var firstAttacher = new FeatureAttacher(first, service, registry) { FeatureContainer = container };
             using var secondAttacher = new FeatureAttacher(second, service, registry) { FeatureContainer = container };
             firstAttacher.Attach();
             secondAttacher.Attach();
+
+            if (!first.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var firstBorder)
+                || !second.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var secondBorder)
+                || ReferenceEquals(firstBorder, secondBorder))
+            {
+                throw new Exception("Independent presenters did not create isolated shared Border instances.");
+            }
+
             settings.CornerRadius = new CornerRadius(14);
             Check(Snapshot(firstBorder) == Snapshot(settings) && Snapshot(secondBorder) == Snapshot(settings),
                 "Independent views did not receive shared border changes.");
+
             container.Features.Clear();
             settings.Padding = default;
-            Check(Snapshot(firstBorder) == original && Snapshot(secondBorder) == default,
-                "Removing the feature failed to restore both independent views.");
+            Check(!first.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _)
+                && !second.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _)
+                && Snapshot(firstBorder) == default
+                && Snapshot(secondBorder) == default,
+                "Removing the feature failed to restore and remove both independent shared borders.");
         });
 
-        run("Failed border attachment releases bindings established before a native geometry error", () =>
+        run("Failed border attachment releases bindings and shared border lease after native geometry error", () =>
         {
             var presenter = new ComponentPresenter();
-            var border = OriginalBorder();
-            var original = Snapshot(border);
-            presenter.LoadDecorationBorder(border);
             var settings = new BorderFeatureSettings { CornerRadius = new CornerRadius(-1) };
             using var feature = new BorderFeature();
             feature.SetSettings(settings);
@@ -171,24 +218,31 @@ internal static class BorderFeatureTests
             }
             catch (ArgumentException)
             {
-                Check(feature.Target == null && Snapshot(border) == original,
-                    "Failed attachment retained a target or partially applied border properties.");
+                Check(feature.Target == null
+                    && presenter.Decorators.Elements.Count == 0
+                    && !presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _),
+                    "Failed attachment retained a target or dangling shared border lease.");
             }
 
             settings.BorderBrush = null;
             settings.BorderThickness = new Thickness(20);
-            Check(Snapshot(border) == original, "A failed attachment retained settings subscriptions.");
+            Check(presenter.Decorators.Elements.Count == 0, "A failed attachment retained settings subscriptions.");
+
             settings.CornerRadius = new CornerRadius(6);
             feature.Attach(presenter);
-            Check(Snapshot(border) == Snapshot(settings), "The feature could not recover from failed attachment.");
+            Check(presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var recovered)
+                && Snapshot(recovered) == Snapshot(settings),
+                "The feature could not recover from failed attachment.");
         });
 
-        run("Border registration only accepts IBorderable hosts and supplies the matching editor", () =>
+        run("Border registration only accepts ComponentPresenter and supplies the matching editor", () =>
         {
             using var provider = CreateProvider();
             var registration = provider.GetRequiredService<FeatureRegistryService>().Find(FeatureId)!;
-            Check(registration.TargetType == typeof(IBorderable)
+            Check(registration.TargetType == typeof(ComponentPresenter)
                 && registration.TargetType.IsAssignableFrom(typeof(ComponentPresenter))
+                && !registration.TargetType.IsAssignableFrom(typeof(LayerPresenter))
+                && !registration.TargetType.IsAssignableFrom(typeof(ScenePresenter))
                 && !registration.TargetType.IsAssignableFrom(typeof(Control))
                 && !registration.TargetType.IsAssignableFrom(typeof(Border)),
                 "Border target filtering accepted an unsupported host.");
@@ -253,14 +307,6 @@ internal static class BorderFeatureTests
                 "Reloading the editor failed to resume settings notifications.");
         });
     }
-
-    private static Border OriginalBorder() => new()
-    {
-        BorderBrush = new SolidColorBrush(Color.FromArgb(255, 3, 2, 1)),
-        BorderThickness = new Thickness(2, 3, 4, 5),
-        CornerRadius = new CornerRadius(6, 7, 8, 9),
-        Padding = new Thickness(10, 11, 12, 13)
-    };
 
     private static (Brush?, Thickness, CornerRadius, Thickness) Snapshot(Border border) =>
         (border.BorderBrush, border.BorderThickness, border.CornerRadius, border.Padding);

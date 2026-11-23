@@ -11,6 +11,7 @@ using OhMyLockScreen.Shared;
 using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Controls.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Extensions.FeatureHost;
 using OhMyLockScreen.Shared.Extensions.Scene;
 using OhMyLockScreen.Shared.FeatureHost;
@@ -28,22 +29,26 @@ internal static class BackgroundFeatureTests
 
     internal static void Run(Action<string, Action> run)
     {
-        run("Background target resolution shares the actual painted control with gradient editing", () =>
+        run("Background target resolution shares the actual painted control or falls back to decorator host", () =>
         {
             var control = new Control();
-            var border = new Border();
             var presenter = new ComponentPresenter();
-            Check(BackgroundFeature.ResolveBackgroundTarget(presenter) == null, "An unrealized presenter exposed a painted target.");
-            presenter.LoadDecorationBorder(border);
             Check(ReferenceEquals(BackgroundFeature.ResolveBackgroundTarget(control), control)
-                && ReferenceEquals(BackgroundFeature.ResolveBackgroundTarget(presenter), border),
-                "Background editing did not resolve the painted control.");
-            presenter.UnloadDecorationBorder(border);
-            Check(BackgroundFeature.ResolveBackgroundTarget(presenter) == null
+                && ReferenceEquals(BackgroundFeature.ResolveBackgroundTarget(presenter), presenter),
+                "Background target resolution did not return Control or IDecoratorHost fallback before shared border activation.");
+
+            using (var borderLease = presenter.Decorators.AcquireShared(
+                DecoratorKeys.Border, static () => new Border(), DecoratorPriorities.Border))
+            {
+                Check(ReferenceEquals(BackgroundFeature.ResolveBackgroundTarget(presenter), borderLease.Element),
+                    "Background target resolution did not resolve the active shared border.");
+            }
+
+            Check(ReferenceEquals(BackgroundFeature.ResolveBackgroundTarget(presenter), presenter)
                 && BackgroundFeature.ResolveBackgroundTarget(new ContentPresenter { Content = new UserControl() }) == null
                 && BackgroundFeature.ResolveBackgroundTarget(new FrameworkElement()) == null
                 && BackgroundFeature.ResolveBackgroundTarget(null) == null,
-                "An unsupported host or absent decoration border was treated as a painted target.");
+                "Background target resolution did not fall back cleanly or reject unsupported elements.");
         });
 
         run("Background changes and null synchronize immediately and detach restores the original brush", () =>
@@ -75,22 +80,31 @@ internal static class BackgroundFeatureTests
             var secondSettings = new BackgroundFeatureSettings { Background = secondBrush };
             var original = new SolidColorBrush();
             var first = new UserControl { Background = original };
-            var second = new Border();
             var presenter = new ComponentPresenter();
-            presenter.LoadDecorationBorder(second);
             using var feature = new BackgroundFeature();
             feature.SetSettings(firstSettings);
             feature.Attach(first);
             feature.SetSettings(secondSettings);
             firstSettings.Background = null;
             Check(ReferenceEquals(first.Background, secondBrush), "Old settings still controlled the background.");
+
             feature.Attach(presenter);
-            Check(ReferenceEquals(first.Background, original) && ReferenceEquals(second.Background, secondBrush),
-                "Reattachment did not restore the old target and update the new content.");
+            if (!presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var second))
+            {
+                throw new Exception("Reattachment did not acquire a shared border on ComponentPresenter.");
+            }
+
+            Check(ReferenceEquals(first.Background, original)
+                && ReferenceEquals(second.Background, secondBrush)
+                && ReferenceEquals(BackgroundFeature.ResolveBackgroundTarget(presenter), second),
+                "Reattachment did not restore the old target and bind the presenter's shared border.");
+
             feature.Dispose();
             secondSettings.Background = firstBrush;
-            Check(second.Background == null && ReferenceEquals(first.Background, original),
-                "Disposal retained a settings subscription or lost the original background.");
+            Check(second.Background == null
+                && !presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _)
+                && ReferenceEquals(first.Background, original),
+                "Disposal retained a settings subscription or failed to release the shared border.");
         });
 
         run("Removing a background feature restores each independent view", () =>
@@ -103,9 +117,7 @@ internal static class BackgroundFeatureTests
             };
             var original = new SolidColorBrush();
             var first = new Control { Background = original };
-            var second = new Border();
             var presenter = new ComponentPresenter();
-            presenter.LoadDecorationBorder(second);
             var service = provider.GetRequiredService<IFeatureService>();
             var registry = provider.GetRequiredService<FeatureRegistryService>();
             using var firstAttacher = new FeatureAttacher(first, service, registry) { FeatureContainer = container };
@@ -115,60 +127,64 @@ internal static class BackgroundFeatureTests
             };
             firstAttacher.Attach();
             secondAttacher.Attach();
-            Check(ReferenceEquals(first.Background, settings.Background) && ReferenceEquals(second.Background, settings.Background),
+            if (!presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var second))
+            {
+                throw new Exception("ComponentPresenter did not acquire a shared border.");
+            }
+
+            Check(ReferenceEquals(first.Background, settings.Background)
+                && ReferenceEquals(second.Background, settings.Background),
                 "Independent views did not apply the same settings.");
             container.Features.Clear();
             settings.Background = new LinearGradientBrush();
-            Check(ReferenceEquals(first.Background, original) && second.Background == null,
+            Check(ReferenceEquals(first.Background, original)
+                && second.Background == null
+                && !presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _),
                 "Feature removal did not release both view bindings.");
         });
 
-        run("Decoration border notifications, delayed realization and replacement preserve binding lifetimes", () =>
+        run("Shared border lease notifications and coexistence with BorderFeature preserve lifetimes", () =>
         {
             var presenter = new ComponentPresenter();
-            var notifications = new List<(string Kind, Border? Border)>();
-            presenter.PropertyChanging += (_, args) =>
-            {
-                if (args.PropertyName == nameof(presenter.Border))
-                {
-                    notifications.Add(("changing", presenter.Border));
-                }
-            };
-            presenter.PropertyChanged += (_, args) =>
-            {
-                if (args.PropertyName == nameof(presenter.Border))
-                {
-                    notifications.Add(("changed", presenter.Border));
-                }
-            };
+            var changedCount = 0;
+            presenter.Decorators.Changed += (_, _) => changedCount++;
+
             var settings = new BackgroundFeatureSettings { Background = new SolidColorBrush() };
             using var feature = new BackgroundFeature();
             feature.SetSettings(settings);
             feature.Attach(presenter);
-            settings.Background = new LinearGradientBrush();
-            var original = new SolidColorBrush();
-            var first = new Border { Background = original };
-            presenter.LoadDecorationBorder(first);
-            Check(notifications.SequenceEqual([("changing", null), ("changed", first)])
-                && ReferenceEquals(first.Background, settings.Background),
-                "A delayed border did not notify before and after the change or receive the latest background.");
-            presenter.LoadDecorationBorder(first);
-            Check(notifications.Count == 2, "The same border produced duplicate property notifications.");
-            var second = new Border();
-            presenter.LoadDecorationBorder(second);
-            presenter.UnloadDecorationBorder(first);
-            settings.Background = new SolidColorBrush();
-            Check(ReferenceEquals(first.Background, original) && ReferenceEquals(second.Background, settings.Background)
-                && ReferenceEquals(presenter.Border, second), "A replaced border retained bindings or its stale unload cleared the active border.");
-            presenter.UnloadDecorationBorder(second);
-            Check(presenter.Border == null && second.Background == null, "Border unload did not restore and release the background.");
-            feature.Dispose();
-            var afterDisposal = new Border();
-            presenter.LoadDecorationBorder(afterDisposal);
-            Check(afterDisposal.Background == null, "Disposed features still observed the host border.");
+            if (!presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var border))
+            {
+                throw new Exception("Attaching BackgroundFeature did not acquire the shared border.");
+            }
+
+            Check(changedCount == 1
+                && ReferenceEquals(border.Background, settings.Background),
+                "Attaching BackgroundFeature did not notify Decorators.Changed and paint the shared border.");
+
+            using (var borderFeature = new BorderFeature())
+            {
+                borderFeature.SetSettings(new BorderFeatureSettings { BorderThickness = new Thickness(3) });
+                borderFeature.Attach(presenter);
+                Check(changedCount == 1
+                    && presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var shared)
+                    && ReferenceEquals(shared, border)
+                    && shared.BorderThickness == new Thickness(3),
+                    "BorderFeature did not reuse BackgroundFeature's shared border without extra chain rebuilds.");
+
+                feature.Detach();
+                Check(changedCount == 1
+                    && presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _)
+                    && border.Background == null
+                    && border.BorderThickness == new Thickness(3),
+                    "Detaching BackgroundFeature cleared BorderFeature's shared border prematurely.");
+            }
+
+            Check(changedCount == 2 && !presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _),
+                "Disposing final lease did not remove the shared border and notify Decorators.Changed.");
         });
 
-        run("Component content recreation reapplies background to its current decoration border", () =>
+        run("Component content recreation reapplies background to its current shared border", () =>
         {
             IAppHost.Host = new HostBuilder().ConfigureServices(services =>
             {
@@ -188,30 +204,48 @@ internal static class BackgroundFeatureTests
             var presenter = new ComponentPresenter { Settings = settings };
             presenter.Load();
             var first = (UserControl)presenter.Content!;
-            var firstBorder = new Border();
-            presenter.LoadDecorationBorder(firstBorder);
-            Check(ReferenceEquals(firstBorder.Background, background.Background) && first.Background == null,
-                "The background did not target the decoration border independently of component content.");
+            if (!presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var firstBorder))
+            {
+                throw new Exception("Loading ComponentPresenter did not acquire the first shared border.");
+            }
+
+            Check(ReferenceEquals(firstBorder.Background, background.Background)
+                && first.Background == null
+                && ReferenceEquals(BackgroundFeature.ResolveBackgroundTarget(presenter), firstBorder),
+                "The background did not target the shared border independently of component content.");
+
             settings.Settings = new TextComponentSettings();
             var second = (UserControl)presenter.Content!;
-            var secondBorder = new Border();
-            presenter.UnloadDecorationBorder(firstBorder);
-            presenter.LoadDecorationBorder(secondBorder);
-            Check(!ReferenceEquals(first, second) && firstBorder.Background == null
+            if (!presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var secondBorder))
+            {
+                throw new Exception("Content recreation did not acquire the new shared border.");
+            }
+
+            Check(!ReferenceEquals(first, second)
+                && firstBorder.Background == null
                 && ReferenceEquals(secondBorder.Background, background.Background)
                 && ReferenceEquals(BackgroundFeature.ResolveBackgroundTarget(presenter), secondBorder),
-                "Content recreation did not release the old border and resolve the new one.");
+                "Content recreation did not release the old border and bind the new one.");
+
             background.Background = new SolidColorBrush();
             Check(firstBorder.Background == null && ReferenceEquals(secondBorder.Background, background.Background),
-                "Background changes reached an obsolete decoration border.");
+                "Background changes reached an obsolete shared border.");
+
             presenter.Unload();
-            Check(secondBorder.Background == null && presenter.Border == null && presenter.Content == null,
+            Check(secondBorder.Background == null
+                && !presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out _)
+                && presenter.Decorators.Elements.Count == 0
+                && presenter.Content == null,
                 "Unload retained a border or background binding.");
+
             presenter.Load();
-            var reloadedBorder = new Border();
-            presenter.LoadDecorationBorder(reloadedBorder);
+            if (!presenter.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var reloadedBorder))
+            {
+                throw new Exception("Reload did not re-acquire the shared border.");
+            }
+
             Check(ReferenceEquals(reloadedBorder.Background, background.Background),
-                "Reload did not apply the latest background.");
+                "Reload did not re-acquire and apply the latest background.");
             presenter.Unload();
         });
 

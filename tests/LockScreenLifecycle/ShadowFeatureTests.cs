@@ -38,21 +38,22 @@ internal static class ShadowFeatureTests
 
     internal static void Run(Action<string, Action> run)
     {
-        run("Shadow feature registers metadata and targets components and layers without targeting scenes", () =>
+        run("Shadow feature registers metadata and targets IDecoratorHost across scenes, layers, and components", () =>
         {
             using var provider = CreateProvider();
             var registry = provider.GetRequiredService<FeatureRegistryService>();
             var registration = registry.Find(FeatureId);
             Check(registration != null, "Shadow feature was not registered.");
             Check(registration!.Name == "阴影"
-                && registration.TargetType == typeof(IShadowTarget)
+                && registration.TargetType == typeof(IDecoratorHost)
                 && registration.ClientSettingsType == typeof(ShadowFeatureSettings)
                 && registration.SettingsType == typeof(ShadowSettingsControl),
-                "Shadow feature metadata did not match its target interface, settings model, or control.");
+                "Shadow feature metadata did not match IDecoratorHost, settings model, or control.");
             Check(registration.TargetType.IsAssignableFrom(typeof(ComponentPresenter))
                 && registration.TargetType.IsAssignableFrom(typeof(LayerPresenter))
-                && !registration.TargetType.IsAssignableFrom(typeof(ScenePresenter)),
-                "Shadow feature did not restrict its target to ComponentPresenter and LayerPresenter.");
+                && registration.TargetType.IsAssignableFrom(typeof(ScenePresenter))
+                && !registration.TargetType.IsAssignableFrom(typeof(FrameworkElement)),
+                "Shadow feature did not target IDecoratorHost implementations exclusively.");
         });
 
         run("ShadowFeatureSettings sanitizes bounds, ColorJsonConverter validates colors, and JSON round-trips", () =>
@@ -144,7 +145,7 @@ internal static class ShadowFeatureTests
                 "ShadowFeatureSettings did not round-trip accurately through FeatureInfo JSON.");
         });
 
-        run("Shadow feature binds ShadowEffect.Shadow on components and layers and restores original values", () =>
+        run("Shadow feature registers ShadowDecorator, binds ShadowSpec on hosts, and cleans up on detach", () =>
         {
             using var provider = CreateProvider();
             var registry = provider.GetRequiredService<FeatureRegistryService>();
@@ -152,8 +153,6 @@ internal static class ShadowFeatureTests
 
             var component = new ComponentPresenter();
             var componentModel = new ComponentSettings();
-            var originalSpec = new ShadowEffectSpec(Colors.White, 0.2, 8, 1, 2);
-            ShadowEffect.SetShadow(component, originalSpec);
 
             using (var attacher = new FeatureAttacher(component, features, registry) { FeatureContainer = componentModel })
             {
@@ -162,27 +161,26 @@ internal static class ShadowFeatureTests
                 var info = new FeatureInfo { Id = FeatureId, Settings = settings };
                 componentModel.Features.Add(info);
 
-                var applied = ShadowEffect.GetShadow(component);
-                Check(applied == new ShadowEffectSpec(Colors.Black, 0.5, 16, 0, 4),
-                    "Initial shadow spec was not synchronized to ComponentPresenter.");
+                var decorator = component.Decorators.Elements.OfType<ShadowDecorator>().SingleOrDefault();
+                Check(decorator != null
+                    && decorator.ShadowSpec == new ShadowEffectSpec(Colors.Black, 0.5, 16, 0, 4),
+                    "ShadowDecorator was not registered or bound with initial spec on ComponentPresenter.");
 
                 settings.Color = Color.FromArgb(255, 10, 20, 30);
                 settings.Opacity = 0.75;
                 settings.BlurRadius = 30;
                 settings.OffsetX = -12;
                 settings.OffsetY = 24;
-                Check(ShadowEffect.GetShadow(component) == new ShadowEffectSpec(Color.FromArgb(255, 10, 20, 30), 0.75, 30, -12, 24),
-                    "Updated shadow spec was not synchronized to ComponentPresenter.");
+                Check(decorator!.ShadowSpec == new ShadowEffectSpec(Color.FromArgb(255, 10, 20, 30), 0.75, 30, -12, 24),
+                    "Updated shadow spec was not synchronized to ShadowDecorator.");
 
                 componentModel.Features.Remove(info);
-                Check(ReferenceEquals(ShadowEffect.GetShadow(component), originalSpec),
-                    "Removing ShadowFeature did not restore the original ShadowEffect.Shadow value.");
+                Check(component.Decorators.Elements.Count == 0 && decorator.ShadowSpec == null,
+                    "Removing ShadowFeature did not unregister ShadowDecorator and clear its binding.");
             }
 
             var layer = new LayerPresenter();
             var layerModel = new LayerSettings();
-            var originalBinding = new Binding { Source = layerModel, Path = new PropertyPath("Name") };
-            layer.SetBinding(ShadowEffect.ShadowProperty, originalBinding);
 
             using (var attacher = new FeatureAttacher(layer, features, registry) { FeatureContainer = layerModel })
             {
@@ -194,12 +192,35 @@ internal static class ShadowFeatureTests
                 };
                 layerModel.Features.Add(info);
 
-                Check(ShadowEffect.GetShadow(layer) == new ShadowEffectSpec(Colors.Black, 0.8, 24, 4, -6),
-                    "ShadowFeature did not bind ShadowEffect.Shadow on LayerPresenter.");
+                var decorator = layer.Decorators.Elements.OfType<ShadowDecorator>().SingleOrDefault();
+                Check(decorator != null && decorator.ShadowSpec == new ShadowEffectSpec(Colors.Black, 0.8, 24, 4, -6),
+                    "ShadowFeature did not register ShadowDecorator on LayerPresenter.");
 
                 attacher.Detach();
-                Check(ReferenceEquals(layer.GetBindingExpression(ShadowEffect.ShadowProperty)?.ParentBinding, originalBinding),
-                    "Detaching FeatureAttacher did not restore the original ShadowEffect.Shadow binding.");
+                Check(layer.Decorators.Elements.Count == 0 && decorator!.ShadowSpec == null,
+                    "Detaching FeatureAttacher did not unregister ShadowDecorator from LayerPresenter.");
+            }
+
+            var scene = new ScenePresenter();
+            var sceneModel = new SceneSettings();
+
+            using (var attacher = new FeatureAttacher(scene, features, registry) { FeatureContainer = sceneModel })
+            {
+                attacher.Attach();
+                var info = new FeatureInfo
+                {
+                    Id = FeatureId,
+                    Settings = new ShadowFeatureSettings { BlurRadius = 18, OffsetY = 9 }
+                };
+                sceneModel.Features.Add(info);
+
+                var decorator = scene.Decorators.Elements.OfType<ShadowDecorator>().SingleOrDefault();
+                Check(decorator != null && decorator.ShadowSpec == new ShadowEffectSpec(Colors.Black, 0.5, 18, 0, 9),
+                    "ShadowFeature did not register ShadowDecorator on ScenePresenter.");
+
+                attacher.Detach();
+                Check(scene.Decorators.Elements.Count == 0 && decorator!.ShadowSpec == null,
+                    "Detaching FeatureAttacher did not unregister ShadowDecorator from ScenePresenter.");
             }
         });
 
@@ -222,31 +243,35 @@ internal static class ShadowFeatureTests
             var settings = new ShadowFeatureSettings { BlurRadius = 10 };
             var replacement = new ShadowFeatureSettings { Color = Colors.White, Opacity = 0.9, BlurRadius = 40, OffsetX = 8, OffsetY = -8 };
             var first = new ComponentPresenter();
-            var second = new LayerPresenter();
+            var second = new ScenePresenter();
 
             using (var feature = new ShadowFeature())
             {
                 feature.SetSettings(settings);
                 feature.Attach(first);
-                Check(ShadowEffect.GetShadow(first) == new ShadowEffectSpec(Colors.Black, 0.5, 10, 0, 4),
+                var firstDecorator = first.Decorators.Elements.OfType<ShadowDecorator>().Single();
+                Check(firstDecorator.ShadowSpec == new ShadowEffectSpec(Colors.Black, 0.5, 10, 0, 4),
                     "Initial ShadowFeature attach failed.");
 
                 feature.SetSettings(replacement);
                 settings.BlurRadius = 88;
-                Check(ShadowEffect.GetShadow(first) == new ShadowEffectSpec(Colors.White, 0.9, 40, 8, -8),
-                    "Old settings continued updating ShadowEffect.Shadow after SetSettings.");
+                var replacedDecorator = first.Decorators.Elements.OfType<ShadowDecorator>().Single();
+                Check(replacedDecorator.ShadowSpec == new ShadowEffectSpec(Colors.White, 0.9, 40, 8, -8),
+                    "Old settings continued updating ShadowDecorator.ShadowSpec after SetSettings.");
 
                 feature.Attach(second);
-                Check(ShadowEffect.GetShadow(first) == null
-                    && ShadowEffect.GetShadow(second) == new ShadowEffectSpec(Colors.White, 0.9, 40, 8, -8),
-                    "Reattaching ShadowFeature did not clear first target.");
+                var secondDecorator = second.Decorators.Elements.OfType<ShadowDecorator>().Single();
+                Check(first.Decorators.Elements.Count == 0
+                    && replacedDecorator.ShadowSpec == null
+                    && secondDecorator.ShadowSpec == new ShadowEffectSpec(Colors.White, 0.9, 40, 8, -8),
+                    "Reattaching ShadowFeature did not unregister first host.");
 
                 feature.SetSettings(null);
-                Check(feature.Target == null && ShadowEffect.GetShadow(second) == null,
+                Check(feature.Target == null && second.Decorators.Elements.Count == 0 && secondDecorator.ShadowSpec == null,
                     "Clearing settings did not detach ShadowFeature.");
             }
 
-            // Coexistence on ComponentPresenter and LayerPresenter through Load/Unload
+            // Coexistence on LayerPresenter in priority order [Parallax Border, ShadowDecorator] through Load/Unload
             var scene = new ScenePresenter { Scene = new SceneSettings() };
             var layerModel = new LayerSettings
             {
@@ -259,12 +284,15 @@ internal static class ShadowFeatureTests
             };
             var layer = new LayerPresenter { Layer = layerModel, ParallaxHost = scene.ParallaxHost };
             layer.Load();
-            Check(ShadowEffect.GetShadow(layer) == new ShadowEffectSpec(Colors.Black, 0.5, 16, 0, 12)
+            Check(layer.Decorators.Elements.Count == 2
+                && layer.Decorators.Elements[0] is Border
+                && layer.Decorators.Elements[1] is ShadowDecorator shadowDecorator
+                && shadowDecorator.ShadowSpec == new ShadowEffectSpec(Colors.Black, 0.5, 16, 0, 12)
                 && layer.RenderTransform is CompositeTransform { TranslateX: 15 },
-                "ShadowFeature and TransformFeature/ParallaxFeature did not coexist on LayerPresenter.");
+                "ShadowFeature and TransformFeature/ParallaxFeature did not coexist on LayerPresenter in priority order.");
             layer.Unload();
-            Check(ShadowEffect.GetShadow(layer) == null && layer.RenderTransform == null,
-                "Unloading LayerPresenter did not detach ShadowFeature and TransformFeature cleanly.");
+            Check(layer.Decorators.Elements.Count == 0 && layer.RenderTransform == null,
+                "Unloading LayerPresenter did not detach ShadowFeature, ParallaxFeature, and TransformFeature cleanly.");
             scene.Unload();
         });
 

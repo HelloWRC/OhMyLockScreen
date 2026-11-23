@@ -24,6 +24,7 @@ using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Abstractions.Services.Weather;
 using OhMyLockScreen.Shared.Controls.Scene;
+using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Extensions.FeatureHost;
 using OhMyLockScreen.Shared.Extensions.Registry;
 using OhMyLockScreen.Shared.Extensions.Scene;
@@ -67,6 +68,7 @@ public sealed partial class App
                 services.AddFeature<TextFeature, TextFeatureSettingsControl>();
                 services.AddFeature<LayoutFeature, LayoutSettingsControl>();
                 services.AddFeature<TransformFeature>();
+                services.AddFeature<ParallaxFeature>();
                 services.AddFeature<HideByRulesFeature, HideByRulesSettingsControl>();
                 services.AddWeatherIconTemplate(WeatherIconIds.Lucide, "Lucide", "LucideWeatherIconTemplate");
                 services.AddSingleton<IWeatherService>(_ => new WeatherService(
@@ -219,6 +221,18 @@ public sealed partial class App
             // 3. 亚克力背景 + 编辑器隐藏斜条纹遮罩共存
             var ruleSettings = new HideByRulesSettings();
             ruleSettings.Ruleset.Groups[0].Rules[0].Id = BuiltinRules.PlayingId;
+            var acrylicShadowFeature = new FeatureInfo
+            {
+                Id = ShadowFeature.Id,
+                Settings = new ShadowFeatureSettings
+                {
+                    Color = Color.FromArgb(255, 255, 0, 255),
+                    Opacity = 1,
+                    BlurRadius = 8,
+                    OffsetX = 0,
+                    OffsetY = 14
+                }
+            };
             var acrylicRuleModel = new ComponentSettings
             {
                 Id = TextComponent.Id,
@@ -261,18 +275,7 @@ public sealed partial class App
                             BorderBrush = new SolidColorBrush(Colors.White)
                         }
                     },
-                    new FeatureInfo
-                    {
-                        Id = ShadowFeature.Id,
-                        Settings = new ShadowFeatureSettings
-                        {
-                            Color = Color.FromArgb(255, 255, 0, 255),
-                            Opacity = 1,
-                            BlurRadius = 8,
-                            OffsetX = 0,
-                            OffsetY = 14
-                        }
-                    },
+                    acrylicShadowFeature,
                     new FeatureInfo { Id = "omls.features.visibility.hideByRules", Settings = ruleSettings }
                 ]
             };
@@ -280,12 +283,34 @@ public sealed partial class App
             captureRoot.Children.Add(acrylicPresenter);
             await Task.Delay(250);
 
+            Check(acrylicPresenter.Decorators.Elements.Count == 3
+                && acrylicPresenter.Decorators.Elements[0] is ShadowDecorator
+                && acrylicPresenter.Decorators.Elements[1] is StripeMaskDecorator
+                && acrylicPresenter.Decorators.Elements[2] is Border,
+                $"Component decorators preserve [ShadowDecorator, StripeMaskDecorator, Border] order (actual={string.Join(", ", acrylicPresenter.Decorators.Elements.Select(e => e.GetType().Name))})");
+
             var acrylicImage = await CaptureComposedPixelsAsync(captureRoot);
             await CaptureAsync(captureRoot, "shadow-acrylic-stripes.png");
             var stripeAlphas = Enumerable.Range(68, 80).Select(x => SampleDip(acrylicImage, captureRoot, x, 66).A).ToArray();
             var magentaBelow = CountPixelsInDipRect(acrylicImage, captureRoot, 64, 130, 224, 152, p => p.A > 30 && p.R > 100 && p.B > 100 && p.G < 40);
             Check(stripeAlphas.Any(a => Math.Abs(a - 0x50) < 6) && stripeAlphas.Any(a => Math.Abs(a - 0xAF) < 6) && magentaBelow > 20,
                 $"Acrylic + editor stripes preserve diagonal mask and magenta shadow (minA={stripeAlphas.Min()}, maxA={stripeAlphas.Max()}, magentaBelow={magentaBelow})");
+
+            acrylicRuleModel.Features.Remove(acrylicShadowFeature);
+            await Task.Delay(200);
+            var unshadowedAcrylicImage = await CaptureComposedPixelsAsync(captureRoot);
+            var unshadowedAlphas = Enumerable.Range(68, 80).Select(x => SampleDip(unshadowedAcrylicImage, captureRoot, x, 66).A).ToArray();
+            var removedMagenta = CountPixelsInDipRect(unshadowedAcrylicImage, captureRoot, 64, 130, 224, 152, p => p.A > 30 && p.R > 100 && p.B > 100 && p.G < 40);
+            Check(unshadowedAlphas.Any(a => Math.Abs(a - 0x50) < 6) && unshadowedAlphas.Any(a => Math.Abs(a - 0xAF) < 6) && removedMagenta == 0,
+                $"Removing outer ShadowFeature keeps live diagonal stripes without magenta shadow (minA={unshadowedAlphas.Min()}, maxA={unshadowedAlphas.Max()}, removedMagenta={removedMagenta})");
+
+            acrylicRuleModel.Features.Add(acrylicShadowFeature);
+            await Task.Delay(250);
+            var reshadowedAcrylicImage = await CaptureComposedPixelsAsync(captureRoot);
+            var reshadowedAlphas = Enumerable.Range(68, 80).Select(x => SampleDip(reshadowedAcrylicImage, captureRoot, x, 66).A).ToArray();
+            var reshadowedMagenta = CountPixelsInDipRect(reshadowedAcrylicImage, captureRoot, 64, 130, 224, 152, p => p.A > 30 && p.R > 100 && p.B > 100 && p.G < 40);
+            Check(reshadowedAlphas.Any(a => Math.Abs(a - 0x50) < 6) && reshadowedAlphas.Any(a => Math.Abs(a - 0xAF) < 6) && reshadowedMagenta > 20,
+                $"Re-adding outer ShadowFeature reparents StripeMaskDecorator cleanly while preserving stripes and magenta shadow (minA={reshadowedAlphas.Min()}, maxA={reshadowedAlphas.Max()}, reshadowedMagenta={reshadowedMagenta})");
 
             captureRoot.Children.Clear();
 
@@ -314,7 +339,8 @@ public sealed partial class App
                 Features =
                 [
                     layerShadowFeature,
-                    new FeatureInfo { Id = "omls.features.layout.transform", Settings = new TransformFeatureSettings { TranslateX = 24 } }
+                    new FeatureInfo { Id = "omls.features.layout.transform", Settings = new TransformFeatureSettings { TranslateX = 24 } },
+                    new FeatureInfo { Id = "omls.features.layout.parallax" }
                 ],
                 Children =
                 [
@@ -331,6 +357,11 @@ public sealed partial class App
             captureRoot.Children.Add(layerPresenter);
             await Task.Delay(300);
 
+            Check(layerPresenter.Decorators.Elements.Count == 2
+                && layerPresenter.Decorators.Elements[0] is Border
+                && layerPresenter.Decorators.Elements[1] is ShadowDecorator,
+                $"LayerPresenter stacks parallax Border outer to ShadowDecorator (actual={string.Join(", ", layerPresenter.Decorators.Elements.Select(e => e.GetType().Name))})");
+
             var layerImage = await CaptureComposedPixelsAsync(captureRoot);
             await CaptureAsync(captureRoot, "shadow-layer-cyan.png");
             var belowFirst = SampleDip(layerImage, captureRoot, 118, 136);
@@ -343,6 +374,9 @@ public sealed partial class App
 
             layerModel.Features.Remove(layerShadowFeature);
             await Task.Delay(200);
+            Check(layerPresenter.Decorators.Elements.Count == 1
+                && layerPresenter.Decorators.Elements[0] is Border,
+                "Removing ShadowFeature from LayerPresenter leaves parallax Border intact");
             var clearedLayerImage = await CaptureComposedPixelsAsync(captureRoot);
             var remainingCyan = CountPixels(clearedLayerImage, p => p.A > 20 && p.G > 120 && p.B > 120 && p.R < 40);
             Check(remainingCyan == 0 && SampleDip(clearedLayerImage, captureRoot, 118, 136).A == 0,
@@ -371,6 +405,71 @@ public sealed partial class App
             Check(editedShadow.Color == Colors.Black && editedShadow.Opacity == 0.5 && editedShadow.BlurRadius == 16
                 && editedShadow.OffsetX == 0 && editedShadow.OffsetY == 4 && swatchBrush.Color == Colors.Black,
                 "ShadowSettingsControl reset button restores defaults and swatch");
+
+            // 6. ScenePresenter 整体阴影：动态挂载与卸载 ShadowFeature
+            captureRoot.Children.Clear();
+            captureRoot.Width = 360;
+            captureRoot.Height = 220;
+            await Task.Delay(100);
+
+            var sceneShadowFeature = new FeatureInfo
+            {
+                Id = ShadowFeature.Id,
+                Settings = new ShadowFeatureSettings
+                {
+                    Color = Color.FromArgb(255, 255, 255, 0),
+                    Opacity = 1,
+                    BlurRadius = 8,
+                    OffsetX = 0,
+                    OffsetY = 16
+                }
+            };
+            var sceneModel = new SceneSettings
+            {
+                Background = new BackgroundSettings { Mode = BackgroundMode.None },
+                Features = [sceneShadowFeature],
+                Layers =
+                [
+                    new LayerSettings
+                    {
+                        Kind = LayoutKind.Canvas,
+                        Children = [MakeWhiteBox(120, 40)]
+                    }
+                ]
+            };
+            var scenePresenter = new ScenePresenter
+            {
+                Scene = sceneModel,
+                Width = 200,
+                Height = 100,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            captureRoot.Children.Add(scenePresenter);
+            await Task.Delay(300);
+
+            var sceneShadow = scenePresenter.Decorators.Elements.OfType<ShadowDecorator>().SingleOrDefault();
+            Check(scenePresenter.Decorators.Elements.Count == 1 && sceneShadow != null,
+                "ScenePresenter registers ShadowDecorator when ShadowFeature is attached");
+            var sceneImage = await CaptureComposedPixelsAsync(captureRoot);
+            await CaptureAsync(captureRoot, "shadow-scene-yellow.png");
+            var whiteInside = CountPixelsInDipRect(sceneImage, captureRoot, 64, 64, 184, 104,
+                p => p.A > 200 && p.R > 200 && p.G > 200 && p.B > 200);
+            var yellowBelow = CountPixelsInDipRect(sceneImage, captureRoot, 64, 108, 184, 140,
+                p => p.A > 40 && p.R > 120 && p.G > 120 && p.B < 40);
+            var layerCount = Descendants(scenePresenter).OfType<LayerPresenter>().Count();
+            var compCount = Descendants(scenePresenter).OfType<ComponentPresenter>().Count();
+            var shadowSize = sceneShadow == null ? "null" : $"{sceneShadow.ActualWidth}x{sceneShadow.ActualHeight}";
+            Check(whiteInside > 200 && yellowBelow > 20,
+                $"ScenePresenter casts yellow shadow below scene content (whiteInside={whiteInside}, yellowBelow={yellowBelow}, layers={layerCount}, components={compCount}, shadowSize={shadowSize})");
+
+            sceneModel.Features.Remove(sceneShadowFeature);
+            await Task.Delay(200);
+            Check(scenePresenter.Decorators.Elements.Count == 0,
+                "Removing ShadowFeature unregisters ShadowDecorator from ScenePresenter");
+            var clearedSceneImage = await CaptureComposedPixelsAsync(captureRoot);
+            var remainingYellow = CountPixels(clearedSceneImage, p => p.A > 20 && p.R > 120 && p.G > 120 && p.B < 40);
+            Check(remainingYellow == 0, $"Removing scene ShadowFeature clears all shadow pixels (remainingYellow={remainingYellow})");
 
             File.WriteAllLines(report, _report);
         }

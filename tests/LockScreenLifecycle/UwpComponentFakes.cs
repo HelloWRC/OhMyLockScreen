@@ -83,14 +83,52 @@ namespace Windows.UI.Xaml
                 element.Bindings.Remove(property);
             }
 
+            var hadPrevious = _values.TryGetValue(property, out var storedPrevious);
             _values[property] = value;
             if (Equals(previous, value))
             {
                 return;
             }
 
-            property.Metadata.Callback?.Invoke(this, new DependencyPropertyChangedEventArgs(previous, value));
+            try
+            {
+                property.Metadata.Callback?.Invoke(this, new DependencyPropertyChangedEventArgs(previous, value));
+            }
+            catch
+            {
+                if (hadPrevious)
+                {
+                    _values[property] = storedPrevious;
+                }
+                else
+                {
+                    _values.Remove(property);
+                }
+
+                throw;
+            }
+
             NotifyPropertyChanged(property);
+        }
+
+        internal static void AttachSingleParentChild(DependencyObject parent, object? previous, object? next)
+        {
+            if (next is DependencyObject newChild
+                && newChild.VisualParent != null
+                && !ReferenceEquals(newChild.VisualParent, parent))
+            {
+                throw new ArgumentException("Element is already the child of another element.");
+            }
+
+            if (previous is DependencyObject oldChild && ReferenceEquals(oldChild.VisualParent, parent))
+            {
+                oldChild.VisualParent = null;
+            }
+
+            if (next is DependencyObject attachedChild)
+            {
+                attachedChild.VisualParent = parent;
+            }
         }
 
         public object? ReadLocalValue(DependencyProperty property)
@@ -277,12 +315,31 @@ namespace Windows.UI.Xaml
         public void SetBinding(DependencyProperty property, Data.Binding binding) => Bindings[property] = binding;
         public Data.BindingExpression? GetBindingExpression(DependencyProperty property) =>
             Bindings.TryGetValue(property, out var binding) ? new Data.BindingExpression(binding) : null;
-        public void Load() => Loaded?.Invoke(this, new RoutedEventArgs());
-        public void Unload() => Unloaded?.Invoke(this, new RoutedEventArgs());
+        public bool IsLoaded { get; private set; }
+        public void Load()
+        {
+            IsLoaded = true;
+            Loaded?.Invoke(this, new RoutedEventArgs());
+        }
+        public void Unload()
+        {
+            IsLoaded = false;
+            Unloaded?.Invoke(this, new RoutedEventArgs());
+        }
+        internal void RaiseStaleUnloadForTest() => Unloaded?.Invoke(this, new RoutedEventArgs());
         public void RaiseLayoutUpdated() => LayoutUpdated?.Invoke(this, EventArgs.Empty);
         public void InvalidateArrange()
         {
         }
+    }
+}
+
+namespace Windows.UI.Xaml.Markup
+{
+    [AttributeUsage(AttributeTargets.Class)]
+    public sealed class ContentPropertyAttribute : Attribute
+    {
+        public string? Name { get; set; }
     }
 }
 
@@ -378,13 +435,35 @@ namespace Windows.UI.Xaml.Controls
             set => SetValue(BackgroundProperty, value);
         }
 
+        private readonly Dictionary<string, DependencyObject> _templateParts = [];
+
         public object? DefaultStyleKey
         {
             get; set;
         }
 
+        internal void SetTemplatePart(string name, DependencyObject part) => _templateParts[name] = part;
+
+        internal void ApplyTemplateForTest() => OnApplyTemplate();
+
+        protected virtual DependencyObject? GetTemplateChild(string childName)
+            => _templateParts.TryGetValue(childName, out var part) ? part : null;
+
         protected virtual void OnApplyTemplate()
         {
+        }
+    }
+
+    public class ContentControl : Control
+    {
+        public static readonly DependencyProperty ContentProperty = DependencyProperty.Register(
+            nameof(Content), typeof(object), typeof(ContentControl),
+            new PropertyMetadata(null, (sender, args) => AttachSingleParentChild(sender, args.OldValue, args.NewValue)));
+
+        public object? Content
+        {
+            get => GetValue(ContentProperty);
+            set => SetValue(ContentProperty, value);
         }
     }
 
@@ -399,7 +478,14 @@ namespace Windows.UI.Xaml.Controls
     public partial class ContentPresenter : FrameworkElement
     {
         public static readonly DependencyProperty ContentProperty = DependencyProperty.Register(
-            nameof(Content), typeof(object), typeof(ContentPresenter), new PropertyMetadata(null));
+            nameof(Content), typeof(object), typeof(ContentPresenter),
+            new PropertyMetadata(null, (sender, args) =>
+            {
+                if (sender.GetType() == typeof(ContentPresenter))
+                {
+                    AttachSingleParentChild(sender, args.OldValue, args.NewValue);
+                }
+            }));
         public static readonly DependencyProperty ForegroundProperty = DependencyProperty.Register(
             nameof(Foreground), typeof(Windows.UI.Xaml.Media.Brush), typeof(ContentPresenter), new PropertyMetadata(null));
 

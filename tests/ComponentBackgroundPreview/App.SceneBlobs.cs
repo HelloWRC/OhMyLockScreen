@@ -146,7 +146,9 @@ public sealed partial class App
             {
                 await Task.Delay(50);
                 nested = Descendants(surface).OfType<ComponentPresenter>().SingleOrDefault(item => ReferenceEquals(item.Settings, child));
-                bitmap = (nested?.Border?.Background as ImageBrush)?.ImageSource as BitmapImage;
+                bitmap = nested != null && nested.Decorators.TryGetShared<Border>(DecoratorKeys.Border, out var nestedBorder)
+                    ? (nestedBorder.Background as ImageBrush)?.ImageSource as BitmapImage
+                    : null;
             }
             Check(nested?.Content is TextComponent text && text.BlobUriConverter?.Resolve(blobId) == blobUri,
                 "A nested component receives its scene converter");

@@ -103,7 +103,45 @@ namespace Windows.UI.Xaml.Controls
 
     public class Panel : FrameworkElement
     {
-        public List<UIElement> Children { get; } = [];
+        public Panel()
+        {
+            Children = new UIElementCollection(this);
+        }
+
+        public UIElementCollection Children { get; }
+    }
+
+    public sealed class UIElementCollection(Panel owner) : global::System.Collections.ObjectModel.Collection<UIElement>
+    {
+        protected override void InsertItem(int index, UIElement item)
+        {
+            DependencyObject.AttachSingleParentChild(owner, null, item);
+            base.InsertItem(index, item);
+        }
+
+        protected override void SetItem(int index, UIElement item)
+        {
+            var previous = this[index];
+            DependencyObject.AttachSingleParentChild(owner, previous, item);
+            base.SetItem(index, item);
+        }
+
+        protected override void RemoveItem(int index)
+        {
+            var previous = this[index];
+            base.RemoveItem(index);
+            DependencyObject.AttachSingleParentChild(owner, previous, null);
+        }
+
+        protected override void ClearItems()
+        {
+            var previous = Items.ToArray();
+            base.ClearItems();
+            foreach (var item in previous)
+            {
+                DependencyObject.AttachSingleParentChild(owner, item, null);
+            }
+        }
     }
     public class Canvas : Panel
     {
@@ -200,16 +238,9 @@ namespace OhMyLockScreen.Shared.Controls.Scene
 {
     public sealed partial class ComponentPresenter
     {
-        private void UpdateStripeMask() { }
         private static bool IsContentCollapsed(global::OhMyLockScreen.Shared.Abstractions.Controls.Scene.ComponentBase component)
             => component.Visibility == Windows.UI.Xaml.Visibility.Collapsed;
         private static IDisposable? ShowCollapsedContentInEditor(global::OhMyLockScreen.Shared.Abstractions.Controls.Scene.ComponentBase component, Action publish) => null;
-
-        internal void LoadDecorationBorder(Windows.UI.Xaml.Controls.Border border)
-            => OnDecorationBorderLoaded(border, new Windows.UI.Xaml.RoutedEventArgs());
-
-        internal void UnloadDecorationBorder(Windows.UI.Xaml.Controls.Border border)
-            => OnDecorationBorderUnloaded(border, new Windows.UI.Xaml.RoutedEventArgs());
 
         // Native content templating and rendering are verified by the UWP preview.
         private void InitializeComponent()
@@ -243,6 +274,7 @@ namespace OhMyLockScreen.Shared.Controls.Scene
 
     public sealed partial class ScenePresenter
     {
+        private readonly global::OhMyLockScreen.Shared.Controls.UI.ChainedDecorator DecoratorHost = new();
         private readonly Windows.UI.Xaml.Controls.Grid SceneRoot = new();
         private readonly Windows.UI.Xaml.Controls.Grid BackgroundViewport = new();
         private readonly Windows.UI.Xaml.Media.CompositeTransform BackgroundParallaxTransform = new();
@@ -255,6 +287,7 @@ namespace OhMyLockScreen.Shared.Controls.Scene
         {
         });
 
+        internal global::OhMyLockScreen.Shared.Controls.UI.ChainedDecorator DecoratorHostElement => DecoratorHost;
         internal Windows.UI.Xaml.Controls.Grid BackgroundLayerElement => BackgroundLayer;
         internal Windows.UI.Xaml.Controls.Grid BackgroundViewportElement => BackgroundViewport;
         internal Windows.UI.Xaml.Controls.Grid SceneRootElement => SceneRoot;
@@ -274,7 +307,53 @@ namespace OhMyLockScreen.Shared.Controls.Scene
             });
             SceneRoot.Children.Add(BackgroundViewport);
             SceneRoot.Children.Add(LayersLayer);
-            Content = SceneRoot;
+            DecoratorHost.SetTemplatePart("PART_Host", new Windows.UI.Xaml.Controls.Border());
+            DecoratorHost.ApplyTemplateForTest();
+            DecoratorHost.Child = SceneRoot;
+            DecoratorHost.Chain = Decorators;
+            Content = DecoratorHost;
         }
+    }
+}
+
+namespace OhMyLockScreen.Shared.Controls.UI
+{
+    public sealed class ShadowDecorator : Windows.UI.Xaml.Controls.ContentControl
+    {
+        public static readonly Windows.UI.Xaml.DependencyProperty ShadowSpecProperty = Windows.UI.Xaml.DependencyProperty.Register(
+            nameof(ShadowSpec), typeof(ShadowEffectSpec), typeof(ShadowDecorator), new Windows.UI.Xaml.PropertyMetadata(null));
+
+        public static readonly Windows.UI.Xaml.DependencyProperty SourceElementProperty = Windows.UI.Xaml.DependencyProperty.Register(
+            nameof(SourceElement), typeof(Windows.UI.Xaml.FrameworkElement), typeof(ShadowDecorator), new Windows.UI.Xaml.PropertyMetadata(null));
+
+        public ShadowEffectSpec? ShadowSpec
+        {
+            get => (ShadowEffectSpec?)GetValue(ShadowSpecProperty);
+            set => SetValue(ShadowSpecProperty, value);
+        }
+
+        public Windows.UI.Xaml.FrameworkElement? SourceElement
+        {
+            get => (Windows.UI.Xaml.FrameworkElement?)GetValue(SourceElementProperty);
+            set => SetValue(SourceElementProperty, value);
+        }
+    }
+
+    public sealed class StripeMaskDecorator : Windows.UI.Xaml.Controls.ContentControl, IVisualRedirectSourceProvider
+    {
+        public static readonly Windows.UI.Xaml.DependencyProperty IsMaskActiveProperty = Windows.UI.Xaml.DependencyProperty.Register(
+            nameof(IsMaskActive), typeof(bool), typeof(StripeMaskDecorator), new Windows.UI.Xaml.PropertyMetadata(false));
+
+        public bool IsMaskActive
+        {
+            get => GetValue(IsMaskActiveProperty) is true;
+            set => SetValue(IsMaskActiveProperty, value);
+        }
+
+        public Windows.UI.Xaml.FrameworkElement? VisualRedirectSource { get; set; }
+
+        public event EventHandler? VisualRedirectSourceChanged;
+
+        internal void NotifyRedirectSourceChanged() => VisualRedirectSourceChanged?.Invoke(this, EventArgs.Empty);
     }
 }

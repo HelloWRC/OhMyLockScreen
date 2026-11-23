@@ -160,8 +160,16 @@ if (args.Contains("--shadow-only"))
     return;
 }
 
+if (args.Contains("--decorator-only"))
+{
+    ChainedDecoratorTests.Run(Run);
+    Console.WriteLine($"All {passed} chained decorator checks passed using simulated UWP controls.");
+    return;
+}
+
 if (args.Contains("--binding-only"))
 {
+    ChainedDecoratorTests.Run(Run);
     DependencyPropertyBindingTests.Run(Run);
     LayoutFeatureTests.Run(Run);
     TransformFeatureTests.Run(Run);
@@ -222,6 +230,7 @@ BrushSerializationTests.Run(Run);
 BrushEditorTests.Run(Run);
 ToastTests.Run(Run);
 ComponentTests.Run(Run);
+ChainedDecoratorTests.Run(Run);
 DependencyPropertyBindingTests.Run(Run);
 LayoutFeatureTests.Run(Run);
 TransformFeatureTests.Run(Run);
