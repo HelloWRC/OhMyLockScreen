@@ -80,6 +80,60 @@ internal static class SceneLayoutEditing
         return new Rect(x, y, width, height);
     }
 
+    /// <summary>计算元素在布局区域内的未变换布局边界，排除 RenderTransform 的视觉偏移与缩放影响。</summary>
+    internal static Rect GetLayoutBounds(FrameworkElement target, Panel panel, Rect layoutArea)
+    {
+        var width = target.ActualWidth;
+        var height = target.ActualHeight;
+        if (panel is Canvas)
+        {
+            var canvasLeft = Canvas.GetLeft(target);
+            var canvasTop = Canvas.GetTop(target);
+            var x = (double.IsFinite(canvasLeft) ? canvasLeft : 0) + target.Margin.Left - layoutArea.X;
+            var y = (double.IsFinite(canvasTop) ? canvasTop : 0) + target.Margin.Top - layoutArea.Y;
+            return new Rect(x, y, width, height);
+        }
+
+        if (panel is Grid)
+        {
+            var x = GetAlignedOffset(target.HorizontalAlignment, target.Margin.Left, target.Margin.Right, width, layoutArea.Width);
+            var y = GetAlignedOffset(target.VerticalAlignment, target.Margin.Top, target.Margin.Bottom, height, layoutArea.Height);
+            return new Rect(x, y, width, height);
+        }
+
+        return new Rect(0, 0, width, height);
+    }
+
+    private static double GetAlignedOffset(
+        HorizontalAlignment alignment,
+        double leading,
+        double trailing,
+        double size,
+        double available)
+    {
+        return alignment switch
+        {
+            HorizontalAlignment.Left => leading,
+            HorizontalAlignment.Right => available - trailing - size,
+            _ => (available - size + leading - trailing) / 2
+        };
+    }
+
+    private static double GetAlignedOffset(
+        VerticalAlignment alignment,
+        double leading,
+        double trailing,
+        double size,
+        double available)
+    {
+        return alignment switch
+        {
+            VerticalAlignment.Top => leading,
+            VerticalAlignment.Bottom => available - trailing - size,
+            _ => (available - size + leading - trailing) / 2
+        };
+    }
+
     private static (double Start, double Length) GetAxisArea(double[] lengths, int index, int span, double spacing, double fallback)
     {
         if (lengths.Length == 0)

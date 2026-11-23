@@ -146,6 +146,16 @@ namespace Windows.UI.Xaml
             typeof(Visibility),
             typeof(UIElement),
             new PropertyMetadata(Visibility.Visible));
+        public static readonly DependencyProperty RenderTransformProperty = DependencyProperty.Register(
+            nameof(RenderTransform),
+            typeof(Media.Transform),
+            typeof(UIElement),
+            new PropertyMetadata(null));
+        public static readonly DependencyProperty RenderTransformOriginProperty = DependencyProperty.Register(
+            nameof(RenderTransformOrigin),
+            typeof(Windows.Foundation.Point),
+            typeof(UIElement),
+            new PropertyMetadata(default(Windows.Foundation.Point)));
 
         public double Opacity
         {
@@ -157,6 +167,18 @@ namespace Windows.UI.Xaml
         {
             get => (Visibility)GetValue(VisibilityProperty)!;
             set => SetValue(VisibilityProperty, value);
+        }
+
+        public Media.Transform? RenderTransform
+        {
+            get => (Media.Transform?)GetValue(RenderTransformProperty);
+            set => SetValue(RenderTransformProperty, value);
+        }
+
+        public Windows.Foundation.Point RenderTransformOrigin
+        {
+            get => (Windows.Foundation.Point)GetValue(RenderTransformOriginProperty)!;
+            set => SetValue(RenderTransformOriginProperty, value);
         }
     }
     public enum HorizontalAlignment
@@ -206,11 +228,6 @@ namespace Windows.UI.Xaml
         {
             get;
             set;
-        }
-
-        public Media.Transform? RenderTransform
-        {
-            get; set;
         }
 
         public static readonly DependencyProperty WidthProperty = DependencyProperty.Register(nameof(Width), typeof(double), typeof(FrameworkElement), new PropertyMetadata(double.NaN));

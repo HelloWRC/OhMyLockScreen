@@ -144,10 +144,18 @@ if (args.Contains("--system-background-only"))
     return;
 }
 
+if (args.Contains("--transform-only"))
+{
+    TransformFeatureTests.Run(Run);
+    Console.WriteLine($"All {passed} transform checks passed using simulated UWP controls.");
+    return;
+}
+
 if (args.Contains("--binding-only"))
 {
     DependencyPropertyBindingTests.Run(Run);
     LayoutFeatureTests.Run(Run);
+    TransformFeatureTests.Run(Run);
     BackgroundFeatureTests.Run(Run);
     BorderFeatureTests.Run(Run);
     ForegroundFeatureTests.Run(Run);
@@ -205,6 +213,7 @@ ToastTests.Run(Run);
 ComponentTests.Run(Run);
 DependencyPropertyBindingTests.Run(Run);
 LayoutFeatureTests.Run(Run);
+TransformFeatureTests.Run(Run);
 BackgroundFeatureTests.Run(Run);
 BorderFeatureTests.Run(Run);
 ForegroundFeatureTests.Run(Run);

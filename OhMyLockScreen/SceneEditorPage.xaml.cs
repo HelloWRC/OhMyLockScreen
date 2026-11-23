@@ -105,6 +105,8 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private bool _resizing;
     private bool _dragChanged;
     private Point _dragStart;
+    private Point _dragPanelStart;
+    private GeneralTransform? _dragViewportToPanel;
     private LayoutFeatureSettings? _dragLayout;
     private Panel? _dragPanel;
     private ComponentPresenter? _dragPresenter;
@@ -1467,11 +1469,13 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             _ => LayoutKind.Grid
         };
         var stackMove = !resizing && SceneLayoutEditing.ReordersChildrenOnCanvasDrop(panel);
-        _dragLayout = stackMove ? null : ViewModel.GetLayout(create: true);
         _layoutArea = GetLayoutArea(panel, target);
-        var bounds = target.TransformToVisual(panel).TransformBounds(new Rect(0, 0, target.ActualWidth, target.ActualHeight));
-        _startBounds = new Rect(bounds.X - _layoutArea.X, bounds.Y - _layoutArea.Y, bounds.Width, bounds.Height);
+        // 在自动创建布局特性改变对齐或边距之前读取未变换布局边界。
+        _startBounds = SceneLayoutEditing.GetLayoutBounds(target, panel, _layoutArea);
+        _dragViewportToPanel = TryGetTransform(SceneViewport, panel);
+        _dragLayout = stackMove ? null : ViewModel.GetLayout(create: true);
         _dragStart = args.GetCurrentPoint(SceneViewport).Position;
+        _dragPanelStart = TransformPoint(_dragViewportToPanel, _dragStart);
         _dragPointer = args.Pointer.PointerId;
         _resizing = resizing;
         _dragChanged = false;
@@ -1514,8 +1518,9 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         }
         else if (_dragLayout != null)
         {
-            var deltaX = SceneLayoutEditing.Round(point.X - _dragStart.X);
-            var deltaY = SceneLayoutEditing.Round(point.Y - _dragStart.Y);
+            var panelPoint = TransformPoint(_dragViewportToPanel, point);
+            var deltaX = SceneLayoutEditing.Round(panelPoint.X - _dragPanelStart.X);
+            var deltaY = SceneLayoutEditing.Round(panelPoint.Y - _dragPanelStart.Y);
             var left = _startBounds.Left;
             var top = _startBounds.Top;
             var right = _startBounds.Right;
@@ -1739,7 +1744,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
         var excluded = ReferenceEquals(_draggedTreeItem?.Parent, target.Parent) ? _draggedTreeItem?.Model : null;
         var index = GetInsertionIndex(target.Panel, point, excluded);
-        var panelPoint = SceneViewport.TransformToVisual(target.Panel).TransformPoint(point);
+        var panelPoint = TransformPoint(TryGetTransform(SceneViewport, target.Panel), point);
         TryAction(() =>
         {
             ComponentSettings? component = null;
@@ -1797,7 +1802,9 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             _pendingDropAlignments.Remove(component);
             if (FindParent<Panel>(VisualTreeHelper.GetParent(presenter)) is { } panel)
             {
-                var bounds = presenter.TransformToVisual(panel).TransformBounds(new Rect(0, 0, presenter.ActualWidth, presenter.ActualHeight));
+                var area = GetLayoutArea(panel, presenter);
+                var layoutBounds = SceneLayoutEditing.GetLayoutBounds(presenter, panel, area);
+                var bounds = new Rect(area.X + layoutBounds.X, area.Y + layoutBounds.Y, layoutBounds.Width, layoutBounds.Height);
                 SceneLayoutEditing.AlignDropPosition(component, panel, bounds);
             }
         }
@@ -1927,7 +1934,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             return 0;
         }
 
-        var point = SceneViewport.TransformToVisual(panel).TransformPoint(viewportPoint);
+        var point = TransformPoint(TryGetTransform(SceneViewport, panel), viewportPoint);
         var bounds = children
             .Select(child =>
             {
@@ -1960,6 +1967,36 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         => SceneLayoutEditing.GetLayoutArea(panel, Grid.GetRow(child), Grid.GetColumn(child),
             Grid.GetRowSpan(child), Grid.GetColumnSpan(child));
 
+    private static GeneralTransform? TryGetTransform(UIElement from, UIElement to)
+    {
+        try
+        {
+            return from.TransformToVisual(to);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Point TransformPoint(GeneralTransform? transform, Point point)
+    {
+        if (transform == null)
+        {
+            return point;
+        }
+
+        try
+        {
+            var transformed = transform.TransformPoint(point);
+            return double.IsFinite(transformed.X) && double.IsFinite(transformed.Y) ? transformed : point;
+        }
+        catch
+        {
+            return point;
+        }
+    }
+
     private void OnCanvasPointerReleased(object sender, PointerRoutedEventArgs args)
     {
         if (_dragPointer == args.Pointer.PointerId)
@@ -1988,6 +2025,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         _dragPointer = null;
         _dragLayout = null;
         _dragPanel = null;
+        _dragViewportToPanel = null;
         _dragChanged = false;
         if (_dragPresenter != null)
         {
