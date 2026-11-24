@@ -7,6 +7,12 @@
         Spacing="4"
         Margin="12,2,12,0">
         <CheckBox
+            Content="显示小时"
+            IsChecked="{x:Bind Settings.ShowHours, Mode=TwoWay}" />
+        <CheckBox
+            Content="显示分钟"
+            IsChecked="{x:Bind Settings.ShowMinutes, Mode=TwoWay}" />
+        <CheckBox
             Content="显示秒数"
             IsChecked="{x:Bind Settings.ShowSeconds, Mode=TwoWay}" />
         <CheckBox

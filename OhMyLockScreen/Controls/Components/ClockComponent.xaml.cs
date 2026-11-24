@@ -83,11 +83,13 @@ public sealed partial class ClockComponent : ClockComponentBase, ITextStyleTarge
     {
         var now = _timeProvider.GetLocalNow();
         var showSeconds = Settings.ShowSeconds;
-        var hours = now.ToString("HH", TimeCulture);
-        var minutes = now.ToString("mm", TimeCulture);
+        var hours = Settings.ShowHours ? now.ToString("HH", TimeCulture) : "";
+        var minutes = Settings.ShowMinutes ? now.ToString("mm", TimeCulture) : "";
         var seconds = showSeconds ? now.ToString("ss", TimeCulture) : "";
         var secondsVisibility = showSeconds ? Visibility.Visible : Visibility.Collapsed;
-        var text = showSeconds ? $"{hours}:{minutes}:{seconds}" : $"{hours}:{minutes}";
+        var minuteSeparator = Settings.ShowMinuteSeparator ? ":" : "";
+        var secondSeparator = Settings.ShowSecondSeparator ? ":" : "";
+        var text = $"{hours}{minuteSeparator}{minutes}{secondSeparator}{seconds}";
         var separatorOpacity = Settings.FlashSeparator && now.Millisecond >= 500 ? 0d : 1d;
 
         if (HoursText != hours)

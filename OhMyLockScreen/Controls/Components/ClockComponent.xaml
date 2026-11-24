@@ -12,9 +12,11 @@
         HorizontalAlignment="{x:Bind ToHorizontalAlignment(TextContent.TextAlignment), Mode=OneWay}">
         <TextBlock
             x:Name="TextContent"
+            Visibility="{x:Bind Settings.ShowHours, Mode=OneWay}"
             Text="{x:Bind HoursText, Mode=OneWay}" />
         <TextBlock
             x:Name="MinuteSeparator"
+            Visibility="{x:Bind Settings.ShowMinuteSeparator, Mode=OneWay}"
             Text=":"
             Opacity="{x:Bind SeparatorOpacity, Mode=OneWay}"
             LineHeight="{x:Bind TextContent.LineHeight, Mode=OneWay}"
@@ -22,6 +24,7 @@
             TextDecorations="{x:Bind TextContent.TextDecorations, Mode=OneWay}" />
         <TextBlock
             x:Name="MinutesContent"
+            Visibility="{x:Bind Settings.ShowMinutes, Mode=OneWay}"
             Text="{x:Bind MinutesText, Mode=OneWay}"
             LineHeight="{x:Bind TextContent.LineHeight, Mode=OneWay}"
             LineStackingStrategy="{x:Bind TextContent.LineStackingStrategy, Mode=OneWay}"
@@ -30,7 +33,7 @@
             x:Name="SecondSeparator"
             Text=":"
             Opacity="{x:Bind SeparatorOpacity, Mode=OneWay}"
-            Visibility="{x:Bind SecondsVisibility, Mode=OneWay}"
+            Visibility="{x:Bind Settings.ShowSecondSeparator, Mode=OneWay}"
             LineHeight="{x:Bind TextContent.LineHeight, Mode=OneWay}"
             LineStackingStrategy="{x:Bind TextContent.LineStackingStrategy, Mode=OneWay}"
             TextDecorations="{x:Bind TextContent.TextDecorations, Mode=OneWay}" />

@@ -233,6 +233,29 @@ public sealed partial class App
             await WaitClockLayoutAsync(root, 100);
             Check(partsPanel.HorizontalAlignment == HorizontalAlignment.Center,
                 $"Alignment update to Center: panelAlignment={partsPanel.HorizontalAlignment}");
+
+            var clockParts = partsPanel.Children.OfType<TextBlock>().ToArray();
+            foreach (var (hours, minutes, seconds, expected) in new[]
+            {
+                (true, true, true, "12:34:56"),
+                (true, false, true, "12:56"),
+                (false, false, true, "56"),
+                (false, true, true, "34:56"),
+                (false, true, false, "34"),
+                (false, false, false, ""),
+                (true, false, false, "12"),
+                (true, true, false, "12:34")
+            })
+            {
+                alignClock.Settings.ShowHours = hours;
+                alignClock.Settings.ShowMinutes = minutes;
+                alignClock.Settings.ShowSeconds = seconds;
+                var visibleParts = clockParts.Where(part => part.Visibility == Visibility.Visible).ToArray();
+                var visibleText = string.Concat(visibleParts.Select(part => part.Text));
+                Check(visibleText == expected && alignClock.DisplayText == expected &&
+                    visibleParts.All(part => part.Text.Length > 0),
+                    $"Clock parts ({hours}, {minutes}, {seconds}): visible='{visibleText}', expected='{expected}'");
+            }
         }
         catch (Exception exception)
         {
