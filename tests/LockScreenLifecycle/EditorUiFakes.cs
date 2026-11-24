@@ -16,6 +16,7 @@ namespace OhMyLockScreen.Controls.Editor
 {
     public sealed class BackgroundSettingsControl : BackgroundSettingsControlBase;
     public sealed class BorderSettingsControl : BorderSettingsControlBase;
+    public sealed class StrokeSettingsControl : StrokeSettingsControlBase;
     public sealed class ShadowSettingsControl : ShadowSettingsControlBase;
     public sealed class ForegroundSettingsControl : ForegroundSettingsControlBase;
     public sealed class TextFeatureSettingsControl : TextFeatureSettingsControlBase;

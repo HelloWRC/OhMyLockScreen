@@ -10,6 +10,7 @@ public abstract class TransformSettingsControlBase : FeatureSettingsControlBase<
 public abstract class ParallaxSettingsControlBase : FeatureSettingsControlBase<ParallaxFeatureSettings>;
 public abstract class BackgroundSettingsControlBase : FeatureSettingsControlBase<BackgroundFeatureSettings>;
 public abstract class BorderSettingsControlBase : FeatureSettingsControlBase<BorderFeatureSettings>;
+public abstract class StrokeSettingsControlBase : FeatureSettingsControlBase<StrokeFeatureSettings>;
 public abstract class ShadowSettingsControlBase : FeatureSettingsControlBase<ShadowFeatureSettings>;
 public abstract class ForegroundSettingsControlBase : FeatureSettingsControlBase<ForegroundFeatureSettings>;
 public abstract class TextFeatureSettingsControlBase : FeatureSettingsControlBase<TextFeatureSettings>;

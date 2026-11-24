@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('media', 'system-status', 'spectrum', 'scene-blobs', 'webview2', 'webview2-missing-runtime', 'acrylic-foreground', 'ruleset', 'clock-flash', 'shadow')]
+    [ValidateSet('media', 'system-status', 'spectrum', 'scene-blobs', 'webview2', 'webview2-missing-runtime', 'acrylic-foreground', 'ruleset', 'clock-flash', 'shadow', 'stroke')]
     [string]$Scenario = 'media'
 )
 

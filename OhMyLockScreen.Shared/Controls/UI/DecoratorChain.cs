@@ -36,6 +36,7 @@ public static class DecoratorPriorities
     public const int Shadow = -100;
     public const int EditorOverlay = -50;
     public const int Default = 0;
+    public const int Stroke = 50;
     public const int Border = 200;
 }
 

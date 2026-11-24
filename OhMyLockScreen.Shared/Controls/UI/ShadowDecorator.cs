@@ -25,6 +25,7 @@ public sealed class ShadowDecorator : ContentControl
         new PropertyMetadata(null, (sender, _) => ((ShadowDecorator)sender).SyncShadow()));
 
     private readonly List<IVisualRedirectSourceProvider> _observedProviders = [];
+    private IVisualOutsetProvider? _observedOutsetProvider;
     private FrameworkElement? _shadowHost;
     private FrameworkElement? _contentPresenter;
     private FrameworkElement? _activeHost;
@@ -117,9 +118,17 @@ public sealed class ShadowDecorator : ContentControl
 
     private void OnRedirectSourceChanged(object? sender, EventArgs args) => SyncShadow();
 
+    private void OnChildVisualOutsetChanged(object? sender, EventArgs args) => SyncShadow();
+
     private FrameworkElement? ResolveEffectiveSource()
     {
         ReleaseObservedProviders();
+        if ((SourceElement ?? Content) is IVisualOutsetProvider outsetProvider)
+        {
+            _observedOutsetProvider = outsetProvider;
+            outsetProvider.VisualOutsetChanged += OnChildVisualOutsetChanged;
+        }
+
         if (SourceElement != null)
         {
             return SourceElement;
@@ -148,6 +157,12 @@ public sealed class ShadowDecorator : ContentControl
 
     private void ReleaseObservedProviders()
     {
+        if (_observedOutsetProvider != null)
+        {
+            _observedOutsetProvider.VisualOutsetChanged -= OnChildVisualOutsetChanged;
+            _observedOutsetProvider = null;
+        }
+
         if (_observedProviders.Count == 0)
         {
             return;
@@ -259,8 +274,11 @@ public sealed class ShadowDecorator : ContentControl
         var blurRadius = double.IsFinite(spec.BlurRadius) ? (float)Math.Clamp(spec.BlurRadius, 0, 100) : 0f;
         _brush.Properties.InsertScalar("ShadowBlur.BlurAmount", blurRadius / 3f);
 
-        // 为软边界高斯模糊预留四周外扩边距，防止 LayerVisual 尺寸边界硬裁剪光晕。
-        var pad = blurRadius > 0f ? MathF.Ceiling(blurRadius) + 2f : 0f;
+        // 为软边界高斯模糊及子级描边外扩预留四周边距，防止 LayerVisual 尺寸边界硬裁剪。
+        var childOutset = _observedOutsetProvider?.VisualOutset ?? 0;
+        var basePad = blurRadius > 0f ? MathF.Ceiling(blurRadius) + 2f : 0f;
+        var outsetPad = double.IsFinite(childOutset) && childOutset > 0 ? (float)Math.Ceiling(childOutset) : 0f;
+        var pad = basePad + outsetPad;
         _props.InsertScalar("pad", pad);
         _redirect.Offset = new Vector3(pad, pad, 0f);
 

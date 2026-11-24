@@ -160,6 +160,13 @@ if (args.Contains("--shadow-only"))
     return;
 }
 
+if (args.Contains("--stroke-only"))
+{
+    StrokeFeatureTests.Run(Run);
+    Console.WriteLine($"All {passed} stroke checks passed using simulated UWP controls.");
+    return;
+}
+
 if (args.Contains("--decorator-only"))
 {
     ChainedDecoratorTests.Run(Run);
@@ -176,6 +183,7 @@ if (args.Contains("--binding-only"))
     LayerParallaxTests.Run(Run);
     BackgroundFeatureTests.Run(Run);
     BorderFeatureTests.Run(Run);
+    StrokeFeatureTests.Run(Run);
     ShadowFeatureTests.Run(Run);
     ForegroundFeatureTests.Run(Run);
     TypographyFeatureTests.Run(Run);
@@ -239,6 +247,7 @@ BorderFeatureTests.Run(Run);
 ForegroundFeatureTests.Run(Run);
 TypographyFeatureTests.Run(Run);
 FeatureTests.Run(Run);
+StrokeFeatureTests.Run(Run);
 ShadowFeatureTests.Run(Run);
 LayoutTests.Run(Run);
 EditorConverterTests.Run(Run);

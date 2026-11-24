@@ -1,0 +1,92 @@
+<local:StrokeSettingsControlBase
+    x:Class="OhMyLockScreen.Controls.Editor.StrokeSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OhMyLockScreen.Controls.Editor"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
+    xmlns:icons="using:FluentIcons.Uwp"
+    Loaded="OnLoaded"
+    Unloaded="OnUnloaded">
+    <local:StrokeSettingsControlBase.Resources>
+        <Style
+            x:Key="StrokeThicknessStyle"
+            TargetType="muxc:NumberBox"
+            BasedOn="{StaticResource EditorNumberStyle}">
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="64" />
+            <Setter Property="SmallChange" Value="0.5" />
+            <Setter Property="LargeChange" Value="4" />
+            <Setter Property="Width" Value="116" />
+        </Style>
+    </local:StrokeSettingsControlBase.Resources>
+
+    <StackPanel Spacing="8">
+        <ui:BrushEditControl
+            BlobUriConverter="{x:Bind BlobUriConverter, Mode=OneWay}"
+            Brush="{x:Bind Settings.StrokeBrush, Mode=TwoWay}"
+            TargetElement="{x:Bind TargetElement, Mode=OneWay}" />
+        <StackPanel
+            Style="{StaticResource EditorFormStyle}"
+            Spacing="12"
+            DataContext="{x:Bind Values, Mode=OneWay}">
+            <!-- 描边粗细与重置 -->
+            <StackPanel Spacing="4">
+                <Grid>
+                    <TextBlock
+                        Text="描边粗细"
+                        VerticalAlignment="Center" />
+                    <StackPanel
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal"
+                        Spacing="4">
+                        <muxc:NumberBox
+                            x:Name="ThicknessInput"
+                            Style="{StaticResource StrokeThicknessStyle}"
+                            ToolTipService.ToolTip="描边粗细（逻辑像素）"
+                            AutomationProperties.Name="描边粗细"
+                            Value="{Binding Thickness, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
+                        <Button
+                            x:Name="ResetButton"
+                            Width="28"
+                            Height="28"
+                            Style="{StaticResource EditorTransparentIconButtonStyle}"
+                            Command="{x:Bind Values.ResetCommand, Mode=OneWay}"
+                            ToolTipService.ToolTip="重置描边"
+                            AutomationProperties.Name="重置描边">
+                            <icons:FluentIcon
+                                Icon="ArrowReset"
+                                FontSize="14" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+                <Slider
+                    x:Name="ThicknessSlider"
+                    Minimum="0"
+                    Maximum="64"
+                    StepFrequency="0.5"
+                    Value="{Binding ThicknessStep, Mode=TwoWay}"
+                    ToolTipService.ToolTip="描边粗细"
+                    AutomationProperties.Name="描边粗细滑块" />
+            </StackPanel>
+
+            <!-- 描边位置 -->
+            <ComboBox
+                x:Name="PositionComboBox"
+                Header="描边位置"
+                HorizontalAlignment="Stretch"
+                ItemsSource="{x:Bind Positions}"
+                DisplayMemberPath="Name"
+                SelectedIndex="{Binding PositionIndex, Mode=TwoWay}"
+                AutomationProperties.Name="描边位置" />
+
+            <!-- 是否镂空 -->
+            <CheckBox
+                x:Name="HollowCheckBox"
+                Content="镂空（仅显示描边）"
+                IsChecked="{Binding IsHollow, Mode=TwoWay}"
+                ToolTipService.ToolTip="隐藏组件原始内容，仅保留描边轮廓"
+                AutomationProperties.Name="镂空" />
+        </StackPanel>
+    </StackPanel>
+</local:StrokeSettingsControlBase>

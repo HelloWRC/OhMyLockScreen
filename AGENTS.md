@@ -59,6 +59,7 @@
 - `ScenePresenter`、`LayerPresenter` 与 `ComponentPresenter` 均实现 `IDecoratorHost`，由通用单子节点链式装饰器 `ChainedDecorator`/`DecoratorChain` 按优先级升序（值越小越靠外）动态组合外部包装层；链更新保留外层未变前缀，可位于其子树内的装饰器、呈现器与组件在 `Unloaded` 中以 `IsLoaded` 防护 UWP 同帧重挂投递的过期卸载事件。`AcquireShared` 按键引用计数复用同一装饰节点（如 `ComponentPresenter` 上的 `BackgroundFeature` 与 `BorderFeature` 共享 `DecoratorKeys.Border`），编辑器隐藏条纹遮罩（`StripeMaskDecorator`）通过实现 `IVisualRedirectSourceProvider` 配合外层 `ShadowDecorator` 避免嵌套 `RedirectVisual` 丢失。
 - 图层视差特性（`omls.features.layout.parallax`）通过 `ISceneParallaxHost` 共享 `ScenePresenter` 的视差驱动与计时器，直接观察 `LayerPresenter.ParallaxHost` 并在 `LayerPresenter.Decorators` 注册带 `CompositeTransform` 的视差包装层（优先级 `DecoratorPriorities.Parallax`），与 `TransformFeature` 独立叠加且不受 `SuppressParallaxWithoutBackground` 抑制。
 - 阴影特性（`omls.features.appearance.shadow`）面向 `IDecoratorHost`（覆盖场景、图层与组件），在目标 `Decorators` 注册 `ShadowDecorator`（优先级 `DecoratorPriorities.Shadow`）并绑定 `ShadowSpec`，在内容后方通过 `LayerVisual`、`RedirectVisual` 与 `AlphaMaskEffect` + `GaussianBlurEffect` 按内容轮廓投影，与 `TransformFeature`、视差包装层及编辑器隐藏条纹遮罩独立共存。
+- 描边特性（`omls.features.appearance.stroke`）面向 `IDecoratorHost`（覆盖场景、图层与组件），在目标 `Decorators` 注册 `StrokeDecorator`（优先级 `DecoratorPriorities.Stroke`，位于编辑器遮罩之内、共享 `Border` 之外）并绑定 `StrokeSpec`（画刷、粗细、镂空与内部/中心/外部位置），使用纯 Composition 线性（`K=1`）迭代高斯阈值形态学（大半径内部降半分辨率并全分辨率抛光）、纯色 `CompositionColorBrush` 快速路径、分桶边距与按 `Compositor` 缓存的 `CompositionEffectFactory`（亚克力分支走 `LayerVisual` + `RedirectVisual`），并通过 `IVisualOutsetProvider` 与 `StripeMaskDecorator`、`ShadowDecorator` 同步外扩边距。
 
 ## 验证原则
 

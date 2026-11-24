@@ -10,7 +10,7 @@ using Windows.UI.Xaml.Hosting;
 namespace OhMyLockScreen.Shared.Controls.UI;
 
 /// <summary>对内容应用半透明斜条纹 Alpha 遮罩的可复用装饰器，并向外部保留未被隐藏的原始轮廓源。</summary>
-public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceProvider
+public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceProvider, IVisualOutsetProvider
 {
     public static readonly DependencyProperty IsMaskActiveProperty = DependencyProperty.Register(
         nameof(IsMaskActive),
@@ -24,6 +24,12 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
     private FrameworkElement? _activeHost;
     private Visual? _activeOriginalVisual;
     private CompositeDisposable? _resources;
+    private CompositionPropertySet? _props;
+    private CompositionLinearGradientBrush? _stripes;
+    private LayerVisual? _layer;
+    private RedirectVisual? _redirect;
+    private IVisualOutsetProvider? _observedOutsetProvider;
+    private double _lastOutset;
     private bool _isLoaded;
 
     public bool IsMaskActive
@@ -36,9 +42,14 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
 
     public event EventHandler? VisualRedirectSourceChanged;
 
+    public double VisualOutset => _observedOutsetProvider?.VisualOutset ?? 0;
+
+    public event EventHandler? VisualOutsetChanged;
+
     public StripeMaskDecorator()
     {
         DefaultStyleKey = typeof(StripeMaskDecorator);
+        RegisterPropertyChangedCallback(ContentProperty, (_, _) => UpdateObservedOutsetProvider());
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -51,12 +62,14 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
         _original = GetTemplateChild("PART_Original") as FrameworkElement;
         _contentPresenter = GetTemplateChild("PART_Content") as FrameworkElement;
         VisualRedirectSourceChanged?.Invoke(this, EventArgs.Empty);
+        UpdateObservedOutsetProvider();
         SyncMask();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs args)
     {
         _isLoaded = true;
+        UpdateObservedOutsetProvider();
         SyncMask();
     }
 
@@ -65,12 +78,62 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
         if (IsLoaded)
         {
             _isLoaded = true;
+            UpdateObservedOutsetProvider();
             SyncMask();
             return;
         }
 
         _isLoaded = false;
+        ReleaseObservedOutsetProvider();
         ReleaseMask();
+    }
+
+    private void UpdateObservedOutsetProvider()
+    {
+        var next = Content as IVisualOutsetProvider;
+        if (!ReferenceEquals(_observedOutsetProvider, next))
+        {
+            if (_observedOutsetProvider != null)
+            {
+                _observedOutsetProvider.VisualOutsetChanged -= OnChildOutsetChanged;
+            }
+
+            _observedOutsetProvider = next;
+            if (next != null)
+            {
+                next.VisualOutsetChanged += OnChildOutsetChanged;
+            }
+        }
+
+        NotifyOutsetChanged();
+    }
+
+    private void ReleaseObservedOutsetProvider()
+    {
+        if (_observedOutsetProvider != null)
+        {
+            _observedOutsetProvider.VisualOutsetChanged -= OnChildOutsetChanged;
+            _observedOutsetProvider = null;
+        }
+
+        NotifyOutsetChanged();
+    }
+
+    private void OnChildOutsetChanged(object? sender, EventArgs args) => NotifyOutsetChanged();
+
+    private void NotifyOutsetChanged()
+    {
+        if (IsMaskActive && _isLoaded && _resources != null)
+        {
+            ApplyOutsetPadding();
+        }
+
+        var current = VisualOutset;
+        if (_lastOutset != current)
+        {
+            _lastOutset = current;
+            VisualOutsetChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private void SyncMask()
@@ -87,6 +150,7 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
 
         if (ReferenceEquals(_activeHost, host) && _resources != null)
         {
+            ApplyOutsetPadding();
             return;
         }
 
@@ -105,7 +169,6 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
             resources.Add(stripes);
             stripes.MappingMode = CompositionMappingMode.Absolute;
             stripes.ExtendMode = CompositionGradientExtendMode.Wrap;
-            stripes.EndPoint = new Vector2(10 / MathF.Sqrt(2));
             AddStop(0, 0xAF);
             AddStop(0.5f, 0xAF);
             AddStop(0.5f, 0x50);
@@ -123,15 +186,28 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
             // 未绑定的 Content 参数在 LayerVisual 上接收子树（RedirectVisual）实时渲染输出。
             brush.SetSourceParameter("Stripes", stripes);
 
+            var props = compositor.CreatePropertySet();
+            resources.Add(props);
+            props.InsertScalar("pad", 0f);
+
             var layer = compositor.CreateLayerVisual();
             resources.Add(layer);
-            layer.RelativeSizeAdjustment = Vector2.One;
             layer.Effect = brush;
 
             var redirect = compositor.CreateRedirectVisual(sourceVisual);
             resources.Add(redirect);
-            redirect.RelativeSizeAdjustment = Vector2.One;
+            var redirectSizeAnim = compositor.CreateExpressionAnimation("source.Size");
+            resources.Add(redirectSizeAnim);
+            redirectSizeAnim.SetReferenceParameter("source", sourceVisual);
+            redirect.StartAnimation(nameof(Visual.Size), redirectSizeAnim);
             layer.Children.InsertAtTop(redirect);
+
+            var layerSizeAnim = compositor.CreateExpressionAnimation(
+                "source.Size.X > 0 && source.Size.Y > 0 ? source.Size + Vector2(props.pad * 2, props.pad * 2) : Vector2(0, 0)");
+            resources.Add(layerSizeAnim);
+            layerSizeAnim.SetReferenceParameter("source", sourceVisual);
+            layerSizeAnim.SetReferenceParameter("props", props);
+            layer.StartAnimation(nameof(Visual.Size), layerSizeAnim);
 
             ElementCompositionPreview.SetElementChildVisual(host, layer);
             // XAML Opacity=0 会剔除源子树，因此在合成层隐藏 PART_Original 以保留 PART_Content 的正常输出。
@@ -141,6 +217,11 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
             _activeHost = host;
             _activeOriginalVisual = originalVisual;
             _resources = resources;
+            _props = props;
+            _stripes = stripes;
+            _layer = layer;
+            _redirect = redirect;
+            ApplyOutsetPadding();
 
             void AddStop(float offset, byte alpha)
             {
@@ -156,6 +237,23 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
         }
     }
 
+    private void ApplyOutsetPadding()
+    {
+        if (_props == null || _stripes == null || _layer == null || _redirect == null)
+        {
+            return;
+        }
+
+        var outset = VisualOutset;
+        var pad = double.IsFinite(outset) && outset > 0 ? (float)Math.Ceiling(outset) : 0f;
+        var stripeStep = 10f / MathF.Sqrt(2f);
+        _props.InsertScalar("pad", pad);
+        _redirect.Offset = new Vector3(pad, pad, 0f);
+        _layer.Offset = new Vector3(-pad, -pad, 0f);
+        _stripes.StartPoint = new Vector2(pad, pad);
+        _stripes.EndPoint = new Vector2(pad + stripeStep, pad + stripeStep);
+    }
+
     private void ReleaseMask()
     {
         var host = _activeHost;
@@ -164,6 +262,10 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
         _activeHost = null;
         _activeOriginalVisual = null;
         _resources = null;
+        _props = null;
+        _stripes = null;
+        _layer = null;
+        _redirect = null;
 
         if (originalVisual != null)
         {

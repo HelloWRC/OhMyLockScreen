@@ -339,6 +339,33 @@ namespace OhMyLockScreen.Shared.Controls.UI
         }
     }
 
+    public sealed class StrokeDecorator : Windows.UI.Xaml.Controls.ContentControl, IVisualOutsetProvider
+    {
+        public static readonly Windows.UI.Xaml.DependencyProperty StrokeSpecProperty = Windows.UI.Xaml.DependencyProperty.Register(
+            nameof(StrokeSpec), typeof(StrokeEffectSpec), typeof(StrokeDecorator), new Windows.UI.Xaml.PropertyMetadata(null));
+
+        public static readonly Windows.UI.Xaml.DependencyProperty SourceElementProperty = Windows.UI.Xaml.DependencyProperty.Register(
+            nameof(SourceElement), typeof(Windows.UI.Xaml.FrameworkElement), typeof(StrokeDecorator), new Windows.UI.Xaml.PropertyMetadata(null));
+
+        public StrokeEffectSpec? StrokeSpec
+        {
+            get => (StrokeEffectSpec?)GetValue(StrokeSpecProperty);
+            set => SetValue(StrokeSpecProperty, value);
+        }
+
+        public Windows.UI.Xaml.FrameworkElement? SourceElement
+        {
+            get => (Windows.UI.Xaml.FrameworkElement?)GetValue(SourceElementProperty);
+            set => SetValue(SourceElementProperty, value);
+        }
+
+        public double VisualOutset => StrokeMorphologyPlanner.GetVisualOutset(StrokeSpec);
+
+        public event EventHandler? VisualOutsetChanged;
+
+        internal void NotifyVisualOutsetChanged() => VisualOutsetChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public sealed class StripeMaskDecorator : Windows.UI.Xaml.Controls.ContentControl, IVisualRedirectSourceProvider
     {
         public static readonly Windows.UI.Xaml.DependencyProperty IsMaskActiveProperty = Windows.UI.Xaml.DependencyProperty.Register(

@@ -134,6 +134,7 @@ public sealed partial class App
         services.AddFeature<ParallaxFeature, ParallaxSettingsControl>();
         services.AddFeature<BackgroundFeature, BackgroundSettingsControl>();
         services.AddFeature<BorderFeature, BorderSettingsControl>();
+        services.AddFeature<StrokeFeature, StrokeSettingsControl>();
         services.AddFeature<ShadowFeature, ShadowSettingsControl>();
         services.AddFeature<ForegroundFeature, ForegroundSettingsControl>();
         services.AddFeature<TextFeature, TextFeatureSettingsControl>();
