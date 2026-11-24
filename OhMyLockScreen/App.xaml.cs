@@ -16,7 +16,10 @@ using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers.UI;
 using OhMyLockScreen.Shared;
 using OhMyLockScreen.Services;
+using OhMyLockScreen.Services.Scene;
+using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Views;
+using Windows.Storage;
 
 namespace OhMyLockScreen;
 /// <summary>
@@ -39,6 +42,7 @@ public sealed partial class App : Application
         internal bool IsDesktop { get; set; }
         internal bool WeatherForegroundPending { get; set; }
         internal DispatcherTimer? EditorWindowProbe { get; set; }
+        internal Queue<IReadOnlyList<IStorageItem>> PendingFileImports { get; } = new();
     }
 
     private sealed class PendingUnhandledException
@@ -134,6 +138,13 @@ public sealed partial class App : Application
 
     protected override void OnActivated(IActivatedEventArgs args)
     {
+        if (args is FileActivatedEventArgs fileArgs)
+        {
+            base.OnActivated(args);
+            HandleFileActivation(fileArgs);
+            return;
+        }
+
         var kind = args.Kind;
         if (kind is not ActivationKind.LockScreenComponent and not ActivationKind.LockScreen)
         {
@@ -143,7 +154,19 @@ public sealed partial class App : Application
         ShowMainPage(kind);
     }
 
-    private async void ShowMainPage(ActivationKind? activationKind = null)
+    protected override void OnFileActivated(FileActivatedEventArgs args)
+    {
+        base.OnFileActivated(args);
+        HandleFileActivation(args);
+    }
+
+    private void HandleFileActivation(FileActivatedEventArgs args)
+    {
+        var files = args.Files is { Count: > 0 } items ? items.ToArray() : null;
+        ShowMainPage(args.Kind, files);
+    }
+
+    private async void ShowMainPage(ActivationKind? activationKind = null, IReadOnlyList<IStorageItem>? pendingImportFiles = null)
     {
         var window = Window.Current;
         var dispatcher = window.Dispatcher;
@@ -154,11 +177,17 @@ public sealed partial class App : Application
             currentWindow.Closed += (_, _) =>
             {
                 state.IsClosed = true;
+                state.PendingFileImports.Clear();
+                IAppHost.TryGetService<ScenePackageImportQueue>()?.Clear(currentWindow);
                 StopEditorWindowProbe(state);
             };
             return state;
         });
         activation.Kind = activationKind;
+        if (pendingImportFiles is { Count: > 0 })
+        {
+            activation.PendingFileImports.Enqueue(pendingImportFiles);
+        }
         try
         {
             await _initializeHost.Value.ConfigureAwait(false);
@@ -216,6 +245,7 @@ public sealed partial class App : Application
         activation.IsDesktop = !isLockScreen;
         if (isLockScreen)
         {
+            activation.PendingFileImports.Clear();
             StopEditorWindowProbe(activation);
             WindowTransparency.Enable(window);
         }
@@ -245,11 +275,18 @@ public sealed partial class App : Application
         // A retained lock view cannot re-enter after its dismissal animation completed.
         var lockScreenRequiresFreshPage = isLockScreen &&
             rootFrame.Content is MainPage { IsDismissalStarted: true };
+        var hasPendingFileImports = !isLockScreen && activation.PendingFileImports.Count > 0;
+        var fileImportRequiresManager = hasPendingFileImports && rootFrame.Content is not SceneManagerPage;
         var pageChanged = isLockScreen
             ? rootFrame.Content is not MainPage || lockScreenRequiresFreshPage
-            : rootFrame.Content is not (SceneManagerPage or SceneEditorPage or ScenePreviewPage or ApplicationSettingsPage);
+            : fileImportRequiresManager || rootFrame.Content is not (SceneManagerPage or SceneEditorPage or ScenePreviewPage or ApplicationSettingsPage);
         if (pageChanged)
         {
+            if (fileImportRequiresManager && rootFrame.Content is SceneEditorPage)
+            {
+                IAppHost.TryGetService<ISceneService>()?.FlushPending();
+            }
+
             var version = Package.Current.Id.Version;
             IAppHost.TryGetService<ILogger<App>>()?.LogInformation(
                 "OhMyLockScreen {Version} 启动，生命周期：{Lifetime}",
@@ -271,6 +308,13 @@ public sealed partial class App : Application
 
         ShowPendingUnhandledException(window);
         window.Activate();
+        if (hasPendingFileImports && IAppHost.TryGetService<ScenePackageImportQueue>() is { } importQueue)
+        {
+            while (activation.PendingFileImports.TryDequeue(out var batch))
+            {
+                importQueue.Enqueue(window, batch);
+            }
+        }
         if (!isLockScreen && !_isExiting && !activation.IsClosed)
         {
             StartEditorWindowProbe(window, activation);

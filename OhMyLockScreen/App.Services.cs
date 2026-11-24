@@ -77,6 +77,7 @@ public sealed partial class App
         services.AddSingleton(provider => new SceneService(provider.GetRequiredService<SettingsService>(), provider.GetRequiredService<ILogger<SceneService>>(), ApplicationData.Current.LocalFolder.Path));
         services.AddSingleton<ISceneService>(provider => provider.GetRequiredService<SceneService>());
         services.AddSingleton<ISceneBlobStorageService, SceneBlobStorageService>();
+        services.AddSingleton<ScenePackageImportQueue>();
         services.AddSingleton(TimeProvider.System);
         var uiDispatcher = Window.Current?.Dispatcher;
         services.AddSingleton(provider => new WeatherService(provider.GetRequiredService<SettingsService>(),

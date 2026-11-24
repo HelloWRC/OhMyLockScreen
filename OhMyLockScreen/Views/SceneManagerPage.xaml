@@ -14,7 +14,12 @@
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
     FontFamily="Microsoft YaHei UI">
-    <Grid x:Name="PageRoot">
+    <Grid
+        x:Name="PageRoot"
+        Background="{ThemeResource SystemControlTransparentBrush}"
+        AllowDrop="True"
+        DragOver="OnPageDragOver"
+        Drop="OnPageDrop">
         <Grid.RowDefinitions>
             <RowDefinition Height="48" />
             <RowDefinition Height="Auto" />
@@ -44,6 +49,28 @@
             DefaultButton="Close"
             RequestedTheme="Dark"
             Content="{x:Bind ViewModel.DialogMessage, Mode=OneWay}" />
+
+        <ContentDialog
+            x:Name="ImportSceneDialog"
+            Title="导入场景？"
+            PrimaryButtonText="导入"
+            CloseButtonText="取消"
+            DefaultButton="Primary"
+            RequestedTheme="Dark">
+            <StackPanel Spacing="8" MaxWidth="420">
+                <TextBlock
+                    Text="{x:Bind ViewModel.DialogMessage, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+                <TextBlock
+                    Text="{x:Bind ViewModel.DialogDetail, Mode=OneWay}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    FontSize="12"
+                    TextWrapping="Wrap"
+                    MaxLines="6"
+                    TextTrimming="CharacterEllipsis"
+                    Visibility="{x:Bind ViewModel.HasDialogDetail, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
+            </StackPanel>
+        </ContentDialog>
 
         <!-- 顶部导航栏：左侧复用 Pivot，右侧为筛选与管理操作按钮 -->
         <Grid Padding="4,0,4,0">

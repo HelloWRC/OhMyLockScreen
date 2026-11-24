@@ -33,6 +33,12 @@ public sealed partial class SceneManagerViewModel : ObservableObject
     [ObservableProperty]
     private string _dialogMessage = "";
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDialogDetail))]
+    private string _dialogDetail = "";
+
+    public bool HasDialogDetail => !string.IsNullOrWhiteSpace(DialogDetail);
+
     public ObservableCollection<SceneCardItem> FilteredScenes { get; } = [];
 
     public SceneManagerViewModel(ISceneService scenes, ISceneBlobStorageService blobs)

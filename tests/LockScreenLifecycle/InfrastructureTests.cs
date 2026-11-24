@@ -12,8 +12,13 @@ using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Shared.Models;
 using OhMyLockScreen.Hosting;
 using OhMyLockScreen.Models;
+using OhMyLockScreen.Models.Features.Layout;
 using OhMyLockScreen.Services;
+using OhMyLockScreen.Services.Scene;
+using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Extensions.Registry;
+using OhMyLockScreen.Shared.Helpers.Serialization;
+using OhMyLockScreen.Shared.Models.Scene;
 using OhMyLockScreen.Shared.Services.Registry;
 using OhMyLockScreen.Views;
 using OhMyLockScreen.Views.SettingsPages;
@@ -80,6 +85,138 @@ internal static class InfrastructureTests
             Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(300));
             await app.ExitAsync();
         });
+
+    internal static async Task RunFileActivationRoutingAsync(Func<string, Func<Task>, Task> runAsync)
+    {
+        await runAsync("File activation routes desktop views to SceneManagerPage, flushes pending edits, and isolates lock views", async () =>
+        {
+            AutoJsonPolymorphicRegistrationHelper.DiscoverAndRegisterForAssembly(typeof(SceneSettings).Assembly);
+            AutoJsonPolymorphicRegistrationHelper.DiscoverAndRegisterForAssembly(typeof(LayoutFeatureSettings).Assembly);
+
+            var app = new App(() => BuildHost(new HostedProbe(), configureServices: services =>
+            {
+                services.AddSingleton(provider => new SceneService(
+                    provider.GetRequiredService<SettingsService>(),
+                    provider.GetRequiredService<ILogger<SceneService>>(),
+                    ApplicationData.Current.LocalFolder.Path));
+                services.AddSingleton<ISceneService>(provider => provider.GetRequiredService<SceneService>());
+                services.AddSingleton<ScenePackageImportQueue>();
+            }));
+            LockScreenHosting.IsHosted = () => false;
+
+            var editorWindow = Window.Current;
+            var coldFile = new StorageFile { Path = @"C:\Scenes\cold.omls" };
+            app.ActivateFile(new FileActivatedEventArgs([coldFile]));
+
+            var editorFrame = ((WindowToastHost)editorWindow.Content!).Frame;
+            Check(editorFrame.Content is SceneManagerPage && editorFrame.BackStack.Count == 0,
+                "Cold-start file activation did not open SceneManagerPage with a clean back stack.");
+            var queue = IAppHost.GetRequiredService<ScenePackageImportQueue>();
+            Check(queue.TryDequeue(editorWindow, out var coldBatch) && coldBatch.SequenceEqual([coldFile]),
+                "Cold-start file activation did not enqueue the activated file.");
+
+            // Warm-start on SceneManagerPage retains the current page instance.
+            var managerPage = editorFrame.Content;
+            var warmFile = new StorageFile { Path = @"C:\Scenes\warm.omls" };
+            app.Activate(new FileActivatedEventArgs([warmFile]));
+            Check(ReferenceEquals(editorFrame.Content, managerPage),
+                "File activation on SceneManagerPage replaced the active page instance.");
+            Check(queue.TryDequeue(editorWindow, out var warmBatch) && warmBatch.SequenceEqual([warmFile]),
+                "Warm-start file activation on SceneManagerPage did not enqueue the activated file.");
+
+            // Warm-start from SceneEditorPage flushes pending scene changes before returning to SceneManagerPage.
+            var scenes = IAppHost.GetRequiredService<ISceneService>();
+            var activeScene = scenes.Load(scenes.ActiveSceneId);
+            activeScene.Name = "激活前未落盘命名";
+            scenes.QueueSave(activeScene);
+            Check(scenes.HasPendingChanges(activeScene.SceneId), "SceneService did not mark queued scene changes as pending.");
+            Check(editorFrame.Navigate(typeof(SceneEditorPage)), "Could not navigate to SceneEditorPage.");
+            Check(editorFrame.BackStack.Count == 1, "Navigating to SceneEditorPage did not push a back stack entry.");
+
+            var editorFile = new StorageFile { Path = @"C:\Scenes\from-editor.omls" };
+            app.ActivateFile(new FileActivatedEventArgs([editorFile]));
+            Check(editorFrame.Content is SceneManagerPage && editorFrame.BackStack.Count == 0,
+                "File activation from SceneEditorPage did not reset back to SceneManagerPage.");
+            Check(!scenes.HasPendingChanges(activeScene.SceneId) && scenes.Load(activeScene.SceneId).Name == "激活前未落盘命名",
+                "File activation left pending edits unflushed when leaving SceneEditorPage.");
+            Check(queue.TryDequeue(editorWindow, out var editorBatch) && editorBatch.SequenceEqual([editorFile]),
+                "File activation from SceneEditorPage did not deliver files.");
+
+            // Warm-start from ScenePreviewPage and ApplicationSettingsPage also returns to SceneManagerPage.
+            Check(editorFrame.Navigate(typeof(ScenePreviewPage)), "Could not navigate to ScenePreviewPage.");
+            var previewFile = new StorageFile { Path = @"C:\Scenes\from-preview.omls" };
+            app.ActivateFile(new FileActivatedEventArgs([previewFile]));
+            Check(editorFrame.Content is SceneManagerPage && editorFrame.BackStack.Count == 0,
+                "File activation from ScenePreviewPage did not return to SceneManagerPage.");
+            Check(queue.TryDequeue(editorWindow, out var previewBatch) && previewBatch.SequenceEqual([previewFile]),
+                "File activation from ScenePreviewPage did not deliver files.");
+
+            Check(editorFrame.Navigate(typeof(ApplicationSettingsPage)), "Could not navigate to ApplicationSettingsPage.");
+            var settingsFile = new StorageFile { Path = @"C:\Scenes\from-settings.omls" };
+            app.ActivateFile(new FileActivatedEventArgs([settingsFile]));
+            Check(editorFrame.Content is SceneManagerPage && editorFrame.BackStack.Count == 0,
+                "File activation from ApplicationSettingsPage did not return to SceneManagerPage.");
+            Check(queue.TryDequeue(editorWindow, out var settingsBatch) && settingsBatch.SequenceEqual([settingsFile]),
+                "File activation from ApplicationSettingsPage did not deliver files.");
+
+            // Lock-screen windows discard file activation imports and stay on MainPage.
+            var lockWindow = new Window();
+            Window.Current = lockWindow;
+            LockScreenHosting.IsHosted = () => ReferenceEquals(Window.Current, lockWindow);
+            app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
+            var lockFrame = ((WindowToastHost)lockWindow.Content!).Frame;
+            var lockPage = lockFrame.Content;
+            Check(lockPage is MainPage, "Lock-screen activation did not show MainPage.");
+
+            var ignoredLockFile = new StorageFile { Path = @"C:\Scenes\ignored-on-lock.omls" };
+            app.ActivateFile(new FileActivatedEventArgs([ignoredLockFile]));
+            Check(ReferenceEquals(lockFrame.Content, lockPage) && !queue.HasPending(lockWindow),
+                "File activation modified or queued imports on a lock-screen window.");
+
+            // Closing a desktop window clears its queued imports.
+            Window.Current = editorWindow;
+            LockScreenHosting.IsHosted = () => false;
+            queue.Enqueue(editorWindow, [new StorageFile { Path = @"C:\Scenes\before-close.omls" }]);
+            Check(queue.HasPending(editorWindow), "Queue did not hold pending file before window close.");
+            editorWindow.Close();
+            Check(!queue.HasPending(editorWindow), "Closing the desktop window did not clear pending file imports.");
+
+            await app.ExitAsync();
+        });
+
+        await runAsync("Queued file activations during delayed startup preserve every batch in FIFO order", async () =>
+        {
+            var probe = new HostedProbe { StartGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            var app = new App(() => BuildHost(probe, configureServices: services => services.AddSingleton<ScenePackageImportQueue>()));
+            LockScreenHosting.IsHosted = () => false;
+
+            var view = new ViewContext();
+            var first = new StorageFile { Path = @"C:\Scenes\first.omls" };
+            var second = new StorageFile { Path = @"C:\Scenes\second.omls" };
+            view.Invoke(() => app.ActivateFile(new FileActivatedEventArgs([first])));
+            view.Invoke(() => app.ActivateFile(new FileActivatedEventArgs([second])));
+            Check(view.Window.Content == null, "File activation rendered before host startup completed.");
+
+            probe.StartGate.SetResult();
+            var stopwatch = Stopwatch.StartNew();
+            while (view.Window.Content is not WindowToastHost { Frame.Content: SceneManagerPage })
+            {
+                Check(stopwatch.Elapsed < TimeSpan.FromSeconds(5), "Queued file activations did not reach SceneManagerPage.");
+                view.Drain();
+                await Task.Delay(10);
+            }
+            view.Drain();
+
+            var queue = IAppHost.GetRequiredService<ScenePackageImportQueue>();
+            Check(queue.TryDequeue(view.Window, out var batch1) && batch1.SequenceEqual([first]),
+                "Delayed startup lost or reordered the first file activation batch.");
+            Check(queue.TryDequeue(view.Window, out var batch2) && batch2.SequenceEqual([second]),
+                "Delayed startup lost or reordered the second file activation batch.");
+            Check(!queue.HasPending(view.Window), "Unexpected extra batches remained in the queue.");
+
+            await app.ExitAsync();
+        });
+    }
 
     internal static Task RunEditorWindowRecoveryAsync(Func<string, Func<Task>, Task> runAsync) =>
         runAsync("Only an unframed desktop editor starts recovery after the probe times out", async () =>
@@ -724,7 +861,7 @@ internal static class InfrastructureTests
     }
 
     private static IHost BuildHost(HostedProbe probe, string? path = null, ILogger<SettingsService>? logger = null,
-        ILogger<App>? appLogger = null)
+        ILogger<App>? appLogger = null, Action<IServiceCollection>? configureServices = null)
     {
         return new HostBuilder()
             .ConfigureServices(services =>
@@ -736,6 +873,8 @@ internal static class InfrastructureTests
                 {
                     services.AddSingleton(appLogger);
                 }
+
+                configureServices?.Invoke(services);
             })
             .Build();
     }

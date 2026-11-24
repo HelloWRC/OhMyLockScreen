@@ -92,6 +92,7 @@ if (args.Contains("--lock-screen-provider-only"))
 if (args.Contains("--activation-only"))
 {
     await InfrastructureTests.RunActivationRoutingAsync(RunAsync);
+    await InfrastructureTests.RunFileActivationRoutingAsync(RunAsync);
     await InfrastructureTests.RunEditorWindowRecoveryAsync(RunAsync);
     await InfrastructureTests.RunEditorRecoveryExitAsync(RunAsync);
     await InfrastructureTests.RunEditorRelaunchAsync(RunAsync);
@@ -220,6 +221,7 @@ if (args.Contains("--layout-only"))
 }
 
 await InfrastructureTests.RunActivationRoutingAsync(RunAsync);
+await InfrastructureTests.RunFileActivationRoutingAsync(RunAsync);
 await InfrastructureTests.RunEditorWindowRecoveryAsync(RunAsync);
 await InfrastructureTests.RunEditorRecoveryExitAsync(RunAsync);
 await InfrastructureTests.RunEditorRelaunchAsync(RunAsync);

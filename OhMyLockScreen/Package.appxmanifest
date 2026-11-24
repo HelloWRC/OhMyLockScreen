@@ -45,6 +45,15 @@
       </uap:VisualElements>
       <Extensions>
         <uap:Extension Category="windows.lockScreen"/>
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="omls">
+            <uap:DisplayName>OhMyLockScreen 场景包</uap:DisplayName>
+            <uap:Logo>Assets\Logos\ScenePackageLogo.png</uap:Logo>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.omls</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
         <desktop:Extension Category="windows.fullTrustProcess" Executable="OhMyLockScreen.NativeHost.exe">
           <desktop:FullTrustProcess>
             <desktop:ParameterGroup GroupId="AudioSpectrum" Parameters="--audio-spectrum" />

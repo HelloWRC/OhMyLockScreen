@@ -17,6 +17,7 @@ namespace Windows.ApplicationModel.Activation
     public enum ActivationKind
     {
         Launch,
+        File,
         LockScreen,
         LockScreenComponent,
         Other
@@ -36,6 +37,12 @@ namespace Windows.ApplicationModel.Activation
         // Hosted activations may not expose these interfaces. Access is a regression.
         public string Arguments => throw new InvalidCastException("Launch interface unavailable");
         public bool PrelaunchActivated => throw new InvalidCastException("Prelaunch interface unavailable");
+    }
+
+    public sealed class FileActivatedEventArgs(IReadOnlyList<Windows.Storage.IStorageItem> files) : IActivatedEventArgs
+    {
+        public ActivationKind Kind => ActivationKind.File;
+        public IReadOnlyList<Windows.Storage.IStorageItem> Files { get; } = files;
     }
 
     public sealed record ActivatedEventArgs(ActivationKind Kind) : IActivatedEventArgs;
@@ -96,9 +103,28 @@ namespace Windows.ApplicationModel
 
 namespace Windows.Storage
 {
-    public sealed class StorageFile
+    public interface IStorageItem
     {
+        string Name
+        {
+            get;
+        }
+
+        string Path
+        {
+            get;
+        }
+    }
+
+    public sealed class StorageFile : IStorageItem
+    {
+        private string? _name;
         public required string Path { get; init; }
+        public string Name
+        {
+            get => _name ?? global::System.IO.Path.GetFileName(Path);
+            init => _name = value;
+        }
         internal static Func<Uri, Task<StorageFile>>? OpenFromApplicationUri { get; set; }
 
         public static Task<StorageFile> GetFileFromApplicationUriAsync(Uri uri)
@@ -113,9 +139,16 @@ namespace Windows.Storage
         }
     }
 
-    public sealed class StorageFolder
+    public sealed class StorageFolder : IStorageItem
     {
+        private string? _name;
         public string Path { get; set; } = "";
+        public string Name
+        {
+            get => _name ?? global::System.IO.Path.GetFileName(
+                Path.TrimEnd(global::System.IO.Path.DirectorySeparatorChar, global::System.IO.Path.AltDirectorySeparatorChar));
+            init => _name = value;
+        }
     }
 
     public sealed class ApplicationData
@@ -633,8 +666,13 @@ namespace Windows.UI.Xaml
         {
         }
 
+        protected virtual void OnFileActivated(FileActivatedEventArgs args)
+        {
+        }
+
         public void Launch(LaunchActivatedEventArgs args) => OnLaunched(args);
         public void Activate(IActivatedEventArgs args) => OnActivated(args);
+        public void ActivateFile(FileActivatedEventArgs args) => OnFileActivated(args);
         public UnhandledExceptionEventArgs RaiseUnhandledException(Exception exception)
         {
             var args = new UnhandledExceptionEventArgs(exception);

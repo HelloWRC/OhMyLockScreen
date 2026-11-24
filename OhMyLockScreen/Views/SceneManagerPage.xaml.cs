@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml.Controls;
 using OhMyLockScreen.Services.LockScreenProvider;
+using OhMyLockScreen.Services.Scene;
 using OhMyLockScreen.Shared;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Controls.UI;
@@ -7,6 +8,7 @@ using OhMyLockScreen.Shared.Helpers.UI;
 using OhMyLockScreen.Shared.Models.Scene;
 using OhMyLockScreen.Shared.Models.UI;
 using OhMyLockScreen.ViewModels;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.Storage.Provider;
@@ -23,9 +25,12 @@ public sealed partial class SceneManagerPage : Page
 {
     private readonly ISceneService _scenes;
     private readonly LockScreenReplacementService _lockScreenReplacement;
+    private readonly ScenePackageImportQueue _importQueue;
+    private readonly SemaphoreSlim _dialogGate = new(1, 1);
     private readonly HashSet<ToastMessage> _pageToasts = [];
     private Window? _window;
     private bool _loaded;
+    private bool _processingImportQueue;
     private int _lockScreenStatusRequest;
     private bool? _lastLockScreenEnabled;
 
@@ -35,6 +40,7 @@ public sealed partial class SceneManagerPage : Page
     {
         _scenes = IAppHost.GetRequiredService<ISceneService>();
         _lockScreenReplacement = IAppHost.GetRequiredService<LockScreenReplacementService>();
+        _importQueue = IAppHost.GetRequiredService<ScenePackageImportQueue>();
         ViewModel = IAppHost.GetRequiredService<SceneManagerViewModel>();
         InitializeComponent();
         NavigationCacheMode = NavigationCacheMode.Enabled;
@@ -58,6 +64,7 @@ public sealed partial class SceneManagerPage : Page
         _window.CoreWindow.KeyDown += OnKeyDown;
         _scenes.SceneSaved += OnSceneServiceChanged;
         _scenes.ActiveSceneChanged += OnSceneServiceChanged;
+        _importQueue.PendingChanged += OnPendingImportsChanged;
 
         try
         {
@@ -72,6 +79,7 @@ public sealed partial class SceneManagerPage : Page
             ShowError(exception);
         }
 
+        _ = ProcessPendingImportsAsync();
         await RefreshLockScreenStatusAsync();
     }
 
@@ -84,6 +92,7 @@ public sealed partial class SceneManagerPage : Page
 
         _loaded = false;
         ClearPageToasts();
+        _importQueue.PendingChanged -= OnPendingImportsChanged;
         _scenes.SceneSaved -= OnSceneServiceChanged;
         _scenes.ActiveSceneChanged -= OnSceneServiceChanged;
         if (_window != null)
@@ -244,6 +253,10 @@ public sealed partial class SceneManagerPage : Page
             finally
             {
                 ViewModel.IsBusy = false;
+                if (_loaded)
+                {
+                    _ = ProcessPendingImportsAsync();
+                }
             }
         }
         catch (Exception exception)
@@ -252,6 +265,234 @@ public sealed partial class SceneManagerPage : Page
             {
                 ShowError(exception);
             }
+        }
+    }
+
+    private void OnPageDragOver(object sender, DragEventArgs args)
+    {
+        if (!args.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            return;
+        }
+
+        var canImport = _loaded && !ViewModel.IsBusy;
+        args.AcceptedOperation = canImport ? DataPackageOperation.Copy : DataPackageOperation.None;
+        if (canImport)
+        {
+            args.DragUIOverride.Caption = "导入场景";
+            args.DragUIOverride.IsCaptionVisible = true;
+            args.DragUIOverride.IsGlyphVisible = true;
+        }
+
+        args.Handled = true;
+    }
+
+    private async void OnPageDrop(object sender, DragEventArgs args)
+    {
+        if (!args.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            return;
+        }
+
+        args.Handled = true;
+        args.AcceptedOperation = DataPackageOperation.None;
+        if (!_loaded || ViewModel.IsBusy || _window is not { } window)
+        {
+            return;
+        }
+
+        IReadOnlyList<IStorageItem>? droppedItems = null;
+        var deferral = args.GetDeferral();
+        try
+        {
+            args.AcceptedOperation = DataPackageOperation.Copy;
+            droppedItems = await args.DataView.GetStorageItemsAsync();
+        }
+        catch (Exception exception)
+        {
+            if (_loaded)
+            {
+                ShowError(exception);
+            }
+        }
+        finally
+        {
+            deferral.Complete();
+        }
+
+        if (droppedItems is { Count: > 0 } && _loaded && ReferenceEquals(_window, window))
+        {
+            _importQueue.Enqueue(window, droppedItems);
+        }
+    }
+
+    private async void OnPendingImportsChanged(object? sender, Window window)
+    {
+        await OnViewAsync(() =>
+        {
+            if (ReferenceEquals(window, _window))
+            {
+                _ = ProcessPendingImportsAsync();
+            }
+        });
+    }
+
+    private async Task ProcessPendingImportsAsync()
+    {
+        if (!_loaded || _window == null || _processingImportQueue || ViewModel.IsBusy)
+        {
+            return;
+        }
+
+        _processingImportQueue = true;
+        try
+        {
+            while (_loaded && _window is { } window && !ViewModel.IsBusy && _importQueue.HasPending(window))
+            {
+                IReadOnlyList<IStorageItem> supported;
+                List<string> unsupportedNames;
+                ContentDialogResult dialogResult;
+                var candidates = new List<ScenePackageImportCandidate<StorageFile>>();
+
+                await _dialogGate.WaitAsync();
+                try
+                {
+                    if (!_loaded || !ReferenceEquals(_window, window) || ViewModel.IsBusy)
+                    {
+                        break;
+                    }
+
+                    if (!_importQueue.TryDequeue(window, out var batch))
+                    {
+                        continue;
+                    }
+
+                    (supported, unsupportedNames) = ScenePackageImport.PartitionItems(
+                        batch,
+                        static item => item is StorageFile,
+                        static item => item.Name);
+
+                    if (unsupportedNames.Count > 0)
+                    {
+                        var title = supported.Count == 0 ? "不支持的文件" : "已跳过不支持的文件";
+                        ShowMessage(title, $"仅支持导入 .omls 场景包：{string.Join("、", unsupportedNames)}", InfoBarSeverity.Warning);
+                    }
+
+                    if (supported.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    foreach (var file in supported.Cast<StorageFile>())
+                    {
+                        ScenePackageMetadata? metadata = null;
+                        try
+                        {
+                            await using var stream = await file.OpenStreamForReadAsync();
+                            metadata = await ScenePackageImport.TryReadMetadataAsync(stream);
+                        }
+                        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                        {
+                            metadata = null;
+                        }
+
+                        candidates.Add(new ScenePackageImportCandidate<StorageFile>(file, file.Name, metadata));
+                    }
+
+                    if (!_loaded || !ReferenceEquals(_window, window))
+                    {
+                        break;
+                    }
+
+                    var (message, detail) = ScenePackageImport.FormatConfirmationPrompt(candidates);
+                    ViewModel.DialogMessage = message;
+                    ViewModel.DialogDetail = detail;
+                    PrepareDialog(ImportSceneDialog);
+                    dialogResult = await ImportSceneDialog.ShowAsync();
+                }
+                finally
+                {
+                    _dialogGate.Release();
+                }
+
+                if (dialogResult != ContentDialogResult.Primary || !_loaded || !ReferenceEquals(_window, window))
+                {
+                    continue;
+                }
+
+                await ImportPackageCandidatesAsync(candidates);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (_loaded)
+            {
+                ShowError(exception);
+            }
+        }
+        finally
+        {
+            _processingImportQueue = false;
+            if (_loaded && _window is { } pendingWindow && !ViewModel.IsBusy && _importQueue.HasPending(pendingWindow))
+            {
+                await OnViewAsync(() => _ = ProcessPendingImportsAsync());
+            }
+        }
+    }
+
+    private async Task ImportPackageCandidatesAsync(IReadOnlyList<ScenePackageImportCandidate<StorageFile>> candidates)
+    {
+        var imported = new List<SceneSettings>(candidates.Count);
+        var failures = new List<(string FileName, Exception Error)>();
+
+        ViewModel.IsBusy = true;
+        try
+        {
+            foreach (var candidate in candidates)
+            {
+                if (!_loaded)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await using var stream = await candidate.File.OpenStreamForReadAsync();
+                    imported.Add(await ViewModel.ImportSceneAsync(stream));
+                }
+                catch (Exception exception)
+                {
+                    failures.Add((candidate.FileName, exception));
+                }
+            }
+        }
+        finally
+        {
+            ViewModel.IsBusy = false;
+        }
+
+        if (!_loaded)
+        {
+            return;
+        }
+
+        if (imported.Count == 1)
+        {
+            TrackToast(this.ShowSuccessToastRef($"已导入场景：{imported[0].Name}"));
+        }
+        else if (imported.Count > 1)
+        {
+            TrackToast(this.ShowSuccessToastRef($"已导入 {imported.Count} 个场景"));
+        }
+
+        if (failures.Count == 1 && imported.Count == 0)
+        {
+            ShowError(failures[0].Error);
+        }
+        else if (failures.Count > 0)
+        {
+            var details = string.Join(Environment.NewLine, failures.Select(failure => $"{failure.FileName}：{failure.Error.Message}"));
+            ShowMessage("部分场景未能导入", details, InfoBarSeverity.Error);
         }
     }
 
@@ -334,6 +575,10 @@ public sealed partial class SceneManagerPage : Page
             finally
             {
                 ViewModel.IsBusy = false;
+                if (_loaded)
+                {
+                    _ = ProcessPendingImportsAsync();
+                }
             }
         }
         catch (Exception exception)
@@ -394,11 +639,24 @@ public sealed partial class SceneManagerPage : Page
 
         try
         {
-            ViewModel.DialogMessage = $"将删除“{item.Name}”及其专有资源。此操作无法撤销。";
-            PrepareDialog(DeleteSceneDialog);
-            if (await DeleteSceneDialog.ShowAsync() == ContentDialogResult.Primary && _loaded)
+            await _dialogGate.WaitAsync();
+            try
             {
-                ViewModel.DeleteScene(item.Id);
+                if (!_loaded)
+                {
+                    return;
+                }
+
+                ViewModel.DialogMessage = $"将删除“{item.Name}”及其专有资源。此操作无法撤销。";
+                PrepareDialog(DeleteSceneDialog);
+                if (await DeleteSceneDialog.ShowAsync() == ContentDialogResult.Primary && _loaded)
+                {
+                    ViewModel.DeleteScene(item.Id);
+                }
+            }
+            finally
+            {
+                _dialogGate.Release();
             }
         }
         catch (Exception exception)
@@ -409,11 +667,24 @@ public sealed partial class SceneManagerPage : Page
 
     private async Task<string?> AskNameAsync(string title, string initial)
     {
-        ViewModel.DialogTitle = title;
-        ViewModel.DialogName = initial;
-        ViewModel.DialogNameError = "";
-        PrepareDialog(NameDialog);
-        return await NameDialog.ShowAsync() == ContentDialogResult.Primary ? ViewModel.DialogName.Trim() : null;
+        await _dialogGate.WaitAsync();
+        try
+        {
+            if (!_loaded)
+            {
+                return null;
+            }
+
+            ViewModel.DialogTitle = title;
+            ViewModel.DialogName = initial;
+            ViewModel.DialogNameError = "";
+            PrepareDialog(NameDialog);
+            return await NameDialog.ShowAsync() == ContentDialogResult.Primary ? ViewModel.DialogName.Trim() : null;
+        }
+        finally
+        {
+            _dialogGate.Release();
+        }
     }
 
     private void OnNameDialogPrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)

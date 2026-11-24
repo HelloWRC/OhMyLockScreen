@@ -185,7 +185,7 @@ public sealed partial class SceneService
             FileOptions.Asynchronous | FileOptions.SequentialScan);
     }
 
-    private static (ZipArchiveEntry SceneEntry, List<(ZipArchiveEntry Entry, string[] Segments, bool IsBlob)> ResourceEntries) CollectImportEntries(
+    internal static (ZipArchiveEntry SceneEntry, List<(ZipArchiveEntry Entry, string[] Segments, bool IsBlob)> ResourceEntries) CollectImportEntries(
         ZipArchive archive)
     {
         var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -344,7 +344,7 @@ public sealed partial class SceneService
         }
     }
 
-    private static async Task<byte[]> ReadSceneBytesFromEntryAsync(
+    internal static async Task<byte[]> ReadSceneBytesFromEntryAsync(
         ZipArchiveEntry entry,
         CancellationToken cancellationToken)
     {

@@ -1945,6 +1945,153 @@ internal static class SceneTests
                 }
             });
         });
+
+        await runAsync("ScenePackageImport filters .omls files, safely peeks metadata, and formats confirmation prompts", async () =>
+        {
+            var items = new IStorageItem[]
+            {
+                new StorageFile { Path = @"C:\Temp\alpha.omls" },
+                new StorageFile { Path = @"C:\Temp\BETA.OMLS" },
+                new StorageFile { Path = @"C:\Temp\cover.png" },
+                new StorageFile { Path = @"C:\Temp\archive.zip" },
+                new StorageFolder { Path = @"C:\Temp\folder.omls" }
+            };
+
+            var (supported, unsupported) = ScenePackageImport.PartitionItems(
+                items,
+                static item => item is StorageFile,
+                static item => item.Name);
+            Check(supported.Select(item => item.Name).SequenceEqual(["alpha.omls", "BETA.OMLS"]),
+                "PartitionItems did not preserve .omls files case-insensitively.");
+            Check(unsupported.SequenceEqual(["cover.png", "archive.zip", "folder.omls"]),
+                "PartitionItems did not reject non-.omls files and folders.");
+
+            using var fixture = new Fixture();
+            var scene = fixture.Service.Create("极光锁屏");
+            scene.Description = "包含天气与媒体卡片";
+            scene.Author = "Alice";
+            fixture.Service.QueueSave(scene);
+            fixture.Service.FlushPending();
+
+            using var packageStream = new MemoryStream();
+            await fixture.Service.ExportAsync(scene.SceneId, packageStream);
+
+            packageStream.Position = 0;
+            var metadata = await ScenePackageImport.TryReadMetadataAsync(packageStream);
+            Check(metadata == new ScenePackageMetadata("极光锁屏", "包含天气与媒体卡片", "Alice"),
+                "TryReadMetadataAsync did not extract scene Name, Description, and Author.");
+
+            packageStream.Position = 0;
+            using (var nonSeekable = new NonSeekableReadStream(packageStream))
+            {
+                Check(await ScenePackageImport.TryReadMetadataAsync(nonSeekable) is null,
+                    "TryReadMetadataAsync did not return null for a non-seekable stream.");
+            }
+
+            using (var corrupt = new MemoryStream("not-a-zip"u8.ToArray()))
+            {
+                Check(await ScenePackageImport.TryReadMetadataAsync(corrupt) is null,
+                    "TryReadMetadataAsync did not return null for a corrupted ZIP.");
+            }
+
+            Check(await PeekZipBytesAsync(zip => WriteZipEntry(zip, "Blobs/aa/" + new string('a', 64), "x"u8.ToArray())) is null,
+                "TryReadMetadataAsync did not return null when scene.json is missing.");
+            Check(await PeekZipBytesAsync(zip =>
+            {
+                WriteZipEntry(zip, "scene.json", "{\"Name\":\"Evil\"}"u8.ToArray());
+                WriteZipEntry(zip, "../evil.txt", "escape"u8.ToArray());
+            }) is null, "TryReadMetadataAsync did not reject path traversal entries.");
+            Check(await PeekZipBytesAsync(zip => WriteZipEntry(zip, "scene.json", "{bad json"u8.ToArray())) is null,
+                "TryReadMetadataAsync did not return null for invalid scene.json.");
+            Check(await PeekZipBytesAsync(zip =>
+            {
+                var huge = new byte[(16 * 1024 * 1024) + 128];
+                Array.Fill(huge, (byte)' ');
+                WriteZipEntry(zip, "scene.json", huge);
+            }) is null, "TryReadMetadataAsync did not reject oversized scene.json.");
+
+            Check(!Directory.EnumerateFileSystemEntries(fixture.Service.ScenesPath)
+                .Any(path => Path.GetFileName(path).StartsWith(".scene-import-", StringComparison.Ordinal)
+                    || Path.GetFileName(path).StartsWith(".omls-stream-", StringComparison.Ordinal)),
+                "TryReadMetadataAsync left temporary files on disk.");
+
+            var singleWithMeta = ScenePackageImport.FormatConfirmationPrompt(
+                [new ScenePackageImportCandidate<string>("a", "alpha.omls", metadata)]);
+            Check(singleWithMeta.Message == "确定要导入场景“极光锁屏”吗？"
+                && singleWithMeta.Detail.Contains("文件：alpha.omls", StringComparison.Ordinal)
+                && singleWithMeta.Detail.Contains("作者：Alice", StringComparison.Ordinal)
+                && singleWithMeta.Detail.Contains("包含天气与媒体卡片", StringComparison.Ordinal),
+                "Single-candidate confirmation prompt omitted metadata details.");
+
+            var singleFallback = ScenePackageImport.FormatConfirmationPrompt(
+                [new ScenePackageImportCandidate<string>("b", "broken.omls", null)]);
+            Check(singleFallback.Message == "确定要导入场景文件“broken.omls”吗？"
+                && singleFallback.Detail == string.Empty,
+                "Fallback confirmation prompt did not format filename-only text.");
+
+            var sixCandidates = Enumerable.Range(1, 6)
+                .Select(index => new ScenePackageImportCandidate<int>(
+                    index,
+                    $"scene-{index}.omls",
+                    index == 1 ? new ScenePackageMetadata("首个场景", "", "") : null))
+                .ToArray();
+            var multiFive = ScenePackageImport.FormatConfirmationPrompt(sixCandidates.Take(5).ToArray());
+            Check(multiFive.Message == "确定要导入这 5 个场景包吗？"
+                && multiFive.Detail.Contains("• 首个场景（scene-1.omls）", StringComparison.Ordinal)
+                && multiFive.Detail.Contains("• scene-5.omls", StringComparison.Ordinal)
+                && !multiFive.Detail.Contains("其余", StringComparison.Ordinal),
+                "Five-candidate confirmation prompt did not format all items.");
+
+            var multiSix = ScenePackageImport.FormatConfirmationPrompt(sixCandidates);
+            Check(multiSix.Message == "确定要导入这 6 个场景包吗？"
+                && multiSix.Detail.Contains("• 首个场景（scene-1.omls）", StringComparison.Ordinal)
+                && !multiSix.Detail.Contains("scene-6.omls", StringComparison.Ordinal)
+                && multiSix.Detail.Contains("…以及其余 1 个文件", StringComparison.Ordinal),
+                "Six-candidate confirmation prompt did not truncate beyond five entries.");
+
+            static async Task<ScenePackageMetadata?> PeekZipBytesAsync(Action<ZipArchive> build)
+            {
+                using var stream = new MemoryStream();
+                using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    build(zip);
+                }
+
+                stream.Position = 0;
+                return await ScenePackageImport.TryReadMetadataAsync(stream);
+            }
+        });
+
+        await runAsync("ScenePackageImportQueue preserves FIFO order per window, notifies listeners, and clears cleanly", () =>
+        {
+            var queue = new ScenePackageImportQueue();
+            var window1 = new Window();
+            var window2 = new Window();
+            var notified = new List<Window>();
+            queue.PendingChanged += (_, window) => notified.Add(window);
+
+            var f1 = new StorageFile { Path = @"C:\Scenes\1.omls" };
+            var f2 = new StorageFile { Path = @"C:\Scenes\2.omls" };
+            var f3 = new StorageFile { Path = @"C:\Scenes\3.omls" };
+
+            queue.Enqueue(window1, []);
+            Check(!queue.HasPending(window1) && notified.Count == 0, "Empty batch modified queue state.");
+
+            queue.Enqueue(window1, [f1]);
+            queue.Enqueue(window2, [f3]);
+            queue.Enqueue(window1, [f2]);
+            Check(notified.Count == 3 && ReferenceEquals(notified[0], window1) && ReferenceEquals(notified[1], window2) && ReferenceEquals(notified[2], window1),
+                "Queue notifications did not identify each target window.");
+            Check(queue.HasPending(window1) && queue.HasPending(window2), "Queue did not report pending batches per window.");
+
+            Check(queue.TryDequeue(window1, out var w1b1) && w1b1.SequenceEqual([f1]), "First dequeue for window1 failed.");
+            Check(queue.TryDequeue(window1, out var w1b2) && w1b2.SequenceEqual([f2]), "Second dequeue for window1 broke FIFO order.");
+            Check(!queue.HasPending(window1) && queue.HasPending(window2), "Dequeuing window1 affected window2.");
+
+            queue.Clear(window2);
+            Check(!queue.HasPending(window2) && !queue.TryDequeue(window2, out _), "Clear did not empty window2 queue.");
+            return Task.CompletedTask;
+        });
     }
 
     private static Task<SceneSettings> ImportArchiveBytesAsync(ISceneService service, Action<ZipArchive> build)
