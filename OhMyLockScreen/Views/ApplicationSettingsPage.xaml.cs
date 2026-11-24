@@ -199,7 +199,6 @@ public sealed partial class ApplicationSettingsPage : Page
         _drawerRoute?.Dispose();
         _drawerRoute = null;
         ResetDrawer();
-        systemNavigation.AppViewBackButtonVisibility = AppViewBackButtonVisibility.Collapsed;
         _systemNavigation = null;
         _rootFrame = null;
         _window = null;
@@ -209,9 +208,9 @@ public sealed partial class ApplicationSettingsPage : Page
 
     private void UpdateSystemBackButton()
     {
-        if (_systemNavigation is { } systemNavigation)
+        if (_systemNavigation is { } systemNavigation && _rootFrame is { } root && ReferenceEquals(root.Content, this))
         {
-            systemNavigation.AppViewBackButtonVisibility = SettingsDrawer.IsDrawerOpen || SettingsFrame.CanGoBack || _rootFrame?.CanGoBack == true
+            systemNavigation.AppViewBackButtonVisibility = SettingsDrawer.IsDrawerOpen || SettingsFrame.CanGoBack || root.CanGoBack
                 ? AppViewBackButtonVisibility.Visible
                 : AppViewBackButtonVisibility.Collapsed;
         }
