@@ -240,11 +240,14 @@ public sealed partial class SceneManagerPage : Page
                 return;
             }
 
+            ToastMessage? progressToast = null;
             ViewModel.IsBusy = true;
             try
             {
+                progressToast = ShowProgressToast("正在导入场景…");
                 await using var stream = await file.OpenStreamForReadAsync();
                 var imported = await ViewModel.ImportSceneAsync(stream);
+                progressToast.Close();
                 if (_loaded)
                 {
                     TrackToast(this.ShowSuccessToastRef($"已导入场景：{imported.Name}"));
@@ -252,6 +255,7 @@ public sealed partial class SceneManagerPage : Page
             }
             finally
             {
+                progressToast?.Close();
                 ViewModel.IsBusy = false;
                 if (_loaded)
                 {
@@ -442,12 +446,21 @@ public sealed partial class SceneManagerPage : Page
 
     private async Task ImportPackageCandidatesAsync(IReadOnlyList<ScenePackageImportCandidate<StorageFile>> candidates)
     {
+        if (!_loaded || candidates.Count == 0)
+        {
+            return;
+        }
+
         var imported = new List<SceneSettings>(candidates.Count);
         var failures = new List<(string FileName, Exception Error)>();
 
+        ToastMessage? progressToast = null;
         ViewModel.IsBusy = true;
         try
         {
+            progressToast = ShowProgressToast(candidates.Count > 1
+                ? $"正在导入 {candidates.Count} 个场景…"
+                : "正在导入场景…");
             foreach (var candidate in candidates)
             {
                 if (!_loaded)
@@ -468,6 +481,7 @@ public sealed partial class SceneManagerPage : Page
         }
         finally
         {
+            progressToast?.Close();
             ViewModel.IsBusy = false;
         }
 
@@ -547,9 +561,11 @@ public sealed partial class SceneManagerPage : Page
                 return;
             }
 
+            ToastMessage? progressToast = null;
             ViewModel.IsBusy = true;
             try
             {
+                progressToast = ShowProgressToast("正在导出场景…");
                 CachedFileManager.DeferUpdates(file);
                 await using (var stream = await file.OpenStreamForWriteAsync())
                 {
@@ -567,13 +583,16 @@ public sealed partial class SceneManagerPage : Page
                 {
                     throw new IOException($"导出场景文件未能完成保存（{status}）。");
                 }
+
+                progressToast.Close();
                 if (_loaded)
                 {
-                    TrackToast(this.ShowSuccessToastRef($"已导出场景：{file.Name}"));
+                    ShowExportSuccessToast(file);
                 }
             }
             finally
             {
+                progressToast?.Close();
                 ViewModel.IsBusy = false;
                 if (_loaded)
                 {
@@ -589,6 +608,76 @@ public sealed partial class SceneManagerPage : Page
             }
         }
     }
+
+    private void ShowExportSuccessToast(StorageFile file)
+    {
+        var actionButton = (Button)((DataTemplate)Resources["RevealExportedFileButtonTemplate"]).LoadContent();
+        var toast = new ToastMessage($"已导出场景：{file.Name}")
+        {
+            Severity = InfoBarSeverity.Success,
+            ActionContent = actionButton
+        };
+        actionButton.Tag = new ExportedFileToastContext(file, toast);
+        TrackToast(this.ShowToastRef(toast));
+    }
+
+    private async void OnRevealExportedFileClick(object sender, RoutedEventArgs args)
+    {
+        if (sender is not Button { Tag: ExportedFileToastContext context } button || !button.IsEnabled)
+        {
+            return;
+        }
+
+        button.IsEnabled = false;
+        try
+        {
+            if (await RevealExportedFileAsync(context.File))
+            {
+                context.Toast.Close();
+            }
+            else if (_loaded)
+            {
+                ShowMessage(
+                    "无法在文件资源管理器中显示文件",
+                    string.IsNullOrWhiteSpace(context.File.Path) ? context.File.Name : context.File.Path);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (_loaded)
+            {
+                ShowError(exception);
+            }
+        }
+        finally
+        {
+            if (context.Toast.IsOpen)
+            {
+                button.IsEnabled = true;
+            }
+        }
+    }
+
+    private static async Task<bool> RevealExportedFileAsync(StorageFile file)
+    {
+        var options = new FolderLauncherOptions();
+        options.ItemsToSelect.Add(file);
+
+        // LaunchFolderPathAsync 无需目标目录权限，可直接配合选择器返回的 StorageFile 高亮定位文件。
+        if (!string.IsNullOrWhiteSpace(file.Path) && Path.GetDirectoryName(file.Path) is { Length: > 0 } folderPath)
+        {
+            return await Launcher.LaunchFolderPathAsync(folderPath, options);
+        }
+
+        if (await file.GetParentAsync() is { } folder)
+        {
+            return await Launcher.LaunchFolderAsync(folder, options);
+        }
+
+        return false;
+    }
+
+    private sealed record ExportedFileToastContext(StorageFile File, ToastMessage Toast);
 
     private void OnCardDuplicateRequested(object? sender, SceneCardItem item) =>
         TryAction(() =>
@@ -727,6 +816,13 @@ public sealed partial class SceneManagerPage : Page
     }
 
     private void ShowError(Exception exception) => TrackToast(this.ShowErrorToastRef("操作未完成", exception));
+
+    private ToastMessage ShowProgressToast(string message) =>
+        TrackToast(this.ShowToastRef(new ToastMessage(message)
+        {
+            AutoClose = false,
+            CanUserClose = false
+        }));
 
     private ToastMessage ShowMessage(string title, string message, InfoBarSeverity severity = InfoBarSeverity.Error) =>
         TrackToast(this.ShowToastRef(new ToastMessage(title, message)

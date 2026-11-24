@@ -14,6 +14,13 @@
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
     FontFamily="Microsoft YaHei UI">
+    <Page.Resources>
+        <DataTemplate x:Key="RevealExportedFileButtonTemplate">
+            <Button
+                Content="在文件资源管理器中显示"
+                Click="OnRevealExportedFileClick" />
+        </DataTemplate>
+    </Page.Resources>
     <Grid
         x:Name="PageRoot"
         Background="{ThemeResource SystemControlTransparentBrush}"

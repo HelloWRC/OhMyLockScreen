@@ -215,6 +215,35 @@ internal static class ToastTests
             tracker.Clear();
             Check(unrelated.IsOpen, "Clearing tracked failures affected unrelated hints.");
         });
+
+        run("Progress toast stays open without user close until closed before completion toast", () =>
+        {
+            var host = CreateHost();
+            var source = new FrameworkElement { VisualParent = host.Frame };
+            var time = new ManualTimeProvider();
+            var progress = source.ShowToastRef(new ToastMessage("正在导出场景…")
+            {
+                AutoClose = false,
+                CanUserClose = false
+            });
+            using var lifetime = new ToastLifetime(progress, time, action => action());
+            lifetime.Resume();
+            time.Advance(TimeSpan.FromDays(1));
+            Check(progress.Severity == InfoBarSeverity.Informational && !progress.AutoClose && !progress.CanUserClose
+                && progress.IsOpen && host.Toasts.Messages.Contains(progress)
+                && !ToastSwipeGesture.ShouldDismiss(-200, -3000, 320, progress.CanUserClose),
+                "Progress toast did not remain persistent and non-user-closable.");
+
+            progress.Close();
+            Check(!progress.IsOpen && !host.Toasts.Messages.Contains(progress),
+                "Closing progress toast did not dismiss or remove it.");
+
+            var completed = source.ShowSuccessToastRef("已导出场景：示例.omls");
+            Check(completed.IsOpen && completed.Severity == InfoBarSeverity.Success
+                && host.Toasts.Messages.Count == 1 && ReferenceEquals(host.Toasts.Messages[0], completed),
+                "Completion toast did not replace the dismissed progress toast.");
+            host.Clear();
+        });
     }
 
     private static WindowToastHost CreateHost()
