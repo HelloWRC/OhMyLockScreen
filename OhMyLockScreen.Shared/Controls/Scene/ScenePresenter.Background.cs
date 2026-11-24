@@ -14,6 +14,8 @@ namespace OhMyLockScreen.Shared.Controls.Scene;
 
 public sealed partial class ScenePresenter
 {
+    internal bool SkipVideoPlayback { get; set; }
+
     private SceneSettings? _subscribedScene;
     private BackgroundSettings? _subscribedBackground;
     private Application? _backgroundApplication;
@@ -153,7 +155,9 @@ public sealed partial class ScenePresenter
             return;
         }
 
-        if (Scene is not { Background.Mode: BackgroundMode.Video } scene || string.IsNullOrWhiteSpace(scene.Background.BlobId))
+        if (Scene is not { Background.Mode: BackgroundMode.Video } scene
+            || string.IsNullOrWhiteSpace(scene.Background.BlobId)
+            || SkipVideoPlayback)
         {
             ReleaseBackground();
             return;

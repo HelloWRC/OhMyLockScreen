@@ -6,6 +6,7 @@ using Windows.UI.Xaml.Controls;
 namespace OhMyLockScreen.Views
 {
     public sealed class ApplicationSettingsPage : Page;
+    public sealed class SceneManagerPage : Page;
 }
 
 namespace OhMyLockScreen.Views.SettingsPages

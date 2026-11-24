@@ -1,7 +1,8 @@
 {
   "profiles": {
     "OhMyLockScreen": {
-      "commandName": "MsixPackage"
+      "commandName": "MsixPackage",
+      "nativeDebugging": true
     }
   }
 }

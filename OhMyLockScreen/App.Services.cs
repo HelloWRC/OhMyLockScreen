@@ -98,6 +98,7 @@ public sealed partial class App
         services.AddSingleton<IMediaStateService>(provider => provider.GetRequiredService<MediaStateService>());
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<MediaStateService>());
         services.AddSingleton<FontCatalogService>();
+        services.AddTransient<SceneManagerViewModel>();
         services.AddTransient<SceneEditorViewModel>();
         services.AddSingleton<ComponentRegistryService>();
         services.AddSingleton<FeatureRegistryService>();

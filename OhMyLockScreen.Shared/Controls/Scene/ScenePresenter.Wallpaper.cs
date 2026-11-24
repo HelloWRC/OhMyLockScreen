@@ -11,6 +11,7 @@ namespace OhMyLockScreen.Shared.Controls.Scene;
 public sealed partial class ScenePresenter
 {
     internal bool ShowSystemBackgroundPreview { get; set; }
+    internal BitmapImage? CurrentSystemWallpaper => _systemWallpaper;
 
     private Window? _systemBackgroundWindow;
     private bool _systemBackgroundWindowActive;
@@ -99,6 +100,16 @@ public sealed partial class ScenePresenter
 
     private void UpdateSystemBackgroundPreview() =>
         SystemBackgroundImageElement.Source = ShowSystemBackgroundPreview && !UsesSystemWallpaper ? _systemWallpaper : null;
+
+    internal void SetPreloadedSystemWallpaper(BitmapImage? wallpaper)
+    {
+        _systemWallpaper = wallpaper;
+        UpdateSystemBackgroundPreview();
+        if (UsesSystemWallpaper)
+        {
+            WallpaperImage.Source = wallpaper;
+        }
+    }
 
     private void UpdateWallpaperImage(string? blobId)
     {

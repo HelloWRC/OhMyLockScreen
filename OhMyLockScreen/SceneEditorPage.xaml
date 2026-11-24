@@ -18,6 +18,9 @@
         <DataTemplate x:Key="RulesetDrawerTemplate">
             <rules:RulesetControl ShowTitle="True" />
         </DataTemplate>
+        <DataTemplate x:Key="LicensePresetMenuItemTemplate">
+            <MenuFlyoutItem Text="{Binding}" Click="OnSelectLicensePresetClick" />
+        </DataTemplate>
         <Style x:Key="EditorListItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -206,10 +209,17 @@
             <RowDefinition
                 Height="48" />
             <RowDefinition
-                Height="Auto" />
-            <RowDefinition
                 Height="*" />
         </Grid.RowDefinitions>
+        <!-- 隐藏的 16:9 截图渲染宿主：置于主页面不透明背景层之下，保证布局完整且不裁剪 -->
+        <Canvas
+            x:Name="CaptureHost"
+            Grid.RowSpan="2"
+            IsHitTestVisible="False" />
+        <Border
+            Grid.RowSpan="2"
+            Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+            IsHitTestVisible="False" />
         <ContentDialog
             x:Name="NameDialog"
             Title="{Binding DialogTitle, Mode=OneWay}"
@@ -224,18 +234,9 @@
                 MaxLength="120"
                 MinWidth="280" />
         </ContentDialog>
-        <ContentDialog
-            x:Name="DeleteSceneDialog"
-            Title="删除场景？"
-            PrimaryButtonText="删除"
-            CloseButtonText="取消"
-            DefaultButton="Close"
-            RequestedTheme="Dark"
-            Content="{Binding DialogMessage, Mode=OneWay}" />
         <Grid
             x:Name="TopNavigation"
-            Padding="4,0,0,0"
-            Visibility="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}">
+            Padding="4,0,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition
                     Width="Auto" />
@@ -278,7 +279,7 @@
                 VerticalAlignment="Center">
                 <Button
                     Style="{StaticResource EditorToolbarIconButtonStyle}"
-                    ToolTipService.ToolTip="全屏预览（按任意键退出）"
+                    ToolTipService.ToolTip="全屏预览"
                     AutomationProperties.Name="全屏预览"
                     Click="OnPreviewClick">
                     <icons:FluentIcon
@@ -299,8 +300,7 @@
         </Grid>
         <Grid
             x:Name="MainContent"
-            Grid.Row="{x:Bind ViewModel.ContentRow, Mode=OneWay}"
-            Grid.RowSpan="{x:Bind ViewModel.ContentRowSpan, Mode=OneWay}"
+            Grid.Row="1"
             Background="{ThemeResource SystemControlTransparentBrush}"
             SizeChanged="OnContentSizeChanged">
             <Grid
@@ -318,8 +318,8 @@
                 Drop="OnCanvasDrop">
                 <scene:ScenePresenter
                     x:Name="EditorPresenter"
-                    IsEditing="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
-                    IsHitTestVisible="{x:Bind ViewModel.IsPreview, Mode=OneWay}"
+                    IsEditing="True"
+                    IsHitTestVisible="False"
                     ParallaxInputSurface="{x:Bind PageRoot}"
                     Scene="{x:Bind ViewModel.Scene, Mode=OneWay}" />
                 <Canvas
@@ -348,8 +348,7 @@
                 <!-- 编辑态由透明层接管输入，避免组件内容参与命中测试。 -->
                 <Border
                     x:Name="EditorInteractionLayer"
-                    Background="{ThemeResource SystemControlTransparentBrush}"
-                    Visibility="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}" />
+                    Background="{ThemeResource SystemControlTransparentBrush}" />
                 <Canvas
                     x:Name="ResizeOverlay"
                     Background="{x:Null}">
@@ -416,18 +415,12 @@
                 Style="{StaticResource FloatingPanelStyle}"
                 HorizontalAlignment="Left"
                 Margin="16,16,0,0"
-                Height="207"
+                VerticalAlignment="Top"
                 Opacity="0"
                 Visibility="Collapsed">
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="HomePanelTransform" />
                 </Border.RenderTransform>
-                <Border.Resources>
-                    <Style x:Key="SceneManagementIconStyle" TargetType="icons:FluentIcon">
-                        <Setter Property="FontSize" Value="16" />
-                        <Setter Property="IsTextScaleFactorEnabled" Value="False" />
-                    </Style>
-                </Border.Resources>
                 <ContentControl
                     x:Name="HomePanelInput"
                     IsTabStop="False"
@@ -443,127 +436,122 @@
                         <StackPanel
                             Margin="12,0,0,0">
                             <TextBlock
-                                Text="场景"
+                                Text="场景信息"
                                 FontWeight="Bold"
                                 Height="37"
                                 Padding="0,10,0,0" />
                             <Border
                                 Style="{StaticResource SectionPillStyle}" />
                         </StackPanel>
-                        <StackPanel
-                            Orientation="Horizontal"
-                            HorizontalAlignment="Right">
-                            <Button
-                                Style="{StaticResource EditorToolbarIconButtonStyle}"
-                                ToolTipService.ToolTip="重新加载场景列表"
-                                AutomationProperties.Name="重新加载场景列表"
-                                Click="OnRefreshScenesClick">
-                                <icons:FluentIcon
-                                    Style="{StaticResource SceneManagementIconStyle}"
-                                    Icon="ArrowClockwise" />
-                            </Button>
-                            <Button
-                                Style="{StaticResource EditorToolbarIconButtonStyle}"
-                                ToolTipService.ToolTip="新建场景"
-                                AutomationProperties.Name="新建场景"
-                                Click="OnCreateSceneClick">
-                                <icons:FluentIcon
-                                    Style="{StaticResource SceneManagementIconStyle}"
-                                    Icon="Add" />
-                            </Button>
-                            <Button
-                                Style="{StaticResource EditorToolbarIconButtonStyle}"
-                                ToolTipService.ToolTip="打开场景文件夹"
-                                AutomationProperties.Name="打开场景文件夹"
-                                Click="OnOpenFolderClick">
-                                <icons:FluentIcon
-                                    Style="{StaticResource SceneManagementIconStyle}"
-                                    Icon="FolderOpen" />
-                            </Button>
-                        </StackPanel>
-                        <ListView
-                            x:Name="SceneList"
+                        <ScrollViewer
                             Grid.Row="1"
-                            MinHeight="90"
-                            MaxHeight="340"
-                            SingleSelectionFollowsFocus="False"
-                            ItemsSource="{x:Bind ViewModel.Scenes}"
-                            SelectionChanged="OnSceneSelectionChanged"
-                            ContainerContentChanging="OnSceneRowContainerChanging">
-                            <ListView.ItemContainerStyle>
-                                <Style TargetType="ListViewItem" BasedOn="{StaticResource EditorListItemStyle}">
-                                    <Setter Property="Padding" Value="8,0" />
-                                </Style>
-                            </ListView.ItemContainerStyle>
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:SceneListItem">
-                                    <Grid Background="{ThemeResource SystemControlTransparentBrush}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="32" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="96" />
-                                        </Grid.ColumnDefinitions>
-                                        <RadioButton
-                                            MinWidth="0"
-                                            Width="32"
-                                            Padding="0"
-                                            VerticalAlignment="Center"
-                                            IsChecked="{x:Bind IsActive, Mode=OneWay}"
-                                            AutomationProperties.Name="{x:Bind EnableLabel, Mode=OneWay}"
-                                            ToolTipService.ToolTip="设为锁屏场景"
-                                            Tapped="OnSceneActionTapped"
-                                            Click="OnEnableSceneClick" />
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Style="{StaticResource EditorFormStyle}">
+                                <TextBlock Text="预览图" />
+                                <Border
+                                    Height="160"
+                                    CornerRadius="6"
+                                    BorderThickness="1"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <Grid CornerRadius="6">
+                                        <Border CornerRadius="6">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.58">
+                                                    <GradientStop Color="#805ED5D1" Offset="0.008" />
+                                                    <GradientStop Color="#803FC3BE" Offset="0.992" />
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                        </Border>
+                                        <Border
+                                            x:Name="MetadataPreviewLayer"
+                                            CornerRadius="6" />
                                         <TextBlock
-                                            Grid.Column="1"
+                                            Text="未设置预览图"
+                                            HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            Text="{x:Bind Name, Mode=OneWay}"
-                                            TextTrimming="CharacterEllipsis"
-                                            ToolTipService.ToolTip="{x:Bind Name, Mode=OneWay}" />
-                                        <StackPanel
-                                            Grid.Column="2"
-                                            VerticalAlignment="Center"
-                                            Orientation="Horizontal"
-                                            Visibility="{x:Bind ShowActions, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}">
-                                            <Button
-                                                Style="{StaticResource EditorTransparentIconButtonStyle}"
-                                                AllowFocusOnInteraction="True"
-                                                ToolTipService.ToolTip="重命名"
-                                                AutomationProperties.Name="重命名场景"
-                                                Tapped="OnSceneActionTapped"
-                                                Click="OnRenameSceneClick">
-                                                <icons:FluentIcon
-                                                    Style="{StaticResource SceneManagementIconStyle}"
-                                                    Icon="Rename" />
-                                            </Button>
-                                            <Button
-                                                Style="{StaticResource EditorTransparentIconButtonStyle}"
-                                                AllowFocusOnInteraction="True"
-                                                ToolTipService.ToolTip="复制"
-                                                AutomationProperties.Name="复制场景"
-                                                Tapped="OnSceneActionTapped"
-                                                Click="OnDuplicateSceneClick">
-                                                <icons:FluentIcon
-                                                    Style="{StaticResource SceneManagementIconStyle}"
-                                                    Icon="Copy" />
-                                            </Button>
-                                            <Button
-                                                Style="{StaticResource EditorTransparentIconButtonStyle}"
-                                                AllowFocusOnInteraction="True"
-                                                IsEnabled="{x:Bind CanDelete, Mode=OneWay}"
-                                                Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
-                                                ToolTipService.ToolTip="删除"
-                                                AutomationProperties.Name="删除场景"
-                                                Tapped="OnSceneActionTapped"
-                                                Click="OnDeleteSceneClick">
-                                                <icons:FluentIcon
-                                                    Style="{StaticResource SceneManagementIconStyle}"
-                                                    Icon="Delete" />
-                                            </Button>
-                                        </StackPanel>
+                                            Foreground="White"
+                                            Visibility="{x:Bind ViewModel.HasPreviewImage, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}" />
                                     </Grid>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
+                                </Border>
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button
+                                        HorizontalAlignment="Stretch"
+                                        IsEnabled="{x:Bind ViewModel.IsCapturingPreview, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
+                                        Click="OnCapturePreviewClick"
+                                        ToolTipService.ToolTip="按 16:9 截取当前场景画面作为预览图">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <icons:FluentIcon Icon="Camera" FontSize="16" />
+                                            <TextBlock Text="16:9 截图" />
+                                        </StackPanel>
+                                    </Button>
+                                    <ui:BlobPicker
+                                        x:Name="PreviewImagePicker"
+                                        Grid.Column="1"
+                                        BlobId="{x:Bind ViewModel.Scene.PreviewImageBlobId, Mode=TwoWay}"
+                                        BlobUriConverter="{x:Bind EditorPresenter.BlobUriConverter, Mode=OneWay}"
+                                        IsEnabled="{x:Bind ViewModel.IsCapturingPreview, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
+                                        SuggestedStartLocation="PicturesLibrary" />
+                                </Grid>
+                                <Button
+                                    HorizontalAlignment="Stretch"
+                                    Content="清除预览图"
+                                    Click="OnClearPreviewClick"
+                                    Visibility="{x:Bind ViewModel.HasPreviewImage, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
+
+                                <TextBox
+                                    Header="名称"
+                                    MaxLength="120"
+                                    Text="{x:Bind ViewModel.MetadataName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    LostFocus="OnMetadataNameLostFocus" />
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.MetadataNameError, Mode=OneWay}"
+                                    Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+                                    FontSize="12"
+                                    Visibility="{x:Bind ViewModel.HasMetadataNameError, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
+
+                                <TextBox
+                                    Header="描述"
+                                    PlaceholderText="介绍此锁屏场景…"
+                                    AcceptsReturn="True"
+                                    TextWrapping="Wrap"
+                                    MinHeight="68"
+                                    MaxHeight="120"
+                                    MaxLength="500"
+                                    Text="{x:Bind ViewModel.Scene.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <TextBox
+                                    Header="作者"
+                                    PlaceholderText="作者名称"
+                                    MaxLength="100"
+                                    Text="{x:Bind ViewModel.Scene.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox
+                                        Header="分发许可"
+                                        PlaceholderText="如 CC BY 4.0、MIT…"
+                                        MaxLength="120"
+                                        Text="{x:Bind ViewModel.Scene.License, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button
+                                        Grid.Column="1"
+                                        VerticalAlignment="Bottom"
+                                        Content="预设"
+                                        ToolTipService.ToolTip="选择常用分发许可">
+                                        <Button.Flyout>
+                                            <MenuFlyout x:Name="LicensePresetFlyout" Opening="OnLicensePresetFlyoutOpening" />
+                                        </Button.Flyout>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </ScrollViewer>
                     </Grid>
                 </ContentControl>
             </Border>
@@ -848,7 +836,7 @@
                                 x:Name="VideoPicker"
                                 BlobId="{x:Bind ViewModel.Scene.Background.BlobId, Mode=TwoWay}"
                                 BlobUriConverter="{x:Bind EditorPresenter.BlobUriConverter, Mode=OneWay}"
-                                IsEnabled="{x:Bind CanPickVideo(ViewModel.Scene.Background.Mode, ViewModel.IsPreview), Mode=OneWay}"
+                                IsEnabled="{x:Bind CanPickVideo(ViewModel.Scene.Background.Mode), Mode=OneWay}"
                                 Visibility="{x:Bind GetVideoControlsVisibility(ViewModel.Scene.Background.Mode), Mode=OneWay}"
                                 SuggestedStartLocation="VideosLibrary" />
                             <CheckBox
@@ -864,7 +852,7 @@
                                     x:Name="WallpaperPicker"
                                     BlobId="{x:Bind ViewModel.Scene.Background.ImageBlobId, Mode=TwoWay}"
                                     BlobUriConverter="{x:Bind EditorPresenter.BlobUriConverter, Mode=OneWay}"
-                                    IsEnabled="{x:Bind CanPickWallpaper(ViewModel.Scene.Background.Mode, ViewModel.IsPreview), Mode=OneWay}"
+                                    IsEnabled="{x:Bind CanPickWallpaper(ViewModel.Scene.Background.Mode), Mode=OneWay}"
                                     SuggestedStartLocation="PicturesLibrary" />
                                 <Button
                                     Click="OnUseSystemWallpaperClick"
@@ -882,24 +870,8 @@
                 </ContentControl>
             </Border>
         </Grid>
-        <muxc:InfoBar
-            x:Name="LockScreenReplacementInfoBar"
-            Grid.Row="1"
-            HorizontalAlignment="Stretch"
-            VerticalAlignment="Top"
-            IsOpen="False"
-            Severity="Warning"
-            Title="未启用替换系统锁屏"
-            Message="请按指南将 OhMyLockScreen 设为锁屏提供方，以应用当前锁屏场景。"
-            Visibility="{x:Bind ViewModel.IsPreview, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}">
-            <muxc:InfoBar.ActionButton>
-                <HyperlinkButton
-                    Content="查看启用指南"
-                    NavigateUri="https://github.com/HelloWRC/OhMyLockScreen/blob/master/docs/activating-lockscreen.md" />
-            </muxc:InfoBar.ActionButton>
-        </muxc:InfoBar>
         <Canvas
-            Grid.RowSpan="3"
+            Grid.RowSpan="2"
             IsHitTestVisible="False"
             AutomationProperties.AccessibilityView="Raw">
             <Border

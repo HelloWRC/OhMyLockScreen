@@ -4,7 +4,6 @@ using OhMyLockScreen.Controls.Editor;
 using OhMyLockScreen.Models.Features.Layout;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Services.Scene;
-using OhMyLockScreen.Services.LockScreenProvider;
 using OhMyLockScreen.Services.Features.Appearance;
 using OhMyLockScreen.Shared.Abstractions.Models.Scene;
 using OhMyLockScreen.Services;
@@ -25,12 +24,12 @@ using Windows.Foundation;
 using Windows.Storage;
 using Windows.System;
 using Windows.UI.Core;
-using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
 using OhMyLockScreen.Shared.Controls.UI;
 using OhMyLockScreen.Shared.Helpers.UI;
@@ -45,8 +44,9 @@ namespace OhMyLockScreen;
 
 public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawerHost
 {
-    private SystemNavigationManager? _drawerNavigation;
+    private SystemNavigationManager? _systemNavigation;
     private long _drawerToken;
+    private long _rootBackToken;
 
     void Controls.Rules.IRulesetDrawerHost.OpenRulesetDrawer(Shared.Models.Ruleset.Ruleset ruleset)
     {
@@ -64,20 +64,51 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             editor.Width = Math.Min(600, args.NewSize.Width);
     }
 
-    private void OnDrawerBack(object? sender, BackRequestedEventArgs args)
+    private void OnSystemBackRequested(object? sender, BackRequestedEventArgs args)
     {
-        if (!args.Handled && EditorDrawer.IsDrawerOpen)
+        if (args.Handled)
+        {
+            return;
+        }
+
+        if (EditorDrawer.IsDrawerOpen)
         {
             EditorDrawer.IsDrawerOpen = false;
+            args.Handled = true;
+            return;
+        }
+
+        if (Frame is { CanGoBack: true } frame && ReferenceEquals(frame.Content, this))
+        {
+            EndDrag();
+            ClearHover();
+            ClearPageToasts();
+            _scenes.FlushPending();
+            frame.GoBack();
             args.Handled = true;
         }
     }
 
     private void OnDrawerChanged(DependencyObject sender, DependencyProperty property)
     {
-        if (!EditorDrawer.IsDrawerOpen) EditorDrawer.DrawerContent = null;
-        if (_drawerNavigation != null)
-            _drawerNavigation.AppViewBackButtonVisibility = EditorDrawer.IsDrawerOpen ? AppViewBackButtonVisibility.Visible : AppViewBackButtonVisibility.Collapsed;
+        if (!EditorDrawer.IsDrawerOpen)
+        {
+            EditorDrawer.DrawerContent = null;
+        }
+
+        UpdateSystemBackButton();
+    }
+
+    private void OnBackNavigationChanged(DependencyObject sender, DependencyProperty property) => UpdateSystemBackButton();
+
+    private void UpdateSystemBackButton()
+    {
+        if (_systemNavigation != null)
+        {
+            _systemNavigation.AppViewBackButtonVisibility = EditorDrawer.IsDrawerOpen || Frame?.CanGoBack == true
+                ? AppViewBackButtonVisibility.Visible
+                : AppViewBackButtonVisibility.Collapsed;
+        }
     }
 
     private readonly ISceneService _scenes;
@@ -86,16 +117,14 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private readonly IComponentsService _components;
     private readonly IFeatureService _features;
     private readonly FeatureRegistryService _featureRegistry;
-    private readonly LockScreenReplacementService _lockScreenReplacement;
-    private int _lockScreenStatusRequest;
-    private bool? _lastLockScreenEnabled;
     private Window? _window;
     private bool _loaded;
     private bool _restoringEditor;
+    private Guid? _requestedSceneId;
+    private CancellationTokenSource? _captureCts;
+    private Uri? _loadedMetadataPreviewUri;
     private readonly HashSet<ToastMessage> _pageToasts = [];
     private readonly SceneSaveToastTracker _saveToasts = new();
-    private bool _syncingLists;
-    private bool _enteredFullScreen;
     private bool _updatingInspector;
     private bool _inspectorAgain;
     private bool _selectionPending;
@@ -136,25 +165,29 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         _components = IAppHost.GetRequiredService<IComponentsService>();
         _features = IAppHost.GetRequiredService<IFeatureService>();
         _featureRegistry = IAppHost.GetRequiredService<FeatureRegistryService>();
-        _lockScreenReplacement = IAppHost.GetRequiredService<LockScreenReplacementService>();
         ViewModel = IAppHost.GetRequiredService<SceneEditorViewModel>();
         InitializeComponent();
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
         {
             var template = (ControlTemplate)Resources["Windows10EditorListItemTemplate"];
-            foreach (var list in new[] { SceneList, ComponentLibrary })
+            ComponentLibrary.ItemContainerStyle = new Style(typeof(ListViewItem))
             {
-                list.ItemContainerStyle = new Style(typeof(ListViewItem))
-                {
-                    BasedOn = list.ItemContainerStyle,
-                    Setters = { new Setter(Control.TemplateProperty, template) }
-                };
-            }
+                BasedOn = ComponentLibrary.ItemContainerStyle,
+                Setters = { new Setter(Control.TemplateProperty, template) }
+            };
         }
 
         EditorPresenter.SuppressParallaxWithoutBackground = true;
         EditorPresenter.ShowSystemBackgroundPreview = true;
         NavigationCacheMode = NavigationCacheMode.Enabled;
+        PreviewImagePicker.FileTypes = BrushImageImport.Extensions;
+        PreviewImagePicker.ValidateAsync = async uri => { await SceneImageDecoder.ReadSizeAsync(uri); };
+        PreviewImagePicker.PickFailed += (_, exception) => ShowError(exception);
+        PreviewImagePicker.BlobPicked += (_, _) =>
+        {
+            _mediaImportRevision++;
+            ViewModel.RefreshPreviewImageUri();
+        };
         VideoPicker.FileTypes = SceneMediaImport.VideoExtensions;
         VideoPicker.PickFailed += (_, exception) => ShowError(exception);
         VideoPicker.BlobPicked += OnVideoBlobPicked;
@@ -181,9 +214,13 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     {
         base.OnNavigatedTo(args);
         _restoringEditor = args.NavigationMode == NavigationMode.Back;
+        if (!_restoringEditor)
+        {
+            _requestedSceneId = args.Parameter is Guid id && id != Guid.Empty ? id : null;
+        }
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs args)
+    private void OnLoaded(object sender, RoutedEventArgs args)
     {
         if (_loaded)
         {
@@ -192,17 +229,22 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
         _loaded = true;
         _window = Window.Current;
-        _drawerNavigation = SystemNavigationManager.GetForCurrentView();
-        _drawerNavigation.BackRequested += OnDrawerBack;
+        _systemNavigation = SystemNavigationManager.GetForCurrentView();
+        _systemNavigation.BackRequested += OnSystemBackRequested;
+        if (Frame != null)
+        {
+            _rootBackToken = Frame.RegisterPropertyChangedCallback(Frame.CanGoBackProperty, OnBackNavigationChanged);
+        }
+
         _drawerToken = EditorDrawer.RegisterPropertyChangedCallback(Shared.Controls.UI.DrawerHost.IsDrawerOpenProperty, OnDrawerChanged);
-        _lastLockScreenEnabled = null;
-        _window.Activated += OnWindowActivated;
+        UpdateSystemBackButton();
         ViewModel.SelectionChanged += OnSelectionChanged;
         ViewModel.StructureChanged += OnStructureChanged;
         ViewModel.InspectorChanged += OnInspectorChanged;
         ViewModel.Error += OnEditorError;
         ViewModel.PropertyChanged += OnPanelViewModelPropertyChanged;
         ViewModel.PropertyChanged += OnMediaImportStateChanged;
+        ViewModel.PropertyChanged += OnMetadataViewModelPropertyChanged;
         _scenes.SceneSaved += OnSceneSaved;
         _scenes.ActiveSceneChanged += OnSceneSaved;
         _scenes.SaveFailed += OnSaveFailed;
@@ -221,12 +263,16 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             }
             else
             {
-                var id = _settings.Settings.LastEditedSceneId;
-                OpenScene(id.HasValue && scenes.Any(scene => scene.Id == id) ? id.Value : _scenes.ActiveSceneId);
+                var targetId = _requestedSceneId.HasValue && scenes.Any(scene => scene.Id == _requestedSceneId.Value)
+                    ? _requestedSceneId.Value
+                    : _settings.Settings.LastEditedSceneId is { } lastEdited && scenes.Any(scene => scene.Id == lastEdited)
+                        ? lastEdited
+                        : _scenes.ActiveSceneId;
+                ViewModel.Open(targetId);
                 ShowTab(SceneEditorTab.Home);
             }
 
-            RefreshSceneLists();
+            SyncMetadataPreviewImage();
             if (_scenes.LoadErrors.Count > 0)
             {
                 ShowMessage("部分场景未能加载", string.Join(Environment.NewLine, _scenes.LoadErrors), InfoBarSeverity.Warning);
@@ -243,8 +289,6 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             _restoringEditor = false;
             SettingsButton.Focus(FocusState.Programmatic);
         }
-
-        await RefreshLockScreenStatusAsync();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
@@ -254,19 +298,31 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             return;
         }
 
+        CancelPreviewCapture();
         EndDrag();
         ClearTreePointer();
         ViewModel.PropertyChanged -= OnPanelViewModelPropertyChanged;
+        ViewModel.PropertyChanged -= OnMetadataViewModelPropertyChanged;
         StopPanelAnimations();
-        ExitPreview();
         ClearPageToasts();
         EditorDrawer.IsDrawerOpen = false;
         EditorDrawer.UnregisterPropertyChangedCallback(Shared.Controls.UI.DrawerHost.IsDrawerOpenProperty, _drawerToken);
-        if (_drawerNavigation != null) _drawerNavigation.BackRequested -= OnDrawerBack;
-        _drawerNavigation = null;
+        if (Frame != null && _rootBackToken != 0)
+        {
+            Frame.UnregisterPropertyChangedCallback(Frame.CanGoBackProperty, _rootBackToken);
+            _rootBackToken = 0;
+        }
+
+        if (_systemNavigation != null)
+        {
+            _systemNavigation.BackRequested -= OnSystemBackRequested;
+            _systemNavigation = null;
+        }
+
         _loaded = false;
         _pendingDropAlignments.Clear();
         _mediaImportRevision++;
+        PreviewImagePicker.InvalidateSelection();
         VideoPicker.InvalidateSelection();
         WallpaperPicker.InvalidateSelection();
         ViewModel.PropertyChanged -= OnMediaImportStateChanged;
@@ -283,7 +339,6 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         SceneViewport.LayoutUpdated -= OnViewportLayoutUpdated;
         if (_window != null)
         {
-            _window.Activated -= OnWindowActivated;
             _window.CoreWindow.KeyDown -= OnEditorKeyDown;
         }
 
@@ -295,41 +350,6 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private void OnSettingsClick(object sender, RoutedEventArgs args)
     {
         TryAction(() => Frame.Navigate(typeof(ApplicationSettingsPage)));
-    }
-
-    private async void OnWindowActivated(object sender, WindowActivatedEventArgs args)
-    {
-        if (args.WindowActivationState != CoreWindowActivationState.Deactivated)
-        {
-            await RefreshLockScreenStatusAsync();
-        }
-    }
-
-    private async Task RefreshLockScreenStatusAsync()
-    {
-        var request = ++_lockScreenStatusRequest;
-        try
-        {
-            var isEnabled = await _lockScreenReplacement.IsEnabledAsync();
-            await OnViewAsync(() =>
-            {
-                if (request == _lockScreenStatusRequest && _lastLockScreenEnabled != isEnabled)
-                {
-                    _lastLockScreenEnabled = isEnabled;
-                    LockScreenReplacementInfoBar.IsOpen = !isEnabled;
-                }
-            });
-        }
-        catch (Exception exception)
-        {
-            await OnViewAsync(() =>
-            {
-                if (request == _lockScreenStatusRequest)
-                {
-                    ShowMessage("无法读取系统锁屏设置", exception.Message);
-                }
-            });
-        }
     }
 
     private void OnSelectionChanged(object? sender, EventArgs args)
@@ -365,11 +385,6 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             if (!_scenes.HasPendingChanges(args.SceneId))
             {
                 _saveToasts.Close(args.SceneId);
-            }
-
-            if (!_syncingLists)
-            {
-                RefreshSceneLists(ViewModel.RestoreSceneIfDeleted);
             }
         });
     }
@@ -418,161 +433,6 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         }
     }
 
-    private void OpenScene(Guid id) => RefreshSceneLists(() => ViewModel.Open(id));
-
-    private void RefreshSceneLists(Action? update = null)
-    {
-        var wasSyncing = _syncingLists;
-        _syncingLists = true;
-        try
-        {
-            update?.Invoke();
-        }
-        finally
-        {
-            try
-            {
-                ViewModel.RefreshScenes();
-                SceneList.SelectedItem = ViewModel.SelectedScene;
-            }
-            finally
-            {
-                _syncingLists = wasSyncing;
-            }
-        }
-    }
-
-    private void OnSceneRowContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
-    {
-        if (args.ItemContainer is not ListViewItem container)
-        {
-            return;
-        }
-
-        if (container.Tag is SceneListItem previous)
-        {
-            previous.IsPointerOver = false;
-            previous.HasFocus = false;
-            container.PointerEntered -= OnSceneRowPointerEntered;
-            container.PointerExited -= OnSceneRowPointerExited;
-            container.GotFocus -= OnSceneRowGotFocus;
-            container.LosingFocus -= OnSceneRowLosingFocus;
-            container.Tag = null;
-        }
-
-        if (!args.InRecycleQueue && args.Item is SceneListItem item)
-        {
-            container.Tag = item;
-            container.PointerEntered += OnSceneRowPointerEntered;
-            container.PointerExited += OnSceneRowPointerExited;
-            container.GotFocus += OnSceneRowGotFocus;
-            container.LosingFocus += OnSceneRowLosingFocus;
-            item.HasFocus = FindParent<ListViewItem>(FocusManager.GetFocusedElement() as DependencyObject) == container;
-        }
-    }
-
-    private void OnSceneRowPointerEntered(object sender, PointerRoutedEventArgs args)
-    {
-        if (sender is ListViewItem { Tag: SceneListItem item })
-        {
-            item.IsPointerOver = true;
-        }
-    }
-
-    private void OnSceneRowPointerExited(object sender, PointerRoutedEventArgs args)
-    {
-        if (sender is ListViewItem { Tag: SceneListItem item })
-        {
-            item.IsPointerOver = false;
-        }
-    }
-
-    private void OnSceneRowGotFocus(object sender, RoutedEventArgs args)
-    {
-        if (sender is ListViewItem { Tag: SceneListItem item })
-        {
-            item.HasFocus = true;
-        }
-    }
-
-    private void OnSceneRowLosingFocus(UIElement sender, LosingFocusEventArgs args)
-    {
-        if (sender is ListViewItem { Tag: SceneListItem item } container
-            && FindParent<ListViewItem>(args.NewFocusedElement as DependencyObject) != container)
-        {
-            item.HasFocus = false;
-        }
-    }
-
-    private void OnSceneSelectionChanged(object sender, SelectionChangedEventArgs args)
-    {
-        if (!_loaded || _syncingLists)
-        {
-            return;
-        }
-
-        if (SceneList.SelectedItem is not SceneListItem item)
-        {
-            SceneList.SelectedItem = ViewModel.SelectedScene;
-            return;
-        }
-
-        if (item.Id == ViewModel.Scene?.SceneId)
-        {
-            return;
-        }
-
-        TryAction(() =>
-        {
-            EndDrag();
-            OpenScene(item.Id);
-        });
-    }
-
-    private void OnRefreshScenesClick(object sender, RoutedEventArgs args) => TryAction(() =>
-    {
-        var id = ViewModel.Scene?.SceneId;
-        RefreshSceneLists(() =>
-        {
-            _scenes.Reload();
-            ViewModel.Open(id.HasValue && _scenes.GetScenes().Any(scene => scene.Id == id) ? id.Value : _scenes.ActiveSceneId);
-        });
-        if (_scenes.LoadErrors.Count > 0)
-        {
-            ShowMessage("部分场景未能加载", string.Join(Environment.NewLine, _scenes.LoadErrors), InfoBarSeverity.Warning);
-        }
-    });
-    private async void OnOpenFolderClick(object sender, RoutedEventArgs args)
-    {
-        try
-        {
-            var folder = await StorageFolder.GetFolderFromPathAsync(_scenes.ScenesPath);
-            if (!await Launcher.LaunchFolderAsync(folder))
-            {
-                ShowMessage("无法打开场景文件夹", folder.Path);
-            }
-        }
-        catch (Exception exception)
-        {
-            ShowError(exception);
-        }
-    }
-
-    private async void OnCreateSceneClick(object sender, RoutedEventArgs args)
-    {
-        try
-        {
-            if (await AskNameAsync("新建场景", "新场景") is { } name && _loaded)
-            {
-                RefreshSceneLists(() => ViewModel.Open(_scenes.Create(name).SceneId));
-            }
-        }
-        catch (Exception exception)
-        {
-            ShowError(exception);
-        }
-    }
-
     private void OnNavigationChanged(object sender, SelectionChangedEventArgs args)
     {
         if (!_loaded || !ReferenceEquals(sender, EditorNavigation))
@@ -607,16 +467,149 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     {
         EditorPresenter.BackgroundViewportSize = args.NewSize;
         ViewModel.SidePanelWidth = Math.Clamp((args.NewSize.Width - 320) / 2, 200, 341);
+        HomePanel.MaxHeight = Math.Max(240, args.NewSize.Height - 32);
         UpdatePanelViewport();
+    }
+
+    private void OnMetadataViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(SceneEditorViewModel.PreviewImageUri) or nameof(SceneEditorViewModel.Scene))
+        {
+            SyncMetadataPreviewImage();
+        }
+    }
+
+    private void SyncMetadataPreviewImage()
+    {
+        var uri = ViewModel.PreviewImageUri;
+        if (Equals(_loadedMetadataPreviewUri, uri))
+        {
+            return;
+        }
+
+        _loadedMetadataPreviewUri = uri;
+        if (uri == null)
+        {
+            MetadataPreviewLayer.Background = null;
+            return;
+        }
+
+        var bitmap = new BitmapImage(uri)
+        {
+            DecodePixelWidth = 570
+        };
+        MetadataPreviewLayer.Background = new ImageBrush
+        {
+            ImageSource = bitmap,
+            Stretch = Stretch.UniformToFill
+        };
+    }
+
+    private async void OnCapturePreviewClick(object sender, RoutedEventArgs args)
+    {
+        if (!_loaded || ViewModel.IsCapturingPreview || ViewModel.Scene is not { } scene)
+        {
+            return;
+        }
+
+        CancelPreviewCapture();
+        var cts = new CancellationTokenSource();
+        _captureCts = cts;
+        var targetSceneId = scene.SceneId;
+        ViewModel.IsCapturingPreview = true;
+        try
+        {
+            var blobId = await SceneScreenshotCapture.Capture16By9Async(
+                scene,
+                EditorPresenter,
+                CaptureHost,
+                _blobs,
+                cts.Token);
+            if (_loaded && !cts.IsCancellationRequested && ViewModel.Scene?.SceneId == targetSceneId)
+            {
+                PreviewImagePicker.InvalidateSelection();
+                _mediaImportRevision++;
+                ViewModel.Scene.PreviewImageBlobId = blobId;
+                ViewModel.RefreshPreviewImageUri();
+                TrackToast(this.ShowSuccessToastRef("已截取 16:9 预览图"));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            if (_loaded)
+            {
+                ShowError(exception);
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_captureCts, cts))
+            {
+                _captureCts = null;
+            }
+
+            cts.Dispose();
+            ViewModel.IsCapturingPreview = false;
+        }
+    }
+
+    private void CancelPreviewCapture()
+    {
+        if (_captureCts is { } cts)
+        {
+            _captureCts = null;
+            cts.Cancel();
+        }
+    }
+
+    private void OnClearPreviewClick(object sender, RoutedEventArgs args)
+    {
+        if (_loaded && ViewModel.Scene is { } scene)
+        {
+            PreviewImagePicker.InvalidateSelection();
+            _mediaImportRevision++;
+            scene.PreviewImageBlobId = null;
+            ViewModel.RefreshPreviewImageUri();
+        }
+    }
+
+    private void OnMetadataNameLostFocus(object sender, RoutedEventArgs args) => ViewModel.CommitMetadataName();
+
+    private void OnLicensePresetFlyoutOpening(object sender, object args)
+    {
+        if (sender is not MenuFlyout menu)
+        {
+            return;
+        }
+
+        menu.Items.Clear();
+        var template = (DataTemplate)Resources["LicensePresetMenuItemTemplate"];
+        foreach (var preset in ViewModel.LicensePresets)
+        {
+            var item = (MenuFlyoutItem)template.LoadContent();
+            item.DataContext = preset;
+            menu.Items.Add(item);
+        }
+    }
+
+    private void OnSelectLicensePresetClick(object sender, RoutedEventArgs args)
+    {
+        if (sender is MenuFlyoutItem { DataContext: string license } && ViewModel.Scene is { } scene)
+        {
+            scene.License = license;
+        }
     }
 
     private string FormatParallaxStrength(double strength) => $"背景视差 {strength:0}%";
 
     private bool IsImageBackground(BackgroundMode mode) => mode == BackgroundMode.Image;
 
-    private bool CanPickVideo(BackgroundMode mode, bool isPreview) => !isPreview && !IsImageBackground(mode);
+    private bool CanPickVideo(BackgroundMode mode) => !IsImageBackground(mode);
 
-    private bool CanPickWallpaper(BackgroundMode mode, bool isPreview) => !isPreview && IsImageBackground(mode);
+    private bool CanPickWallpaper(BackgroundMode mode) => IsImageBackground(mode);
 
     private Visibility GetVideoControlsVisibility(BackgroundMode mode) =>
         IsImageBackground(mode) ? Visibility.Collapsed : Visibility.Visible;
@@ -634,7 +627,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void OnUseSystemWallpaperClick(object sender, RoutedEventArgs args)
     {
-        if (_loaded && !ViewModel.IsPreview && ViewModel.Scene?.Background is { Mode: BackgroundMode.Image } background)
+        if (_loaded && ViewModel.Scene?.Background is { Mode: BackgroundMode.Image } background)
         {
             WallpaperPicker.InvalidateSelection();
             _mediaImportRevision++;
@@ -666,7 +659,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             return;
         }
 
-        var location = TryGetDraggedModel(out var model) && _loaded && !ViewModel.IsPreview
+        var location = TryGetDraggedModel(out var model) && _loaded
             ? ResolveTreeDropLocation(args.GetPosition(SceneTree), model)
             : null;
         args.AcceptedOperation = DataPackageOperation.None;
@@ -743,7 +736,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private (SceneTreeItem Parent, int Index)? ResolveTreeDropTarget(DragEventArgs args)
     {
-        if (!_loaded || ViewModel.IsPreview || !TryGetDraggedModel(out var model))
+        if (!_loaded || !TryGetDraggedModel(out var model))
         {
             return null;
         }
@@ -837,7 +830,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private void OnTreePointerPressed(object sender, PointerRoutedEventArgs args)
     {
         var point = args.GetCurrentPoint(SceneTree);
-        if (!_loaded || ViewModel.IsPreview
+        if (!_loaded
             || args.Pointer.PointerDeviceType == PointerDeviceType.Touch
             || !point.Properties.IsLeftButtonPressed
             || FindParent<ButtonBase>(args.OriginalSource as DependencyObject) != null
@@ -940,7 +933,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
         try
         {
-            if (_draggedTreeItem is not { } item || ViewModel.IsPreview)
+            if (_draggedTreeItem is not { } item)
             {
                 return;
             }
@@ -1234,7 +1227,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void OnVideoBlobPicked(object? sender, string fileName)
     {
-        if (_loaded && !ViewModel.IsPreview && ViewModel.Scene is { } scene)
+        if (_loaded && ViewModel.Scene is { } scene)
         {
             _mediaImportRevision++;
             scene.Background.Mode = BackgroundMode.Video;
@@ -1252,87 +1245,6 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
         GetContextMenu("TreeContextMenu").ShowAt(SceneTree, args.GetPosition(SceneTree));
         args.Handled = true;
-    }
-
-    private void OnSceneActionTapped(object sender, TappedRoutedEventArgs args) => args.Handled = true;
-
-    private void OnEnableSceneClick(object sender, RoutedEventArgs args)
-    {
-        if (sender is RadioButton { DataContext: SceneListItem item } radio)
-        {
-            TryAction(() => RefreshSceneLists(() => _scenes.SetActive(item.Id)));
-            radio.IsChecked = item.Id == _scenes.ActiveSceneId;
-        }
-    }
-
-    private async void OnRenameSceneClick(object sender, RoutedEventArgs args)
-    {
-        if (sender is not FrameworkElement { DataContext: SceneListItem item })
-        {
-            return;
-        }
-
-        try
-        {
-            var name = await AskNameAsync("重命名场景", item.Name);
-            if (name == null || !_loaded)
-            {
-                return;
-            }
-
-            if (ViewModel.Scene?.SceneId == item.Id)
-            {
-                ViewModel.Scene.Name = name;
-            }
-            else
-            {
-                var scene = _scenes.Load(item.Id);
-                scene.Name = name;
-                _scenes.QueueSave(scene);
-            }
-
-            RefreshSceneLists();
-        }
-        catch (Exception exception)
-        {
-            ShowError(exception);
-        }
-    }
-
-    private void OnDuplicateSceneClick(object sender, RoutedEventArgs args)
-    {
-        if (sender is FrameworkElement { DataContext: SceneListItem item })
-        {
-            TryAction(() => RefreshSceneLists(() => ViewModel.Open(_scenes.Duplicate(item.Id).SceneId)));
-        }
-    }
-
-    private async void OnDeleteSceneClick(object sender, RoutedEventArgs args)
-    {
-        if (sender is not FrameworkElement { DataContext: SceneListItem { CanDelete: true } item })
-        {
-            return;
-        }
-
-        try
-        {
-            ViewModel.DialogMessage = $"将删除“{item.Name}”及其专有资源。此操作无法撤销。";
-            PrepareDialog(DeleteSceneDialog);
-            if (await DeleteSceneDialog.ShowAsync() != ContentDialogResult.Primary || !_loaded)
-            {
-                return;
-            }
-
-            RefreshSceneLists(() =>
-            {
-                _scenes.Delete(item.Id);
-                ViewModel.RestoreSceneIfDeleted();
-            });
-        }
-        catch (Exception exception)
-        {
-            ShowError(exception);
-        }
     }
 
     private async void OnRenameSelectionClick(object sender, RoutedEventArgs args)
@@ -1415,7 +1327,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void OnCanvasPointerPressed(object sender, PointerRoutedEventArgs args)
     {
-        if (ViewModel.IsPreview || ViewModel.ActiveTab != SceneEditorTab.Components)
+        if (ViewModel.ActiveTab != SceneEditorTab.Components)
         {
             return;
         }
@@ -1440,7 +1352,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void OnResizePointerPressed(object sender, PointerRoutedEventArgs args)
     {
-        if (ViewModel.IsPreview || ViewModel.ActiveTab != SceneEditorTab.Components || sender is not FrameworkElement { Tag: string tag })
+        if (ViewModel.ActiveTab != SceneEditorTab.Components || sender is not FrameworkElement { Tag: string tag })
         {
             return;
         }
@@ -1583,7 +1495,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void UpdateHover(PointerRoutedEventArgs args)
     {
-        if (ViewModel.IsPreview || ViewModel.ActiveTab != SceneEditorTab.Components)
+        if (ViewModel.ActiveTab != SceneEditorTab.Components)
         {
             ClearHover();
             return;
@@ -1678,7 +1590,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void OnCanvasRightTapped(object sender, RightTappedRoutedEventArgs args)
     {
-        if (ViewModel.IsPreview || ViewModel.ActiveTab != SceneEditorTab.Components)
+        if (ViewModel.ActiveTab != SceneEditorTab.Components)
         {
             return;
         }
@@ -1703,7 +1615,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             return;
         }
 
-        if (ViewModel.IsPreview || ViewModel.ActiveTab != SceneEditorTab.Components || !TryGetDraggedModel(out var model))
+        if (ViewModel.ActiveTab != SceneEditorTab.Components || !TryGetDraggedModel(out var model))
         {
             return;
         }
@@ -1784,7 +1696,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void AlignPendingDrops()
     {
-        if (!_loaded || ViewModel.IsPreview)
+        if (!_loaded)
         {
             _pendingDropAlignments.Clear();
             return;
@@ -1849,7 +1761,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         (SceneTreeItem Parent, Panel Panel) target,
         int index)
     {
-        if (ViewModel.IsPreview || !ReferenceEquals(ViewModel.FindItem(item.Model), item))
+        if (!ReferenceEquals(ViewModel.FindItem(item.Model), item))
         {
             return false;
         }
@@ -2070,7 +1982,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void UpdateSelectionGeometry()
     {
-        var target = !ViewModel.IsPreview && ViewModel.ActiveTab == SceneEditorTab.Components ? FindSelectedPresenter() : null;
+        var target = ViewModel.ActiveTab == SceneEditorTab.Components ? FindSelectedPresenter() : null;
         if (target == null || target.ActualWidth <= 0 || target.ActualHeight <= 0)
         {
             ViewModel.HasSelectionBounds = false;
@@ -2155,7 +2067,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void OnEditorKeyDown(CoreWindow sender, KeyEventArgs args)
     {
-        if (!_loaded || ViewModel.IsPreview)
+        if (!_loaded)
         {
             return;
         }
@@ -2205,68 +2117,16 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void OnPreviewClick(object sender, RoutedEventArgs args)
     {
-        if (ViewModel.IsPreview || _window == null)
+        if (!_loaded || ViewModel.Scene is not { } scene)
         {
             return;
         }
 
         EndDrag();
         ClearHover();
-        ViewModel.IsPreview = true;
-        RefreshFeatureEditorTargets();
         ClearPageToasts();
-        InvalidateSelectionGeometry();
-        var view = ApplicationView.GetForCurrentView();
-        _enteredFullScreen = !view.IsFullScreenMode && view.TryEnterFullScreenMode();
-        _window.CoreWindow.KeyDown += OnPreviewKeyDown;
-        _window.CoreWindow.PointerPressed += OnPreviewPointerPressed;
-        _window.CoreWindow.Dispatcher.AcceleratorKeyActivated += OnPreviewAccelerator;
-    }
-
-    private void OnPreviewKeyDown(CoreWindow sender, KeyEventArgs args)
-    {
-        args.Handled = true;
-        ExitPreview();
-    }
-
-    private void OnPreviewPointerPressed(CoreWindow sender, PointerEventArgs args)
-    {
-        args.Handled = true;
-        ExitPreview();
-    }
-
-    private void OnPreviewAccelerator(CoreDispatcher sender, AcceleratorKeyEventArgs args)
-    {
-        if (args.EventType is CoreAcceleratorKeyEventType.KeyDown or CoreAcceleratorKeyEventType.SystemKeyDown)
-        {
-            args.Handled = true;
-            ExitPreview();
-        }
-    }
-
-    private void ExitPreview()
-    {
-        if (!ViewModel.IsPreview)
-        {
-            return;
-        }
-
-        ViewModel.IsPreview = false;
-        RefreshFeatureEditorTargets();
-        if (_window != null)
-        {
-            _window.CoreWindow.KeyDown -= OnPreviewKeyDown;
-            _window.CoreWindow.PointerPressed -= OnPreviewPointerPressed;
-            _window.CoreWindow.Dispatcher.AcceleratorKeyActivated -= OnPreviewAccelerator;
-        }
-
-        if (_enteredFullScreen)
-        {
-            ApplicationView.GetForCurrentView().ExitFullScreenMode();
-        }
-
-        _enteredFullScreen = false;
-        InvalidateSelectionGeometry();
+        _scenes.FlushPending();
+        TryAction(() => Frame.Navigate(typeof(ScenePreviewPage), scene.SceneId));
     }
 
     private void TryAction(Action action)

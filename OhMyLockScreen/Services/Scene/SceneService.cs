@@ -5,8 +5,9 @@ using OhMyLockScreen.Shared.Models.Scene;
 
 namespace OhMyLockScreen.Services.Scene;
 /// <summary>只保留摘要与不可变的序列化快照，不跨视图共享可变模型或 UI 对象。</summary>
-public sealed class SceneService : ISceneService, IDisposable
+public sealed partial class SceneService : ISceneService, IDisposable
 {
+    private const string SceneImportTemporaryPrefix = ".scene-import-";
     private readonly object _sync = new();
     private readonly SettingsService _settings;
     private readonly ILogger<SceneService> _logger;
@@ -70,6 +71,10 @@ public sealed class SceneService : ISceneService, IDisposable
             Directory.CreateDirectory(ScenesPath);
             foreach (var directory in Directory.EnumerateDirectories(ScenesPath).Order(StringComparer.Ordinal))
             {
+                if (Path.GetFileName(directory).StartsWith(SceneImportTemporaryPrefix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
                 var path = Path.Combine(directory, "scene.json");
                 if (!File.Exists(path))
                 {
@@ -89,7 +94,7 @@ public sealed class SceneService : ISceneService, IDisposable
                         throw new InvalidDataException("场景标识与文件名不一致。");
                     }
 
-                    _scenes.Add(id, new SceneInfo(id, scene.Name));
+                    _scenes.Add(id, CreateInfo(scene));
                     _savedSnapshots[id] = Serialize(scene);
                 }
                 catch (Exception exception)
@@ -103,7 +108,7 @@ public sealed class SceneService : ISceneService, IDisposable
             {
                 var scene = DefaultSceneFactory.Create("默认");
                 WriteSnapshot(scene.SceneId, Serialize(scene));
-                _scenes.Add(scene.SceneId, new SceneInfo(scene.SceneId, scene.Name));
+                _scenes.Add(scene.SceneId, CreateInfo(scene));
             }
 
             if (!_scenes.ContainsKey(ActiveSceneId))
@@ -228,7 +233,7 @@ public sealed class SceneService : ISceneService, IDisposable
         {
             EnsureReady();
             WriteSnapshot(scene.SceneId, Serialize(scene));
-            _scenes.Add(scene.SceneId, new SceneInfo(scene.SceneId, scene.Name));
+            _scenes.Add(scene.SceneId, CreateInfo(scene));
         }
 
         SceneSaved?.Invoke(this, new SceneChangedEventArgs(scene.SceneId));
@@ -305,7 +310,7 @@ public sealed class SceneService : ISceneService, IDisposable
 
             _pending[scene.SceneId] = snapshot;
             _saveErrors.Remove(scene.SceneId);
-            _scenes[scene.SceneId] = new SceneInfo(scene.SceneId, scene.Name);
+            _scenes[scene.SceneId] = CreateInfo(scene);
             if (!_saveScheduled)
             {
                 _saveScheduled = true;
@@ -458,6 +463,14 @@ public sealed class SceneService : ISceneService, IDisposable
         ConfigureFileHelper.SaveConfig(stream, scene, writeIndented: true);
         return stream.ToArray();
     }
+
+    private static SceneInfo CreateInfo(SceneSettings scene) => new(
+        scene.SceneId,
+        scene.Name,
+        scene.Description ?? string.Empty,
+        scene.Author ?? string.Empty,
+        scene.License ?? string.Empty,
+        string.IsNullOrWhiteSpace(scene.PreviewImageBlobId) ? null : scene.PreviewImageBlobId);
 
     private static string ValidateName(string name) => string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("场景名称不能为空。", nameof(name)) : name.Trim();
     private void EnsureReady()

@@ -33,6 +33,8 @@ public interface ISceneService
     SceneSettings Duplicate(Guid id);
     void Delete(Guid id);
     void SetActive(Guid id);
+    Task ExportAsync(Guid id, Stream destination, CancellationToken cancellationToken = default);
+    Task<SceneSettings> ImportAsync(Stream source, CancellationToken cancellationToken = default);
     void QueueSave(SceneSettings scene);
     void FlushPending();
 }

@@ -18,10 +18,11 @@ public sealed partial class SceneEditorPage
 
     private void OnMediaImportStateChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName is nameof(SceneEditorViewModel.Scene) or nameof(SceneEditorViewModel.IsPreview))
+        if (args.PropertyName == nameof(SceneEditorViewModel.Scene))
         {
             ClearTreePointer();
             _mediaImportRevision++;
+            PreviewImagePicker.InvalidateSelection();
             VideoPicker.InvalidateSelection();
             WallpaperPicker.InvalidateSelection();
             RefreshFeatureEditorTargets();
@@ -29,7 +30,7 @@ public sealed partial class SceneEditorPage
     }
 
     private bool IsCurrentMediaImport(SceneSettings scene, long revision) =>
-        _loaded && !ViewModel.IsPreview && ReferenceEquals(scene, ViewModel.Scene) && revision == _mediaImportRevision;
+        _loaded && ReferenceEquals(scene, ViewModel.Scene) && revision == _mediaImportRevision;
 
     private bool IsFileDrag(DragEventArgs args) =>
         _draggedLibraryItem == null && _draggedTreeItem == null
@@ -42,7 +43,7 @@ public sealed partial class SceneEditorPage
             return false;
         }
 
-        args.AcceptedOperation = _loaded && !ViewModel.IsPreview && ViewModel.Scene != null
+        args.AcceptedOperation = _loaded && ViewModel.Scene != null
             ? DataPackageOperation.Copy : DataPackageOperation.None;
         args.DragUIOverride.Caption = "导入图片或设置视频背景";
         args.Handled = true;
@@ -58,13 +59,14 @@ public sealed partial class SceneEditorPage
 
         args.Handled = true;
         args.AcceptedOperation = DataPackageOperation.None;
-        if (!_loaded || ViewModel.IsPreview || ViewModel.Scene is not { } scene)
+        if (!_loaded || ViewModel.Scene is not { } scene)
         {
             return;
         }
 
         var deferral = args.GetDeferral();
         var revision = ++_mediaImportRevision;
+        PreviewImagePicker.InvalidateSelection();
         VideoPicker.InvalidateSelection();
         WallpaperPicker.InvalidateSelection();
         bool IsCurrent() => IsCurrentMediaImport(scene, revision);

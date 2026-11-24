@@ -35,9 +35,34 @@ namespace Windows.UI.Xaml.Media
     public class Brush : DependencyObject
     {
         public static bool RejectCompositionTransforms { get; set; }
+        public static int? RequiredThreadId { get; set; }
         private Transform? _transform;
         private Transform? _relativeTransform;
-        public double Opacity { get; set; } = 1;
+        private double _opacity = 1;
+
+        protected Brush() => VerifyThreadAccess();
+
+        private static void VerifyThreadAccess()
+        {
+            if (RequiredThreadId is { } expected && Environment.CurrentManagedThreadId != expected)
+            {
+                throw new InvalidOperationException("RPC_E_WRONG_THREAD: Brush accessed outside the required UI thread.");
+            }
+        }
+
+        public double Opacity
+        {
+            get
+            {
+                VerifyThreadAccess();
+                return _opacity;
+            }
+            set
+            {
+                VerifyThreadAccess();
+                _opacity = value;
+            }
+        }
         public Transform? Transform
         {
             get => _transform ?? (RejectCompositionTransforms && this is XamlCompositionBrushBase ? new MatrixTransform() : null);

@@ -12,6 +12,14 @@ public partial class SceneSettings : ObservableObject, IFeatureContainer
     [ObservableProperty]
     private string _name = "新场景";
     [ObservableProperty]
+    private string _description = "";
+    [ObservableProperty]
+    private string _author = "";
+    [ObservableProperty]
+    private string _license = "";
+    [ObservableProperty]
+    private string? _previewImageBlobId;
+    [ObservableProperty]
     private BackgroundSettings _background = new();
     [ObservableProperty]
     private ObservableCollection<FeatureInfo> _features = [];

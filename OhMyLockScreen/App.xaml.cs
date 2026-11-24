@@ -241,19 +241,19 @@ public sealed partial class App : Application
 
         var rootFrame = toastHost.Frame;
         rootFrame.Background = new SolidColorBrush(Windows.UI.Colors.Transparent);
-        var pageType = isLockScreen ? typeof(MainPage) : typeof(SceneEditorPage);
+        var pageType = isLockScreen ? typeof(MainPage) : typeof(SceneManagerPage);
         // A retained lock view cannot re-enter after its dismissal animation completed.
         var lockScreenRequiresFreshPage = isLockScreen &&
             rootFrame.Content is MainPage { IsDismissalStarted: true };
         var pageChanged = isLockScreen
             ? rootFrame.Content is not MainPage || lockScreenRequiresFreshPage
-            : rootFrame.Content is not (SceneEditorPage or ApplicationSettingsPage);
+            : rootFrame.Content is not (SceneManagerPage or SceneEditorPage or ScenePreviewPage or ApplicationSettingsPage);
         if (pageChanged)
         {
             var version = Package.Current.Id.Version;
             IAppHost.TryGetService<ILogger<App>>()?.LogInformation(
                 "OhMyLockScreen {Version} 启动，生命周期：{Lifetime}",
-                $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}", isLockScreen ? "锁屏" : "编辑器");
+                $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}", isLockScreen ? "锁屏" : "场景管理器");
             toastHost.Clear();
             rootFrame.Navigate(pageType);
             rootFrame.BackStack.Clear();

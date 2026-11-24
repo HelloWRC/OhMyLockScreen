@@ -35,7 +35,30 @@ namespace Windows.ApplicationModel.Core
 
 namespace Windows.UI.Xaml.Navigation
 {
-    public sealed class NavigationEventArgs : EventArgs;
+    public enum NavigationMode
+    {
+        New,
+        Back,
+        Forward,
+        Refresh
+    }
+
+    public sealed class NavigationEventArgs : EventArgs
+    {
+        public NavigationEventArgs()
+            : this(NavigationMode.New, null)
+        {
+        }
+
+        public NavigationEventArgs(NavigationMode navigationMode, object? parameter)
+        {
+            NavigationMode = navigationMode;
+            Parameter = parameter;
+        }
+
+        public NavigationMode NavigationMode { get; }
+        public object? Parameter { get; }
+    }
 }
 
 namespace Windows.UI.Xaml

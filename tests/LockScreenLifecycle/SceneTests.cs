@@ -1,3 +1,9 @@
+using System.Collections.Concurrent;
+using System.IO.Compression;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
+using System.Security.Cryptography;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using FluentIcons.Common;
 using OhMyLockScreen;
@@ -14,24 +20,23 @@ using OhMyLockScreen.Shared.Abstractions.Models.Scene;
 using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Helpers;
 using OhMyLockScreen.Shared.Helpers.Serialization;
+using OhMyLockScreen.Shared.Helpers.UI;
 using OhMyLockScreen.Shared.Models.Scene;
 using OhMyLockScreen.Shared.Models.FeatureHost;
 using OhMyLockScreen.Shared.Services.Scene;
 using OhMyLockScreen.ViewModels;
+using OhMyLockScreen.Views;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
 using Windows.Storage;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
-using Microsoft.Extensions.DependencyInjection;
-using System.Reflection;
-using OhMyLockScreen.Shared.Helpers.UI;
 
 internal static class SceneTests
 {
     internal static Task RunManagementAsync(Func<string, Func<Task>, Task> runAsync) =>
-        runAsync("Scene management keeps editing and activation independent and protects the active scene", async () =>
+        runAsync("Scene management keeps editing and activation independent, filters metadata, and protects the active scene", async () =>
         {
             var packageFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
             var previousPackagePath = packageFolder.Path;
@@ -42,57 +47,79 @@ internal static class SceneTests
                 File.WriteAllText(Path.Combine(assets.FullName, "DefaultScene.json"), "{}");
                 using var fixture = new Fixture();
                 using var editor = fixture.Editor();
+                var manager = fixture.Manager();
+                manager.RefreshScenes();
+
                 var activeId = fixture.Service.ActiveSceneId;
-                var created = fixture.Service.Create("新场景");
+                var created = manager.CreateScene("新场景");
                 editor.Open(created.SceneId);
-                var row = editor.SelectedScene!;
-                Check(row.Id == created.SceneId && row.IsEditing && row.CanDelete
-                    && editor.Scenes.Single(item => item.IsActive).Id == activeId,
-                    "Opening a new scene changed the active scene or did not mark the editing row.");
+                var row = manager.FilteredScenes.Single(item => item.Id == created.SceneId);
+                var activeRow = manager.FilteredScenes.Single(item => item.Id == activeId);
+                Check(activeRow.IsActive && !activeRow.CanDelete && !activeRow.CanSetActive
+                    && !row.IsActive && row.CanDelete && row.CanSetActive,
+                    "Scene manager cards did not reflect initial active and deletable states.");
 
                 editor.Open(activeId);
                 var editing = editor.Scene;
-                fixture.Service.SetActive(created.SceneId);
-                editor.RefreshScenes();
-                Check(ReferenceEquals(editor.Scene, editing) && row.IsActive && !row.IsEditing
-                    && editor.SelectedScene?.Id == activeId,
-                    "Setting the active scene changed the editing selection.");
+                manager.SetActive(created.SceneId);
+                Check(ReferenceEquals(editor.Scene, editing) && row.IsActive && !row.CanDelete && !activeRow.IsActive,
+                    "Setting the active scene changed the editing scene or failed to update existing cards.");
 
                 var active = fixture.Service.Load(created.SceneId);
-                active.Name = "已重命名";
-                var blobs = new SceneBlobStorageService(fixture.Service);
+                active.Description = "极简时钟主题";
+                active.Author = "Alice";
+                active.License = "CC BY 4.0";
                 using var stream = new MemoryStream("scene management test"u8.ToArray());
-                var blobId = await blobs.ImportAsync(active.SceneId, stream);
+                var blobId = await fixture.Blobs.ImportAsync(active.SceneId, stream);
                 active.Background.BlobId = blobId;
+                active.PreviewImageBlobId = blobId;
                 fixture.Service.QueueSave(active);
                 fixture.Service.FlushPending();
-                editor.RefreshScenes();
-                Check(ReferenceEquals(editor.Scene, editing) && ReferenceEquals(editor.Scenes.Single(item => item.IsActive), row)
-                    && row.Name == active.Name && !row.IsEditing && !row.CanDelete,
-                    "Activation or rename replaced the editor, lost row identity, or failed to update the row.");
-                Throws<InvalidOperationException>(() => fixture.Service.Delete(active.SceneId));
+                manager.RenameScene(created.SceneId, "已重命名");
+                Check(ReferenceEquals(editor.Scene, editing)
+                    && ReferenceEquals(manager.FilteredScenes.Single(item => item.IsActive), row)
+                    && row.Name == "已重命名" && row.Description == "极简时钟主题"
+                    && row.Author == "Alice" && row.License == "CC BY 4.0"
+                    && row.PreviewImageUri != null && row.HasPreviewImage
+                    && !row.CanDelete,
+                    "Activation or rename replaced the editor, lost card identity, or failed to sync metadata.");
+                Throws<InvalidOperationException>(() => manager.DeleteScene(active.SceneId));
                 Check(Directory.Exists(fixture.Service.GetSceneDirectory(active.SceneId)), "A rejected delete removed the active scene folder.");
 
-                var copy = fixture.Service.Duplicate(active.SceneId);
+                manager.FilterText = "alice";
+                Check(manager.FilteredScenes.Count == 1 && ReferenceEquals(manager.FilteredScenes[0], row) && !manager.IsEmpty,
+                    "Filtering by author did not match the expected card.");
+                manager.FilterText = "cc by";
+                Check(manager.FilteredScenes.Count == 1 && ReferenceEquals(manager.FilteredScenes[0], row),
+                    "Filtering by license did not match the expected card.");
+                manager.FilterText = "不存在的关键字";
+                Check(manager.FilteredScenes.Count == 0 && manager.IsEmpty,
+                    "An unmatched filter did not empty FilteredScenes.");
+                manager.FilterText = "";
+                Check(!manager.IsEmpty && manager.FilteredScenes.Count == 2,
+                    "Clearing the filter did not restore all scene cards.");
+
+                var copy = manager.DuplicateScene(active.SceneId);
                 editor.Open(copy.SceneId);
                 var sourceBlob = Path.Combine(fixture.Service.GetSceneDirectory(active.SceneId), "Blobs", blobId[..2], blobId);
                 var copiedBlob = Path.Combine(fixture.Service.GetSceneDirectory(copy.SceneId), "Blobs", blobId[..2], blobId);
-                Check(editor.SelectedScene?.Id == copy.SceneId && fixture.Service.ActiveSceneId == active.SceneId
-                    && copy.Background.BlobId == blobId && File.ReadAllBytes(copiedBlob).SequenceEqual(File.ReadAllBytes(sourceBlob)),
-                    "Copying failed to open an independent scene with its own blob or changed the active scene.");
+                Check(editor.Scene?.SceneId == copy.SceneId && fixture.Service.ActiveSceneId == active.SceneId
+                    && copy.Background.BlobId == blobId && copy.Description == active.Description
+                    && copy.Author == active.Author && copy.License == active.License
+                    && copy.PreviewImageBlobId == blobId
+                    && File.ReadAllBytes(copiedBlob).SequenceEqual(File.ReadAllBytes(sourceBlob)),
+                    "Copying failed to open an independent scene with its own metadata and blob or changed the active scene.");
                 File.WriteAllText(copiedBlob, "changed copy");
                 Check(File.ReadAllText(sourceBlob) == "scene management test", "The copy shared its blob with the source.");
 
-                fixture.Service.Delete(copy.SceneId);
-                editor.RestoreSceneIfDeleted();
-                Check(ReferenceEquals(editor.SelectedScene, row) && row.IsEditing && fixture.Settings.Settings.LastEditedSceneId == active.SceneId
-                    && editor.Scenes.All(item => item.Id != copy.SceneId),
-                    "Deleting the edited scene failed to reopen the active scene and update the list.");
+                manager.DeleteScene(copy.SceneId);
+                Check(manager.FilteredScenes.All(item => item.Id != copy.SceneId) && manager.FilteredScenes.Count == 2,
+                    "Deleting the copied scene did not remove its card.");
 
                 fixture.Service.Reload();
-                editor.RefreshScenes();
-                Check(ReferenceEquals(editor.SelectedScene, row) && row.IsActive && row.IsEditing,
-                    "Reloading lost the saved selection or replaced the existing row.");
+                manager.RefreshScenes();
+                Check(ReferenceEquals(manager.FilteredScenes.Single(item => item.IsActive), row) && row.Author == "Alice",
+                    "Reloading lost saved metadata or replaced the existing card.");
             }
             finally
             {
@@ -196,10 +223,6 @@ internal static class SceneTests
             scene.Layers.Remove(parent);
             var blobId = new string('a', 64);
             Check(editor.AddImageComponent("Removed", blobId, 10, 20, parent, 0) == null, "A stale parent accepted an image.");
-            editor.IsPreview = true;
-            Check(editor.AddImageComponent("Preview", blobId, 10, 20, scene, 0) == null && scene.Layers.Count == 0,
-                "Preview inserted an image or created a layer.");
-            editor.IsPreview = false;
             var image = editor.AddImageComponent("Image", blobId, 10, 20, scene, 0);
             Check(scene.Layers.Count == 1 && ReferenceEquals(scene.Layers[0].Children.Single(), image),
                 "An empty scene did not receive an image layer.");
@@ -678,12 +701,12 @@ internal static class SceneTests
             using var graph = new ObservableSettingsGraph(root, (_, _, _) => notifications++);
             var container = root.Layers[0].Children[0].GetSettings<ContainerComponentSettings>();
             var oldClock = container.Children[0].GetSettings<ClockComponentSettings>();
-            oldClock.ShowSeconds = true;
+            oldClock.FlashSeparator = true;
             Check(notifications == 1, "Deep model edits were not observed once.");
             var replacement = new ClockComponentSettings();
             container.Children[0].Settings = replacement;
             var previous = notifications;
-            oldClock.ShowSeconds = false;
+            oldClock.FlashSeparator = false;
             Check(notifications == previous, "Replaced settings remained subscribed.");
             replacement.FlashSeparator = true;
             Check(notifications == previous + 1, "Replacement settings were not subscribed.");
@@ -882,10 +905,6 @@ internal static class SceneTests
                 && !page.PressTreeKey(item, Windows.System.VirtualKey.Up, shift: false)
                 && !page.PressTreeKey(item, Windows.System.VirtualKey.Up, control: true)
                 && ReferenceEquals(group.Children[1], item), "Ordinary navigation was intercepted as reordering.");
-            editor.IsPreview = true;
-            Check(page.PressTreeKey(item, Windows.System.VirtualKey.Up)
-                && ReferenceEquals(group.Children[1], item), "Preview allowed keyboard editing.");
-            editor.IsPreview = false;
             page.PressTreeKey(item, Windows.System.VirtualKey.Up);
             fixture.Service.FlushPending();
             var saved = fixture.Service.Load(editor.Scene!.SceneId).Layers[0].Children[0].GetSettings<ContainerComponentSettings>();
@@ -894,7 +913,7 @@ internal static class SceneTests
             Check(editor.FindItem(item.Model) == null && group.Children.Count == 1 && children.Count == 1,
                 "Deletion after keyboard reordering left a stale node or removed the wrong model.");
         });
-        run("Delayed tree actions reject superseded scenes and preview transitions", () =>
+        run("Delayed tree actions reject superseded scenes", () =>
         {
             using var fixture = new Fixture();
             using var editor = fixture.Editor();
@@ -906,11 +925,6 @@ internal static class SceneTests
             editor.Open(fixture.Service.ActiveSceneId);
             Window.Current.CoreWindow.Dispatcher.Drain();
             Check(calls == 0, "An action crossed a scene reload.");
-            page.QueueTreeAction(() => calls++);
-            editor.IsPreview = true;
-            Window.Current.CoreWindow.Dispatcher.Drain();
-            Check(calls == 0, "An action crossed a preview transition.");
-            editor.IsPreview = false;
             page.QueueTreeAction(() => calls++);
             Window.Current.CoreWindow.Dispatcher.Drain();
             Check(calls == 1, "A valid deferred tree action was discarded.");
@@ -973,11 +987,6 @@ internal static class SceneTests
             Check(editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, layer, 0) != null,
                 "A rebuilt wrapper invalidated a still-live parent model.");
             var current = editor.FindItem(source.Model)!;
-            editor.IsPreview = true;
-            Check(!editor.MoveItem(current, layer, 0)
-                && editor.AddComponent(fixture.Registry.Find(TextComponent.Id)!, layer, 0) == null
-                && ReferenceEquals(editor.FindItem(source.Model), current), "Preview accepted tree editing.");
-            editor.IsPreview = false;
             var oldParent = current.Parent!;
             editor.Open(fixture.Service.ActiveSceneId);
             Check(!editor.MoveItem(current, editor.Roots[0].Children[0], 0)
@@ -1330,13 +1339,9 @@ internal static class SceneTests
                 editor.Select(layer.Model);
                 editor.Select(group.Model);
                 editor.Select(group.Children[0].Model);
-                editor.RefreshScenes();
                 Check(editor.AddComponentCommand.CanExecute(info) == editor.ShowComponents, "The component add action was enabled on a different tab.");
             }
 
-            editor.IsPreview = true;
-            Check(!editor.AddComponentCommand.CanExecute(info), "Preview could add a component.");
-            editor.IsPreview = false;
             Check(editor.Scene!.Layers.Count == 1 && layer.Children.Count == 1 && group.Children.Select(child => child.Model).SequenceEqual(originalChildren) && !fixture.Service.HasPendingChanges(editor.Scene.SceneId), "Navigation or selection changed scene content.");
             editor.ActiveTab = SceneEditorTab.Components;
             editor.Select(layer.Model);
@@ -1591,7 +1596,7 @@ internal static class SceneTests
             await initialize.Value;
             view.Drain();
             Window.Current = window;
-            Check(window.Content is WindowToastHost { Frame.Content: SceneEditorPage }, "Manual launch did not open the editor.");
+            Check(window.Content is WindowToastHost { Frame.Content: SceneManagerPage }, "Manual launch did not open the scene manager.");
             var toastHost = (WindowToastHost)window.Content!;
             var notification = new ToastMessage("正在编辑");
             toastHost.Show(notification);
@@ -1603,7 +1608,7 @@ internal static class SceneTests
             Check(Window.Current.Content is WindowToastHost { Frame.Content: MainPage }, "Lock activation did not open the lock view.");
             Check(ReferenceEquals(toastHost, window.Content) && !notification.IsOpen && toastHost.Toasts.Messages.Count == 0, "Lock activation retained an editor toast or replaced its host.");
             app.Launch(new LaunchActivatedEventArgs());
-            Check(Window.Current.Content is WindowToastHost { Frame.Content: SceneEditorPage }, "Manual reactivation retained stale lock activation state.");
+            Check(Window.Current.Content is WindowToastHost { Frame.Content: SceneManagerPage }, "Manual reactivation retained stale lock activation state.");
             LockScreenHosting.IsHosted = () => true;
             app.Launch(new LaunchActivatedEventArgs());
             Check(Window.Current.Content is WindowToastHost { Frame.Content: MainPage }, "Hosted launch was mistaken for a manual launch.");
@@ -1687,6 +1692,278 @@ internal static class SceneTests
             fixture.Service.QueueSave(scene);
             Check(!fixture.Service.HasPendingChanges(scene.SceneId), "An unchanged saved snapshot created another pending write.");
         });
+
+        await runAsync("Scene metadata persists across saves, reloads, duplicates, and rejects blank editor names", async () =>
+        {
+            using var legacy = new MemoryStream("{}"u8.ToArray());
+            var legacyScene = ConfigureFileHelper.LoadConfigUnWrapped<SceneSettings>(legacy);
+            Check(legacyScene.Description == ""
+                && legacyScene.Author == ""
+                && legacyScene.License == ""
+                && legacyScene.PreviewImageBlobId == null,
+                "Legacy scene JSON did not initialize empty metadata defaults.");
+
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            var target = fixture.Service.Create("元数据场景");
+            editor.Open(target.SceneId);
+            Check(editor.MetadataName == "元数据场景" && !editor.HasMetadataNameError && !editor.HasPreviewImage,
+                "Editor did not initialize metadata properties on Open.");
+
+            editor.MetadataName = "   ";
+            Check(editor.HasMetadataNameError && editor.Scene!.Name == "元数据场景",
+                "Blank MetadataName overwrote the scene name or failed to set an error.");
+            editor.CommitMetadataName();
+            Check(!editor.HasMetadataNameError && editor.MetadataName == "元数据场景",
+                "CommitMetadataName did not restore the previous valid scene name.");
+
+            editor.MetadataName = "  新标题  ";
+            editor.CommitMetadataName();
+            var opened = editor.Scene!;
+            Check(editor.MetadataName == "新标题" && opened.Name == "新标题" && !editor.HasMetadataNameError,
+                "CommitMetadataName did not trim and apply the updated scene name.");
+
+            using var previewStream = new MemoryStream("fake-png-preview"u8.ToArray());
+            var previewBlobId = await fixture.Blobs.ImportAsync(target.SceneId, previewStream);
+            opened.Description = "包含作者与许可信息的场景";
+            opened.Author = "OhMyLockScreen";
+            opened.License = "CC BY 4.0";
+            opened.PreviewImageBlobId = previewBlobId;
+            editor.RefreshPreviewImageUri();
+            Check(editor.HasPreviewImage && editor.PreviewImageUri != null,
+                "RefreshPreviewImageUri did not expose the preview URI.");
+
+            fixture.Service.FlushPending();
+            var info = fixture.Service.GetScenes().Single(item => item.Id == target.SceneId);
+            Check(info.Name == "新标题"
+                && info.Description == "包含作者与许可信息的场景"
+                && info.Author == "OhMyLockScreen"
+                && info.License == "CC BY 4.0"
+                && info.PreviewImageBlobId == previewBlobId,
+                "SceneInfo did not expose persisted metadata.");
+
+            fixture.Service.Reload();
+            var reloaded = fixture.Service.Load(target.SceneId);
+            Check(reloaded.Name == "新标题"
+                && reloaded.Description == "包含作者与许可信息的场景"
+                && reloaded.Author == "OhMyLockScreen"
+                && reloaded.License == "CC BY 4.0"
+                && reloaded.PreviewImageBlobId == previewBlobId,
+                "Reloading lost scene metadata.");
+        });
+
+        await runAsync(".omls export packs all blobs verbatim and import validates integrity into a new scene", async () =>
+        {
+            using var fixture = new Fixture();
+            var source = fixture.Service.Create("打包场景");
+            var usedBytes = "referenced-preview-image"u8.ToArray();
+            var unreferencedBytes = "unreferenced-asset-kept-verbatim"u8.ToArray();
+            var usedBlob = await fixture.Blobs.ImportAsync(source.SceneId, new MemoryStream(usedBytes));
+            var unreferencedBlob = await fixture.Blobs.ImportAsync(source.SceneId, new MemoryStream(unreferencedBytes));
+
+            source.Description = "完整导出测试";
+            source.Author = "Tester";
+            source.License = "MIT";
+            source.PreviewImageBlobId = usedBlob;
+            fixture.Service.QueueSave(source);
+            fixture.Service.FlushPending();
+
+            var sourceDir = fixture.Service.GetSceneDirectory(source.SceneId);
+            File.WriteAllText(Path.Combine(sourceDir, "scene.json.bak"), "stale backup");
+            File.WriteAllText(Path.Combine(sourceDir, "scene.json.tmp"), "stale temp");
+            Directory.CreateDirectory(Path.Combine(sourceDir, "Blobs", "00"));
+            File.WriteAllText(Path.Combine(sourceDir, "Blobs", "00", $"{SceneBlobStorageService.TemporaryFilePrefix}leftover"), "temp");
+
+            using var exportedStream = new MemoryStream();
+            await fixture.Service.ExportAsync(source.SceneId, exportedStream);
+
+            exportedStream.Position = 0;
+            using (var zip = new ZipArchive(exportedStream, ZipArchiveMode.Read, leaveOpen: true))
+            {
+                var names = zip.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var usedPath = $"Blobs/{usedBlob[..2]}/{usedBlob}";
+                var unreferencedPath = $"Blobs/{unreferencedBlob[..2]}/{unreferencedBlob}";
+                Check(names.Contains("scene.json")
+                    && names.Contains(usedPath)
+                    && names.Contains(unreferencedPath),
+                    "Exported .omls archive dropped scene.json or blobs instead of exporting all blobs verbatim.");
+                Check(!names.Contains("scene.json.bak")
+                    && !names.Contains("scene.json.tmp")
+                    && names.All(name => !Path.GetFileName(name).StartsWith(SceneBlobStorageService.TemporaryFilePrefix, StringComparison.Ordinal)),
+                    "Exported .omls archive leaked transient or backup files.");
+            }
+
+            exportedStream.Position = 0;
+            using var nonSeekable = new NonSeekableReadStream(exportedStream);
+            var imported = await fixture.Service.ImportAsync(nonSeekable);
+            Check(imported.SceneId != source.SceneId
+                && imported.Name == source.Name
+                && imported.Description == source.Description
+                && imported.Author == source.Author
+                && imported.License == source.License
+                && imported.PreviewImageBlobId == usedBlob,
+                "Imported scene lost metadata or reused the source SceneId.");
+
+            var importedDir = fixture.Service.GetSceneDirectory(imported.SceneId);
+            Check(File.ReadAllBytes(Path.Combine(importedDir, "Blobs", usedBlob[..2], usedBlob)).SequenceEqual(usedBytes)
+                && File.ReadAllBytes(Path.Combine(importedDir, "Blobs", unreferencedBlob[..2], unreferencedBlob)).SequenceEqual(unreferencedBytes),
+                "Imported scene did not restore all blobs verbatim.");
+            Check(Directory.Exists(sourceDir) && fixture.Service.Load(source.SceneId).Name == source.Name,
+                "Importing altered or replaced the original scene.");
+            Check(!Directory.EnumerateFileSystemEntries(fixture.Service.ScenesPath)
+                .Any(path => Path.GetFileName(path).StartsWith(".scene-import-", StringComparison.Ordinal)
+                    || Path.GetFileName(path).StartsWith(".omls-stream-", StringComparison.Ordinal)),
+                "Package import left temporary staging directories or buffered files on disk.");
+
+            // Reject invalid / malicious / corrupted .omls archives without leaving temp folders.
+            await ThrowsAsync<InvalidDataException>(() => ImportArchiveBytesAsync(fixture.Service, zip =>
+            {
+                WriteZipEntry(zip, "scene.json", "{\"Name\":\"Bad\"}"u8.ToArray());
+                WriteZipEntry(zip, "../evil.txt", "escape"u8.ToArray());
+            }));
+            await ThrowsAsync<InvalidDataException>(() => ImportArchiveBytesAsync(fixture.Service, zip =>
+            {
+                WriteZipEntry(zip, "Blobs/aa/" + new string('a', 64), "no scene"u8.ToArray());
+            }));
+            await ThrowsAsync<InvalidDataException>(() => ImportArchiveBytesAsync(fixture.Service, zip =>
+            {
+                WriteZipEntry(zip, "scene.json", "[]"u8.ToArray());
+            }));
+            await ThrowsAsync<InvalidDataException>(() => ImportArchiveBytesAsync(fixture.Service, zip =>
+            {
+                WriteZipEntry(zip, "scene.json", "{\"Name\":\"BadBlobPath\"}"u8.ToArray());
+                WriteZipEntry(zip, "Blobs/zz/not-a-hash", "bad"u8.ToArray());
+            }));
+            await ThrowsAsync<InvalidDataException>(() => ImportArchiveBytesAsync(fixture.Service, zip =>
+            {
+                var content = "expected content"u8.ToArray();
+                var hash = Convert.ToHexStringLower(SHA256.HashData(content));
+                WriteZipEntry(zip, "scene.json", "{\"Name\":\"Tampered\"}"u8.ToArray());
+                WriteZipEntry(zip, $"Blobs/{hash[..2]}/{hash}", "tampered content"u8.ToArray());
+            }));
+            Check(!Directory.EnumerateDirectories(fixture.Service.ScenesPath, ".scene-import-*").Any(),
+                "Failed package imports leaked temporary staging directories.");
+
+            var staleStage = Path.Combine(fixture.Service.ScenesPath, ".scene-import-orphaned");
+            Directory.CreateDirectory(staleStage);
+            File.WriteAllText(Path.Combine(staleStage, "scene.json"), "{invalid");
+            fixture.Service.Reload();
+            Check(fixture.Service.LoadErrors.Count == 0,
+                "SceneService reported errors for a leftover .scene-import-* staging directory.");
+        });
+
+        await runAsync(".omls import deserializes and serializes brushes on the caller synchronization context for async streams", async () =>
+        {
+            using var uiContext = new SingleThreadSynchronizationContext();
+            await uiContext.RunAsync(async () =>
+            {
+                Brush.RequiredThreadId = uiContext.ManagedThreadId;
+                try
+                {
+                    await ThrowsAsync<InvalidOperationException>(() => Task.Run(() => _ = new SolidColorBrush()));
+
+                    using var fixture = new Fixture();
+                    var source = fixture.Service.Create("跨线程画刷导入");
+                    var blobBytes = "ui-thread-brush-blob"u8.ToArray();
+                    var blobId = await fixture.Blobs.ImportAsync(source.SceneId, new MemoryStream(blobBytes));
+
+                    var imageBrush = new ImageBrush
+                    {
+                        Stretch = Windows.UI.Xaml.Media.Stretch.UniformToFill,
+                        Transform = new MatrixTransform { Matrix = new Matrix(1, 0, 0, 1, 12, 24) }
+                    };
+                    SceneImageBrush.SetBlobId(imageBrush, blobId);
+                    var acrylicColor = Windows.UI.Color.FromArgb(255, 18, 52, 86);
+                    var borderColor = Windows.UI.Color.FromArgb(255, 220, 230, 240);
+
+                    source.Features.Add(new FeatureInfo
+                    {
+                        Id = "omls.features.appearance.background",
+                        Settings = new BackgroundFeatureSettings { Background = imageBrush }
+                    });
+                    source.Features.Add(new FeatureInfo
+                    {
+                        Id = "omls.features.appearance.foreground",
+                        Settings = new ForegroundFeatureSettings
+                        {
+                            Foreground = new AcrylicBrush
+                            {
+                                TintColor = acrylicColor,
+                                TintOpacity = 0.75
+                            }
+                        }
+                    });
+                    source.Features.Add(new FeatureInfo
+                    {
+                        Id = "omls.features.appearance.border",
+                        Settings = new BorderFeatureSettings
+                        {
+                            BorderBrush = new SolidColorBrush(borderColor)
+                        }
+                    });
+
+                    fixture.Service.QueueSave(source);
+                    fixture.Service.FlushPending();
+
+                    using var exported = new MemoryStream();
+                    await fixture.Service.ExportAsync(source.SceneId, exported);
+
+                    foreach (var canSeek in new[] { true, false })
+                    {
+                        exported.Position = 0;
+                        using var asyncStream = new AsyncYieldingReadStream(exported, canSeek);
+                        var imported = await fixture.Service.ImportAsync(asyncStream);
+                        Check(imported.SceneId != source.SceneId && imported.Name == source.Name,
+                            "Async UI-thread import did not allocate a new SceneId or preserve metadata.");
+
+                        var restoredBg = imported.Features.Single(feature => feature.Id == "omls.features.appearance.background")
+                            .GetSettings<BackgroundFeatureSettings>().Background;
+                        var restoredFg = imported.Features.Single(feature => feature.Id == "omls.features.appearance.foreground")
+                            .GetSettings<ForegroundFeatureSettings>().Foreground;
+                        var restoredBorder = imported.Features.Single(feature => feature.Id == "omls.features.appearance.border")
+                            .GetSettings<BorderFeatureSettings>().BorderBrush;
+                        Check(restoredBg is ImageBrush restoredImage
+                            && SceneImageBrush.GetBlobId(restoredImage) == blobId
+                            && restoredImage.Stretch == Windows.UI.Xaml.Media.Stretch.UniformToFill
+                            && restoredFg is AcrylicBrush restoredAcrylic && restoredAcrylic.TintColor == acrylicColor
+                            && restoredBorder is SolidColorBrush restoredSolid && restoredSolid.Color == borderColor,
+                            "Async UI-thread import lost XAML brush data.");
+
+                        var importedBlobPath = Path.Combine(fixture.Service.GetSceneDirectory(imported.SceneId), "Blobs", blobId[..2], blobId);
+                        Check(File.Exists(importedBlobPath) && File.ReadAllBytes(importedBlobPath).SequenceEqual(blobBytes),
+                            "Async UI-thread import did not restore scene blobs.");
+                    }
+
+                    Check(!Directory.EnumerateFileSystemEntries(fixture.Service.ScenesPath)
+                        .Any(path => Path.GetFileName(path).StartsWith(".scene-import-", StringComparison.Ordinal)
+                            || Path.GetFileName(path).StartsWith(".omls-stream-", StringComparison.Ordinal)),
+                        "Async UI-thread import left temporary files on disk.");
+                }
+                finally
+                {
+                    Brush.RequiredThreadId = null;
+                }
+            });
+        });
+    }
+
+    private static Task<SceneSettings> ImportArchiveBytesAsync(ISceneService service, Action<ZipArchive> build)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            build(zip);
+        }
+
+        stream.Position = 0;
+        return service.ImportAsync(stream);
+    }
+
+    private static void WriteZipEntry(ZipArchive archive, string name, byte[] data)
+    {
+        var entry = archive.CreateEntry(name);
+        using var stream = entry.Open();
+        stream.Write(data, 0, data.Length);
     }
 
     private static void Check(bool condition, string message)
@@ -1712,6 +1989,167 @@ internal static class SceneTests
         throw new Exception($"Expected {typeof(T).Name}.");
     }
 
+    private static async Task ThrowsAsync<T>(Func<Task> action)
+        where T : Exception
+    {
+        try
+        {
+            await action();
+        }
+        catch (T)
+        {
+            return;
+        }
+
+        throw new Exception($"Expected {typeof(T).Name}.");
+    }
+
+    private sealed class NonSeekableReadStream(Stream inner) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            inner.ReadAsync(buffer, cancellationToken);
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class AsyncYieldingReadStream(Stream inner, bool canSeek) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => canSeek;
+        public override bool CanWrite => false;
+        public override long Length => canSeek ? inner.Length : throw new NotSupportedException();
+        public override long Position
+        {
+            get => canSeek ? inner.Position : throw new NotSupportedException();
+            set => inner.Position = canSeek ? value : throw new NotSupportedException();
+        }
+
+        public override void Flush() => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            Task.Run(() => inner.Read(buffer, offset, count), cancellationToken);
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            new(Task.Run(() => inner.Read(buffer.Span), cancellationToken));
+
+        public override long Seek(long offset, SeekOrigin origin) => canSeek ? inner.Seek(offset, origin) : throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class SingleThreadSynchronizationContext : SynchronizationContext, IDisposable
+    {
+        private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _queue = new();
+        private readonly Thread _thread;
+
+        internal SingleThreadSynchronizationContext()
+        {
+            _thread = new Thread(Pump)
+            {
+                IsBackground = true,
+                Name = "TestUiThread"
+            };
+            _thread.Start();
+        }
+
+        internal int ManagedThreadId => _thread.ManagedThreadId;
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            try
+            {
+                _queue.Add((d, state));
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        public override void Send(SendOrPostCallback d, object? state)
+        {
+            if (Environment.CurrentManagedThreadId == _thread.ManagedThreadId)
+            {
+                d(state);
+                return;
+            }
+
+            using var completed = new ManualResetEventSlim();
+            Exception? error = null;
+            Post(_ =>
+            {
+                try
+                {
+                    d(state);
+                }
+                catch (Exception exception)
+                {
+                    error = exception;
+                }
+                finally
+                {
+                    completed.Set();
+                }
+            }, null);
+            completed.Wait();
+            if (error != null)
+            {
+                ExceptionDispatchInfo.Capture(error).Throw();
+            }
+        }
+
+        internal Task RunAsync(Func<Task> action)
+        {
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Post(async _ =>
+            {
+                try
+                {
+                    await action();
+                    tcs.TrySetResult();
+                }
+                catch (Exception exception)
+                {
+                    tcs.TrySetException(exception);
+                }
+            }, null);
+            return tcs.Task;
+        }
+
+        private void Pump()
+        {
+            SetSynchronizationContext(this);
+            foreach (var (callback, state) in _queue.GetConsumingEnumerable())
+            {
+                callback(state);
+            }
+        }
+
+        public void Dispose()
+        {
+            _queue.CompleteAdding();
+            if (Environment.CurrentManagedThreadId != _thread.ManagedThreadId)
+            {
+                _thread.Join();
+            }
+
+            _queue.Dispose();
+        }
+    }
+
     private sealed class Fixture : IDisposable
     {
         internal SettingsService Settings
@@ -1719,6 +2157,10 @@ internal static class SceneTests
             get;
         }
         internal SceneService Service
+        {
+            get;
+        }
+        internal SceneBlobStorageService Blobs
         {
             get;
         }
@@ -1736,6 +2178,7 @@ internal static class SceneTests
             Settings.LoadSettingsAsync().GetAwaiter().GetResult();
             Service = new SceneService(Settings, NullLogger<SceneService>.Instance, path);
             Service.Initialize();
+            Blobs = new SceneBlobStorageService(Service);
             var services = new ServiceCollection();
             OhMyLockScreen.Shared.Extensions.Scene.ComponentRegistryExtensions.AddComponent<TextComponent>(services);
             OhMyLockScreen.Shared.Extensions.Scene.ComponentRegistryExtensions.AddComponent<ClockComponent>(services);
@@ -1746,7 +2189,8 @@ internal static class SceneTests
             Registry = _provider.GetRequiredService<ComponentRegistryService>();
         }
 
-        internal SceneEditorViewModel Editor() => new(Service, Settings, Registry);
+        internal SceneEditorViewModel Editor() => new(Service, Blobs, Settings, Registry);
+        internal SceneManagerViewModel Manager() => new(Service, Blobs);
         public void Dispose()
         {
             Service.Dispose();

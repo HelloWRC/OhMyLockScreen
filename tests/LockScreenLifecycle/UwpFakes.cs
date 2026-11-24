@@ -198,6 +198,36 @@ namespace Windows.UI.Core
         }
     }
 
+    public enum AppViewBackButtonVisibility
+    {
+        Visible,
+        Collapsed
+    }
+
+    public sealed class BackRequestedEventArgs : EventArgs
+    {
+        public bool Handled { get; set; }
+    }
+
+    public sealed class SystemNavigationManager
+    {
+        private static SystemNavigationManager _current = new();
+        public static SystemNavigationManager GetForCurrentView() => _current;
+
+        public AppViewBackButtonVisibility AppViewBackButtonVisibility { get; set; } = AppViewBackButtonVisibility.Collapsed;
+        public event EventHandler<BackRequestedEventArgs>? BackRequested;
+        public int BackRequestedSubscribers => BackRequested?.GetInvocationList().Length ?? 0;
+
+        public BackRequestedEventArgs RaiseBackRequested()
+        {
+            var args = new BackRequestedEventArgs();
+            BackRequested?.Invoke(this, args);
+            return args;
+        }
+
+        internal static void Reset() => _current = new();
+    }
+
     public sealed class CoreDispatcher(Windows.UI.Xaml.Window? owner = null)
     {
         private readonly global::System.Collections.Concurrent.ConcurrentQueue<(Action Callback, TaskCompletionSource Completion)> _callbacks = new();
@@ -756,6 +786,40 @@ namespace Windows.UI.Xaml
     }
 }
 
+namespace Windows.UI.ViewManagement
+{
+    public sealed class ApplicationView
+    {
+        private static ApplicationView _current = new();
+        public static ApplicationView GetForCurrentView() => _current;
+
+        public bool IsFullScreenMode { get; set; }
+        public bool AllowFullScreen { get; set; } = true;
+        public int EnterFullScreenCalls { get; private set; }
+        public int ExitFullScreenCalls { get; private set; }
+
+        public bool TryEnterFullScreenMode()
+        {
+            EnterFullScreenCalls++;
+            if (!AllowFullScreen)
+            {
+                return false;
+            }
+
+            IsFullScreenMode = true;
+            return true;
+        }
+
+        public void ExitFullScreenMode()
+        {
+            ExitFullScreenCalls++;
+            IsFullScreenMode = false;
+        }
+
+        internal static void Reset() => _current = new();
+    }
+}
+
 namespace Windows.UI.Xaml.Controls
 {
     using Windows.UI.Xaml;
@@ -780,10 +844,21 @@ namespace Windows.UI.Xaml.Controls
             ActualWidth = 1920;
             ActualHeight = 1080;
         }
+
+        public bool Focus(FocusState state) => true;
+
+        protected virtual void OnNavigatedTo(NavigationEventArgs args)
+        {
+        }
+
+        internal void DispatchNavigatedTo(NavigationEventArgs args) => OnNavigatedTo(args);
     }
 
     public sealed class Frame : FrameworkElement
     {
+        public static readonly DependencyProperty CanGoBackProperty = DependencyProperty.Register(
+            nameof(CanGoBack), typeof(bool), typeof(Frame), new PropertyMetadata(false));
+
         public List<object> BackStack { get; } = [];
         public object? Tag { get; set; }
         public Windows.UI.Xaml.Media.SolidColorBrush? Background
@@ -794,17 +869,33 @@ namespace Windows.UI.Xaml.Controls
         {
             get; set;
         }
+        public bool CanGoBack => BackStack.Count > 0;
 
         public event UwpEventHandler<NavigationFailedEventArgs>? NavigationFailed;
         public event UwpEventHandler<NavigationEventArgs>? Navigated;
-        public bool Navigate(Type pageType)
+        public bool Navigate(Type pageType) => Navigate(pageType, null);
+
+        public bool Navigate(Type pageType, object? parameter)
         {
             try
             {
-                Content = Activator.CreateInstance(pageType);
+                var next = Activator.CreateInstance(pageType);
+                if (Content != null)
+                {
+                    BackStack.Add(Content);
+                }
+
+                Content = next;
+                var args = new NavigationEventArgs(NavigationMode.New, parameter);
                 if (Content is DependencyObject child) child.VisualParent = this;
-                if (Content is Page page) page.Frame = this;
-                Navigated?.Invoke(this, new());
+                if (Content is Page page)
+                {
+                    page.Frame = this;
+                    page.DispatchNavigatedTo(args);
+                }
+
+                SetValue(CanGoBackProperty, CanGoBack);
+                Navigated?.Invoke(this, args);
                 return true;
             }
             catch
@@ -812,6 +903,28 @@ namespace Windows.UI.Xaml.Controls
                 NavigationFailed?.Invoke(this, new(pageType));
                 return false;
             }
+        }
+
+        public void GoBack()
+        {
+            if (BackStack.Count == 0)
+            {
+                return;
+            }
+
+            var previous = BackStack[^1];
+            BackStack.RemoveAt(BackStack.Count - 1);
+            Content = previous;
+            var args = new NavigationEventArgs(NavigationMode.Back, null);
+            if (Content is DependencyObject child) child.VisualParent = this;
+            if (Content is Page page)
+            {
+                page.Frame = this;
+                page.DispatchNavigatedTo(args);
+            }
+
+            SetValue(CanGoBackProperty, CanGoBack);
+            Navigated?.Invoke(this, args);
         }
     }
 
@@ -997,5 +1110,17 @@ namespace OhMyLockScreen
         {
         }
 
+    }
+}
+
+namespace OhMyLockScreen.Views
+{
+    public partial class ScenePreviewPage
+    {
+        internal OhMyLockScreen.Shared.Controls.Scene.ScenePresenter RootScenePresenter { get; } = new();
+
+        public void InitializeComponent()
+        {
+        }
     }
 }

@@ -28,7 +28,7 @@ public sealed partial class SceneEditorPage
 
         // Handle before TreeView performs its own node-only keyboard reorder.
         args.Handled = true;
-        if (!_loaded || ViewModel.IsPreview
+        if (!_loaded
             || FindParent<TreeViewItem>(args.OriginalSource as DependencyObject) is not { } container
             || SceneTree.ItemFromContainer(container) is not SceneTreeItem item
             || ViewModel.FindItem(item.Model) == null)
@@ -52,7 +52,7 @@ public sealed partial class SceneEditorPage
     {
         var window = _window;
         var scene = ViewModel.Scene;
-        if (window == null || scene == null || ViewModel.IsPreview)
+        if (window == null || scene == null)
         {
             return;
         }
@@ -60,7 +60,7 @@ public sealed partial class SceneEditorPage
         _ = window.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
         {
             if (_loaded && ReferenceEquals(_window, window)
-                && ReferenceEquals(ViewModel.Scene, scene) && !ViewModel.IsPreview)
+                && ReferenceEquals(ViewModel.Scene, scene))
             {
                 TryAction(action);
             }

@@ -42,7 +42,7 @@ internal static class FileLoggingTests
             {
                 var text = reader.ReadToEnd();
                 var startup = text.Split(Environment.NewLine).Where(line => line.Contains("|Information|OhMyLockScreen.App|OhMyLockScreen 1.0.0.0 启动，生命周期："));
-                Check(startup.Select(line => line.Split('：')[^1]).SequenceEqual(new[] { "编辑器", "锁屏" }), "Incorrect version, severity, lifecycle or repeated startup message.");
+                Check(startup.Select(line => line.Split('：')[^1]).SequenceEqual(new[] { "场景管理器", "锁屏" }), "Incorrect version, severity, lifecycle or repeated startup message.");
                 foreach (var markerText in new[] { "before-host", "after-start" })
                 {
                     var expected = $"|Critical|OhMyLockScreen.App|应用发生未处理异常{Environment.NewLine}System.InvalidOperationException: {markerText}{Environment.NewLine}";

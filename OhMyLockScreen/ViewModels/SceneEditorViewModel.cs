@@ -28,12 +28,14 @@ namespace OhMyLockScreen.ViewModels;
 public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 {
     private readonly ISceneService _scenes;
+    private readonly ISceneBlobStorageService _blobs;
     private readonly SettingsService _settings;
     private readonly ComponentRegistryService _components;
     private ObservableSettingsGraph? _graph;
     private object? _pendingSelectionModel;
     private IReadOnlyDictionary<object, bool>? _pendingExpansionStates;
     private bool _updatingTree;
+    private bool _syncingMetadata;
     [ObservableProperty]
     private SceneSettings? _scene;
     [ObservableProperty]
@@ -43,17 +45,21 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private SceneEditorTab _activeTab;
     [ObservableProperty]
-    private bool _isPreview;
-    [ObservableProperty]
     private double _sidePanelWidth = 341;
     [ObservableProperty]
-    private SceneListItem? _selectedScene;
+    private string _metadataName = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMetadataNameError))]
+    private string _metadataNameError = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPreviewImage))]
+    private Uri? _previewImageUri;
+    [ObservableProperty]
+    private bool _isCapturingPreview;
     [ObservableProperty]
     private string _dialogTitle = "";
     [ObservableProperty]
     private string _dialogName = "";
-    [ObservableProperty]
-    private string _dialogMessage = "";
     [ObservableProperty]
     private string _dialogNameError = "";
     [ObservableProperty]
@@ -66,21 +72,30 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     private SceneSelectionGeometry _hoverGeometry;
     [ObservableProperty]
     private bool _showHover;
-    public ObservableCollection<SceneListItem> Scenes { get; } = [];
     public ObservableCollection<SceneTreeItem> Roots { get; } = [];
     public ObservableCollection<InspectorSection> InspectorSections { get; } = [];
     public IReadOnlyList<ComponentRegisterInfo> Library => _components.Registered;
+    public IReadOnlyList<string> LicensePresets { get; } = (string[])
+    [
+        "CC BY 4.0",
+        "CC BY-NC 4.0",
+        "CC BY-SA 4.0",
+        "CC BY-NC-SA 4.0",
+        "CC0 1.0",
+        "MIT",
+        "保留所有权利"
+    ];
+    public bool HasPreviewImage => PreviewImageUri != null;
+    public bool HasMetadataNameError => !string.IsNullOrEmpty(MetadataNameError);
     public object? SelectedModel => SelectedItem?.Model;
     public bool CanEditSelection => SelectedModel is ComponentSettings or LayerSettings;
     internal int? PreferredNestedComponentDepth =>
         SelectedItem is { Model: ComponentSettings, Parent.Model: ComponentSettings } selected
             ? selected.Depth
             : null;
-    public bool ShowHome => !IsPreview && ActiveTab == SceneEditorTab.Home;
-    public bool ShowComponents => !IsPreview && ActiveTab == SceneEditorTab.Components;
-    public bool ShowBackground => !IsPreview && ActiveTab == SceneEditorTab.Background;
-    public int ContentRow => IsPreview ? 0 : 2;
-    public int ContentRowSpan => IsPreview ? 3 : 1;
+    public bool ShowHome => ActiveTab == SceneEditorTab.Home;
+    public bool ShowComponents => ActiveTab == SceneEditorTab.Components;
+    public bool ShowBackground => ActiveTab == SceneEditorTab.Background;
     public GridLength PanelWidth => new(SidePanelWidth, GridUnitType.Pixel);
     public Thickness ViewportMargin => ShowComponents ? new Thickness(SidePanelWidth, 0, SidePanelWidth, 0) : default;
     public bool ShowSelection => ShowComponents && HasSelectionBounds;
@@ -90,9 +105,14 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     public event EventHandler? StructureChanged;
     public event EventHandler? InspectorChanged;
     public event EventHandler<Exception>? Error;
-    public SceneEditorViewModel(ISceneService scenes, SettingsService settings, ComponentRegistryService components)
+    public SceneEditorViewModel(
+        ISceneService scenes,
+        ISceneBlobStorageService blobs,
+        SettingsService settings,
+        ComponentRegistryService components)
     {
         _scenes = scenes;
+        _blobs = blobs;
         _settings = settings;
         _components = components;
     }
@@ -105,7 +125,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
         Scene = scene;
         _settings.Settings.LastEditedSceneId = id;
         _graph = new ObservableSettingsGraph(scene, OnSceneChanged);
-        RefreshScenes();
+        SyncMetadataFromScene(scene);
         Roots.Clear();
         var root = CreateTreeItem(scene, null);
         Roots.Add(root);
@@ -118,6 +138,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
         if (Scene is { } scene)
         {
             _graph ??= new ObservableSettingsGraph(scene, OnSceneChanged);
+            SyncMetadataFromScene(scene);
             RefreshSaveStatus();
         }
     }
@@ -129,47 +150,68 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             : _scenes.GetSaveError(scene.SceneId) != null ? "保存失败" : "正在保存…";
     }
 
-    public void RefreshScenes()
+    public void RefreshPreviewImageUri() =>
+        PreviewImageUri = Scene is { } scene
+            ? _blobs.GetBlobUri(scene.SceneId, scene.PreviewImageBlobId)
+            : null;
+
+    internal void CommitMetadataName()
     {
-        var activeId = _scenes.ActiveSceneId;
-        var editingId = Scene?.SceneId;
-        var existing = Scenes.ToDictionary(item => item.Id);
-        var desired = _scenes.GetScenes().Select(info =>
+        if (Scene == null)
         {
-            var item = existing.GetValueOrDefault(info.Id) ?? new SceneListItem(info.Id);
-            item.Name = info.Name;
-            item.IsActive = info.Id == activeId;
-            item.IsEditing = info.Id == editingId;
-            return item;
-        }).ToArray();
-
-        foreach (var removed in Scenes.Except(desired).ToArray())
-        {
-            Scenes.Remove(removed);
+            return;
         }
 
-        for (var index = 0; index < desired.Length; index++)
+        if (string.IsNullOrWhiteSpace(MetadataName))
         {
-            var current = Scenes.IndexOf(desired[index]);
-            if (current < 0)
-            {
-                Scenes.Insert(index, desired[index]);
-            }
-            else if (current != index)
-            {
-                Scenes.Move(current, index);
-            }
+            _syncingMetadata = true;
+            MetadataName = Scene.Name;
+            MetadataNameError = "";
+            _syncingMetadata = false;
+            return;
         }
 
-        SelectedScene = Scenes.FirstOrDefault(item => item.Id == editingId);
+        var trimmed = MetadataName.Trim();
+        if (!string.Equals(MetadataName, trimmed, StringComparison.Ordinal))
+        {
+            _syncingMetadata = true;
+            MetadataName = trimmed;
+            _syncingMetadata = false;
+        }
+
+        if (!string.Equals(Scene.Name, trimmed, StringComparison.Ordinal))
+        {
+            Scene.Name = trimmed;
+        }
     }
 
-    internal void RestoreSceneIfDeleted()
+    partial void OnMetadataNameChanged(string value)
     {
-        if (Scene is { } current && _scenes.GetScenes().All(info => info.Id != current.SceneId))
+        if (_syncingMetadata || Scene == null)
         {
-            Open(_scenes.ActiveSceneId);
+            return;
         }
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            MetadataNameError = "名称不能为空";
+            return;
+        }
+
+        MetadataNameError = "";
+        if (!string.Equals(Scene.Name, value, StringComparison.Ordinal))
+        {
+            Scene.Name = value;
+        }
+    }
+
+    private void SyncMetadataFromScene(SceneSettings scene)
+    {
+        _syncingMetadata = true;
+        MetadataName = scene.Name;
+        MetadataNameError = "";
+        _syncingMetadata = false;
+        RefreshPreviewImageUri();
     }
 
     partial void OnSelectedItemChanged(SceneTreeItem? value)
@@ -319,6 +361,24 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             InspectorChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        if (ReferenceEquals(sender, Scene))
+        {
+            if (property is null or nameof(SceneSettings.Name)
+                && !string.Equals(MetadataName, Scene.Name, StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(Scene.Name))
+            {
+                _syncingMetadata = true;
+                MetadataName = Scene.Name;
+                MetadataNameError = "";
+                _syncingMetadata = false;
+            }
+
+            if (property is null or nameof(SceneSettings.PreviewImageBlobId))
+            {
+                RefreshPreviewImageUri();
+            }
+        }
+
         try
         {
             _scenes.QueueSave(Scene);
@@ -401,14 +461,6 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
         RefreshViewProperties();
     }
 
-    partial void OnIsPreviewChanged(bool value)
-    {
-        AddComponentCommand.NotifyCanExecuteChanged();
-        RefreshViewProperties();
-        OnPropertyChanged(nameof(ContentRow));
-        OnPropertyChanged(nameof(ContentRowSpan));
-    }
-
     partial void OnSidePanelWidthChanged(double value)
     {
         OnPropertyChanged(nameof(PanelWidth));
@@ -465,7 +517,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
     internal ComponentSettings? AddComponent(ComponentRegisterInfo info, SceneTreeItem parent, int index)
     {
-        if (Scene == null || IsPreview || !SceneHierarchyEditing.Contains(Scene, parent.Model)
+        if (Scene == null || !SceneHierarchyEditing.Contains(Scene, parent.Model)
             || SceneHierarchyEditing.GetChildren(parent.Model) is not { } children)
         {
             return null;
@@ -502,7 +554,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
     internal ComponentSettings? AddImageComponent(string name, string blobId, int width, int height, object parentModel, int index)
     {
-        if (Scene == null || IsPreview || FindItem(parentModel) == null)
+        if (Scene == null || FindItem(parentModel) == null)
         {
             return null;
         }
@@ -552,7 +604,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
     internal bool MoveItem(SceneTreeItem item, SceneTreeItem parent, int index)
     {
-        if (Scene == null || IsPreview || item.Parent is not { } sourceParent
+        if (Scene == null || item.Parent is not { } sourceParent
             || !SceneHierarchyEditing.Contains(Scene, sourceParent.Model)
             || !SceneHierarchyEditing.Contains(Scene, parent.Model)
             || SceneHierarchyEditing.GetChildren(sourceParent.Model) is not { } source

@@ -24,7 +24,8 @@ namespace Windows.UI.Xaml
 {
     public enum FocusState
     {
-        Keyboard
+        Keyboard,
+        Programmatic
     }
 }
 

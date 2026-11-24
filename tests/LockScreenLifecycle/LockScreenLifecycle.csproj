@@ -24,10 +24,15 @@
     <Compile Include="../../OhMyLockScreen.NativeHost/LockAppHostGlobalUnlockSignal.cs" Link="NativeHost/LockAppHostGlobalUnlockSignal.cs" />
     <Compile Include="../../OhMyLockScreen.NativeHost/LockScreenUnlockCommand.cs" Link="NativeHost/LockScreenUnlockCommand.cs" />
     <Compile Include="../../OhMyLockScreen/MainPage.xaml.cs" Link="MainPage.xaml.cs" />
+    <Compile Include="../../OhMyLockScreen/Views/ScenePreviewPage.xaml.cs" Link="Views/ScenePreviewPage.xaml.cs" />
     <Compile Include="../../OhMyLockScreen/SceneEditorPage.Tree.cs" Link="SceneEditorPage.Tree.cs" />
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneSaveToastTracker.cs" Link="Helpers/UI/SceneSaveToastTracker.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Remove="../../OhMyLockScreen/Controls/SceneManager/**/*.cs" />
+    <Compile Remove="../../OhMyLockScreen/Helpers/UI/SceneScreenshotCapture.cs" />
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/Scene/ScenePresenter.Capture.cs" />
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/MaskedBackdropBlurBrush.cs" />
     <Compile Remove="../../OhMyLockScreen/Services/Audio/AudioInterop.cs" />
     <Compile Remove="../../OhMyLockScreen/Services/Audio/AudioHostSpectrumClient.cs" />
     <Compile Remove="../../OhMyLockScreen/Services/Audio/WindowsAudioSpectrumSource.cs" />

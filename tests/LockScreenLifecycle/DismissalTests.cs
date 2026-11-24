@@ -1,12 +1,24 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OhMyLockScreen;
+using OhMyLockScreen.Services;
 using OhMyLockScreen.Services.LockScreenProvider;
+using OhMyLockScreen.Services.Scene;
+using OhMyLockScreen.Shared;
+using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Controls.Scene;
+using OhMyLockScreen.Shared.Models;
+using OhMyLockScreen.Views;
 using Windows.ApplicationModel.Core;
 using Windows.Devices.Input;
 using Windows.Foundation;
+using Windows.Storage;
 using Windows.System;
 using Windows.UI.Core;
+using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media.Animation;
 
 internal static class DismissalTests
@@ -523,6 +535,177 @@ internal static class DismissalTests
             await WaitUntilAsync(() => CoreApplication.ExitCalls == 1);
             page.Unload();
         });
+
+        await RunPreviewPageChecksAsync(runAsync);
+    }
+
+    private static async Task RunPreviewPageChecksAsync(Func<string, Func<Task>, Task> runAsync)
+    {
+        await runAsync("ScenePreviewPage enters fullscreen, loads the target scene, and returns cleanly on dismissal without unlocking or exiting", async () =>
+        {
+            var unlock = new FakeUnlockService(true);
+            var (_, scenes) = ConfigurePreviewHost(unlock);
+            var activeId = scenes.ActiveSceneId;
+            var target = scenes.Create("预览目标场景");
+
+            var frame = new Frame();
+            Check(frame.Navigate(typeof(SceneManagerPage)), "Failed to navigate to manager page.");
+            Check(frame.Navigate(typeof(ScenePreviewPage), target.SceneId), "Failed to navigate to ScenePreviewPage.");
+
+            var previewPage = (ScenePreviewPage)frame.Content!;
+            previewPage.RootScenePresenter.ActualHeight = 720;
+            previewPage.Load();
+
+            var appView = ApplicationView.GetForCurrentView();
+            var systemNav = SystemNavigationManager.GetForCurrentView();
+            Check(previewPage.RootScenePresenter.ShowSystemBackgroundPreview, "ScenePreviewPage did not enable system background preview.");
+            Check(previewPage.RootScenePresenter.Scene?.SceneId == target.SceneId && previewPage.RootScenePresenter.Scene?.SceneId != activeId,
+                "ScenePreviewPage did not load the requested target scene.");
+            Check(appView.IsFullScreenMode && appView.EnterFullScreenCalls == 1,
+                "ScenePreviewPage did not enter fullscreen mode on load.");
+            Check(systemNav.AppViewBackButtonVisibility == AppViewBackButtonVisibility.Collapsed && systemNav.BackRequestedSubscribers == 1,
+                "ScenePreviewPage did not configure SystemNavigationManager cleanly.");
+
+            // Upward drag below threshold rebounds like MainPage.
+            var drag = previewPage.PressPointer(PointerDeviceType.Touch, position: new(100, 300)).Pointer;
+            previewPage.MovePointer(drag, new(100, 240), 100_000);
+            CheckVisuals(previewPage.RootScenePresenter, -60, 2d / 3);
+            previewPage.ReleasePointer(drag, new(100, 240), 350_000);
+            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(220));
+            CheckVisuals(previewPage.RootScenePresenter, 0, 1);
+            Check(appView.IsFullScreenMode && ReferenceEquals(frame.Content, previewPage),
+                "A short rebound drag dismissed the preview page.");
+
+            // Tab and modifier keys must not dismiss ScenePreviewPage.
+            foreach (var ignored in new[] { VirtualKey.Tab, VirtualKey.Shift, VirtualKey.Control, VirtualKey.Menu })
+            {
+                previewPage.PressKey(ignored);
+            }
+            Window.Current.CoreWindow.Dispatcher.Drain();
+            Check(appView.IsFullScreenMode && ReferenceEquals(frame.Content, previewPage),
+                "Modifier or focus traversal key dismissed ScenePreviewPage.");
+
+            // Tap dismissal plays unlock animation, then exits fullscreen and navigates back without calling unlock or Exit().
+            var tap = previewPage.PressPointer(PointerDeviceType.Touch).Pointer;
+            previewPage.ReleasePointer(tap);
+            var dismissal = Storyboard.LastCreated!;
+            Check(dismissal.IsRunning, "Tap did not start preview dismissal animation.");
+            dismissal.Advance(TimeSpan.FromMilliseconds(299));
+            Check(appView.IsFullScreenMode && ReferenceEquals(frame.Content, previewPage),
+                "ScenePreviewPage exited before the unlock animation finished.");
+            dismissal.Advance(TimeSpan.FromMilliseconds(1));
+            await WaitUntilAsync(() => !appView.IsFullScreenMode && frame.Content is SceneManagerPage);
+            Check(appView.ExitFullScreenCalls == 1 && systemNav.BackRequestedSubscribers == 0,
+                "ScenePreviewPage did not exit fullscreen and detach navigation on dismissal.");
+            Check(unlock.Preparations == 0 && unlock.Calls == 0 && CoreApplication.ExitCalls == 0,
+                "ScenePreviewPage triggered system unlock or exited the process.");
+
+            previewPage.Unload();
+            Check(appView.ExitFullScreenCalls == 1 && CoreApplication.ExitCalls == 0,
+                "Unloading after preview dismissal exited fullscreen or the app again.");
+        });
+
+        await runAsync("ScenePreviewPage supports velocity flick and keyboard dismissal back to the previous page", async () =>
+        {
+            var unlock = new FakeUnlockService(true);
+            var (_, scenes) = ConfigurePreviewHost(unlock);
+            var frame = new Frame();
+            Check(frame.Navigate(typeof(SceneManagerPage)), "Failed to navigate to manager page.");
+
+            // Upward velocity flick dismissal
+            Check(frame.Navigate(typeof(ScenePreviewPage), scenes.ActiveSceneId), "Failed to open preview for flick test.");
+            var flickPage = (ScenePreviewPage)frame.Content!;
+            flickPage.RootScenePresenter.ActualHeight = 720;
+            flickPage.Load();
+            var pointer = flickPage.PressPointer(PointerDeviceType.Touch, position: new(100, 300)).Pointer;
+            flickPage.MovePointer(pointer, new(100, 280), 20_000);
+            flickPage.ReleasePointer(pointer, new(100, 280), 20_000);
+            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(300));
+            await WaitUntilAsync(() => frame.Content is SceneManagerPage);
+            Check(!ApplicationView.GetForCurrentView().IsFullScreenMode && CoreApplication.ExitCalls == 0 && unlock.Calls == 0,
+                "Flick dismissal leaked fullscreen or triggered unlock/exit.");
+            flickPage.Unload();
+
+            // Keyboard fallback dismissal
+            Check(frame.Navigate(typeof(ScenePreviewPage), scenes.ActiveSceneId), "Failed to open preview for keyboard test.");
+            var keyPage = (ScenePreviewPage)frame.Content!;
+            keyPage.RootScenePresenter.ActualHeight = 720;
+            keyPage.Load();
+            keyPage.PressKey(VirtualKey.Space);
+            Window.Current.CoreWindow.Dispatcher.Drain();
+            Storyboard.LastCreated!.Advance(TimeSpan.FromMilliseconds(300));
+            await WaitUntilAsync(() => frame.Content is SceneManagerPage);
+            Check(!ApplicationView.GetForCurrentView().IsFullScreenMode && CoreApplication.ExitCalls == 0 && unlock.Calls == 0,
+                "Keyboard dismissal leaked fullscreen or triggered unlock/exit.");
+            keyPage.Unload();
+        });
+
+        await runAsync("ScenePreviewPage handles SystemNavigationManager BackRequested and early unload cleanly", () =>
+        {
+            var unlock = new FakeUnlockService(true);
+            var (_, scenes) = ConfigurePreviewHost(unlock);
+            var frame = new Frame();
+            Check(frame.Navigate(typeof(SceneManagerPage)), "Failed to navigate to manager page.");
+            Check(frame.Navigate(typeof(ScenePreviewPage), scenes.ActiveSceneId), "Failed to navigate to ScenePreviewPage.");
+
+            var firstPreview = (ScenePreviewPage)frame.Content!;
+            firstPreview.RootScenePresenter.ActualHeight = 720;
+            firstPreview.Load();
+
+            var appView = ApplicationView.GetForCurrentView();
+            var systemNav = SystemNavigationManager.GetForCurrentView();
+            var backArgs = systemNav.RaiseBackRequested();
+            Check(backArgs.Handled && !appView.IsFullScreenMode && appView.ExitFullScreenCalls == 1
+                && systemNav.BackRequestedSubscribers == 0 && frame.Content is SceneManagerPage
+                && CoreApplication.ExitCalls == 0,
+                "System BackRequested did not exit fullscreen and navigate back cleanly.");
+            firstPreview.Unload();
+            Check(appView.ExitFullScreenCalls == 1, "Unloading after BackRequested exited fullscreen twice.");
+
+            Check(frame.Navigate(typeof(ScenePreviewPage), scenes.ActiveSceneId), "Failed to reopen ScenePreviewPage for early unload.");
+            var secondPreview = (ScenePreviewPage)frame.Content!;
+            secondPreview.RootScenePresenter.ActualHeight = 720;
+            secondPreview.Load();
+            Check(appView.IsFullScreenMode && systemNav.BackRequestedSubscribers == 1,
+                "Reopened ScenePreviewPage did not enter fullscreen.");
+            secondPreview.Unload();
+            Check(!appView.IsFullScreenMode && appView.ExitFullScreenCalls == 2 && systemNav.BackRequestedSubscribers == 0
+                && CoreApplication.ExitCalls == 0,
+                "Early unload did not restore fullscreen state or leaked BackRequested handler.");
+            return Task.CompletedTask;
+        });
+    }
+
+    private static (IHost Host, ISceneService Scenes) ConfigurePreviewHost(ILockScreenUnlockService unlock)
+    {
+        var path = ApplicationData.Current.LocalFolder.Path;
+        var host = new HostBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddLogging();
+                services.AddSingleton(_ =>
+                {
+                    var settings = new SettingsService(
+                        Microsoft.Extensions.Logging.Abstractions.NullLogger<SettingsService>.Instance,
+                        Path.Combine(path, "Settings.json"));
+                    settings.LoadSettingsAsync().GetAwaiter().GetResult();
+                    return settings;
+                });
+                services.AddSingleton<ISceneService>(provider =>
+                {
+                    var sceneService = new SceneService(
+                        provider.GetRequiredService<SettingsService>(),
+                        Microsoft.Extensions.Logging.Abstractions.NullLogger<SceneService>.Instance,
+                        path);
+                    sceneService.Initialize();
+                    return sceneService;
+                });
+                services.AddSingleton(unlock);
+            })
+            .Build();
+        host.StartAsync().GetAwaiter().GetResult();
+        IAppHost.Host = host;
+        return (host, host.Services.GetRequiredService<ISceneService>());
     }
 
     private static MainPage LoadPage(FakeUnlockService? unlock = null)

@@ -37,7 +37,7 @@ public sealed partial class SceneEditorPage
 
     private void OnPanelViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName is nameof(SceneEditorViewModel.ActiveTab) or nameof(SceneEditorViewModel.IsPreview))
+        if (args.PropertyName == nameof(SceneEditorViewModel.ActiveTab))
         {
             UpdatePanelAnimations();
         }

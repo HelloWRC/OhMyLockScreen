@@ -51,7 +51,7 @@ internal static class InfrastructureTests
 
             app.Launch(new LaunchActivatedEventArgs());
             var editorFrame = ((WindowToastHost)editorWindow.Content!).Frame;
-            Check(editorFrame.Content is SceneEditorPage, "Ordinary launch did not open the editor.");
+            Check(editorFrame.Content is SceneManagerPage, "Ordinary launch did not open the scene manager.");
             Check(editorFrame.Navigate(typeof(ApplicationSettingsPage)), "Could not navigate to settings.");
             var settingsPage = editorFrame.Content;
 
@@ -443,8 +443,25 @@ internal static class InfrastructureTests
             titleBar.ExtendViewIntoTitleBar = true;
             app.Launch(new LaunchActivatedEventArgs());
             var root = ((WindowToastHost)Window.Current.Content!).Frame;
-            Check(root.Content is SceneEditorPage, "Desktop launch did not open the editor.");
+            Check(root.Content is SceneManagerPage, "Desktop launch did not open the scene manager.");
             Check(!titleBar.ExtendViewIntoTitleBar, "Desktop launch kept the persisted custom title bar layout.");
+            var manager = root.Content;
+            app.Launch(new LaunchActivatedEventArgs());
+            app.Activate(new ActivatedEventArgs(ActivationKind.Other));
+            Check(ReferenceEquals(root.Content, manager), "Desktop activation replaced the scene manager page.");
+
+            Check(root.Navigate(typeof(SceneEditorPage)), "Could not navigate to the scene editor.");
+            var editor = root.Content;
+            app.Launch(new LaunchActivatedEventArgs());
+            app.Activate(new ActivatedEventArgs(ActivationKind.Other));
+            Check(ReferenceEquals(root.Content, editor), "Desktop activation replaced the current editor page.");
+
+            Check(root.Navigate(typeof(ScenePreviewPage)), "Could not navigate to the scene preview page.");
+            var preview = root.Content;
+            app.Launch(new LaunchActivatedEventArgs());
+            app.Activate(new ActivatedEventArgs(ActivationKind.Other));
+            Check(ReferenceEquals(root.Content, preview), "Desktop activation replaced the current preview page.");
+
             Check(root.Navigate(typeof(ApplicationSettingsPage)), "Could not navigate to settings.");
             var settings = root.Content;
 
@@ -519,7 +536,7 @@ internal static class InfrastructureTests
                 await Task.Delay(10);
             }
             Check(firstView.Window.Content is WindowToastHost && secondView.Window.Content is WindowToastHost, "An asynchronous activation lost its view.");
-            Check(firstView.Window.Content is WindowToastHost { Frame.Content: SceneEditorPage } &&
+            Check(firstView.Window.Content is WindowToastHost { Frame.Content: SceneManagerPage } &&
                 secondView.Window.Content is WindowToastHost { Frame.Content: MainPage },
                 "Delayed startup lost the latest activation kind or shared it across views.");
             await app.ExitAsync();
@@ -547,7 +564,7 @@ internal static class InfrastructureTests
             // A newer activation can arrive while older continuations are queued.
             first.Invoke(() => app.Activate(new ActivatedEventArgs(ActivationKind.Other)));
             first.Drain();
-            first.Invoke(() => Check(first.Window.Content is WindowToastHost { Frame.Content: SceneEditorPage },
+            first.Invoke(() => Check(first.Window.Content is WindowToastHost { Frame.Content: SceneManagerPage },
                 "A stale queued activation replaced the latest page role."));
             second.Invoke(() => Check(second.Window.Content == null, "The first view drained another view's activation."));
             second.Drain();
@@ -643,7 +660,7 @@ internal static class InfrastructureTests
                 Window.Current.CoreWindow.Dispatcher.AcceleratorSubscribers == 0,
                 "Page tracking continued while shutdown was pending.");
             Check(page.RootScenePresenter.LayersLayerElement.Opacity == 0 &&
-                page.RootScenePresenter.LayersTranslation.Y == -720,
+                page.RootScenePresenter.LayersTranslation.Y == -180,
                 "Shutdown restored the scene layers after the unlock animation.");
             probe.StopGate.SetResult();
             await firstExit;
