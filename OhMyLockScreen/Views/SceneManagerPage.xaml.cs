@@ -526,6 +526,9 @@ public sealed partial class SceneManagerPage : Page
         }
     }
 
+    private void OnPreviewActiveSceneClick(object sender, RoutedEventArgs args) =>
+        TryAction(() => Frame.Navigate(typeof(ScenePreviewPage)));
+
     private void OnSettingsClick(object sender, RoutedEventArgs args) =>
         TryAction(() => Frame.Navigate(typeof(ApplicationSettingsPage)));
 

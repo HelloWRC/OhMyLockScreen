@@ -120,8 +120,7 @@
                     Height="32"
                     MinWidth="160"
                     Width="200"
-                    MaxWidth="328"
-                    Margin="0,0,4,0">
+                    MaxWidth="328">
                     <TextBox
                         x:Name="FilterBox"
                         Height="32"
@@ -139,6 +138,18 @@
                         IsHitTestVisible="False" />
                 </Grid>
 
+                <Button
+                    Style="{StaticResource AccentButtonStyle}"
+                    MinWidth="64"
+                    Height="32"
+                    ToolTipService.ToolTip="预览当前启用的场景"
+                    AutomationProperties.Name="预览当前启用的场景"
+                    Click="OnPreviewActiveSceneClick">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <icons:FluentIcon Icon="Play" FontSize="20" />
+                        <TextBlock Text="预览" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <Button
                     Style="{StaticResource EditorToolbarIconButtonStyle}"
                     ToolTipService.ToolTip="新建场景…"
@@ -178,6 +189,16 @@
                 </Button>
             </StackPanel>
         </Grid>
+
+        <Border
+            Grid.Row="1"
+            Grid.RowSpan="2"
+            Margin="1"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BackgroundSizing="OuterBorderEdge"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            IsHitTestVisible="False" />
 
         <muxc:InfoBar
             x:Name="LockScreenReplacementInfoBar"

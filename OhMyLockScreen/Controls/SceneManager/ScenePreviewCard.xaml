@@ -36,7 +36,7 @@
                 Text="预览"
                 Click="OnPreviewClick">
                 <MenuFlyoutItem.Icon>
-                    <icons:FluentIcon Icon="Eye" />
+                    <icons:FluentIcon Icon="Play" />
                 </MenuFlyoutItem.Icon>
             </MenuFlyoutItem>
             <MenuFlyoutItem
