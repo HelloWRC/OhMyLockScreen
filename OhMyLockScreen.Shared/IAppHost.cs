@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.Hosting;
 
 namespace OhMyLockScreen.Shared;
@@ -6,6 +7,20 @@ namespace OhMyLockScreen.Shared;
 public interface IAppHost
 {
     public static IHost? Host;
+
+    public static string AppVersion { get; } = typeof(IAppHost).Assembly.GetName().Version!.ToString();
+
+    public static string AppCodeName => "Amiya";
+
+    public static string AppGitHash { get; } = GetBuildMetadata("GitCommitHash");
+
+    public static string AppGitBranch { get; } = GetBuildMetadata("GitBranch");
+
+    public static string AppVersionLong => $"{AppVersion}-{AppCodeName}-{AppGitHash[..7]}({AppGitBranch})";
+
+    private static string GetBuildMetadata(string key) =>
+        typeof(IAppHost).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == key)?.Value ?? "Unknown";
 
     public static T GetRequiredService<T>() where T : class
     {

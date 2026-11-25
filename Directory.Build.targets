@@ -49,7 +49,11 @@
       <Version>$(GitBuildVersion)</Version>
       <AssemblyVersion>$(GitBuildVersion)</AssemblyVersion>
       <FileVersion>$(GitBuildVersion)</FileVersion>
-      <InformationalVersion>$(GitBuildVersion)</InformationalVersion>
+      <InformationalVersion>$(GitBuildVersion)+$(GitCommitHash)</InformationalVersion>
     </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="GitCommitHash" Value="$(GitCommitHash)" />
+      <AssemblyMetadata Include="GitBranch" Value="$(GitBranch)" />
+    </ItemGroup>
   </Target>
 </Project>

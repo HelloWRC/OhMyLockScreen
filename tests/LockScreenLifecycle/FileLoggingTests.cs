@@ -41,7 +41,7 @@ internal static class FileLoggingTests
             using (var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)))
             {
                 var text = reader.ReadToEnd();
-                var startup = text.Split(Environment.NewLine).Where(line => line.Contains("|Information|OhMyLockScreen.App|OhMyLockScreen 1.0.0.0 启动，生命周期："));
+                var startup = text.Split(Environment.NewLine).Where(line => line.Contains($"|Information|OhMyLockScreen.App|OhMyLockScreen {App.AppVersionLong} 启动，生命周期："));
                 Check(startup.Select(line => line.Split('：')[^1]).SequenceEqual(new[] { "场景管理器", "锁屏" }), "Incorrect version, severity, lifecycle or repeated startup message.");
                 foreach (var markerText in new[] { "before-host", "after-start" })
                 {

@@ -27,6 +27,12 @@ namespace OhMyLockScreen;
 /// </summary>
 public sealed partial class App : Application
 {
+    public static string AppVersion => IAppHost.AppVersion;
+    public static string AppCodeName => IAppHost.AppCodeName;
+    public static string AppGitHash => IAppHost.AppGitHash;
+    public static string AppGitBranch => IAppHost.AppGitBranch;
+    public static string AppVersionLong => IAppHost.AppVersionLong;
+
     private const string UnhandledExceptionToastTitle = "应用发生未处理异常";
     private readonly ConditionalWeakTable<Window, ViewActivation> _viewActivations = new();
     private readonly ConditionalWeakTable<Window, PendingUnhandledException> _pendingUnhandledExceptions = new();
@@ -287,10 +293,9 @@ public sealed partial class App : Application
                 IAppHost.TryGetService<ISceneService>()?.FlushPending();
             }
 
-            var version = Package.Current.Id.Version;
             IAppHost.TryGetService<ILogger<App>>()?.LogInformation(
                 "OhMyLockScreen {Version} 启动，生命周期：{Lifetime}",
-                $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}", isLockScreen ? "锁屏" : "场景管理器");
+                AppVersionLong, isLockScreen ? "锁屏" : "场景管理器");
             toastHost.Clear();
             rootFrame.Navigate(pageType);
             rootFrame.BackStack.Clear();
