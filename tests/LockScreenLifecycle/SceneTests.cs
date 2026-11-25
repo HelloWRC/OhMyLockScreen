@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using FluentIcons.Common;
 using OhMyLockScreen;
 using OhMyLockScreen.Controls.Components;
+using OhMyLockScreen.Helpers.UI;
 using OhMyLockScreen.Models.Features.Layout;
 using OhMyLockScreen.Models.Features.Appearance;
 using OhMyLockScreen.Models.Scene;
@@ -35,6 +36,51 @@ using Windows.UI.Xaml.Media;
 
 internal static class SceneTests
 {
+    internal static void RunListMotion(Action<string, Action> run) =>
+        run("Scene list motion defines Fluent timing/easing curves, caps stagger delays, and orders entering batches", () =>
+        {
+            Check(SceneListMotion.EntranceOffsetY == 40f, "Entrance vertical offset did not match.");
+            Check(SceneListMotion.EntranceTranslationDuration == TimeSpan.FromMilliseconds(333),
+                "Entrance translation duration did not match ControlSlowAnimationDuration.");
+            Check(SceneListMotion.EntranceOpacityDuration == TimeSpan.FromMilliseconds(167),
+                "Entrance opacity duration did not match ControlFastAnimationDuration.");
+            Check(SceneListMotion.EntranceControlPoint1 == new System.Numerics.Vector2(0.0f, 0.0f)
+                && SceneListMotion.EntranceControlPoint2 == new System.Numerics.Vector2(0.0f, 1.0f),
+                "Entrance easing curve did not match Fluent decelerate cubic-bezier(0, 0, 0, 1).");
+            Check(SceneListMotion.OffsetTransitionDuration == TimeSpan.FromMilliseconds(333),
+                "Offset transition duration did not match.");
+            Check(SceneListMotion.OffsetControlPoint1 == new System.Numerics.Vector2(0.55f, 0.55f)
+                && SceneListMotion.OffsetControlPoint2 == new System.Numerics.Vector2(0.0f, 1.0f),
+                "Offset easing curve did not match Fluent point-to-point cubic-bezier(0.55, 0.55, 0, 1).");
+            Check(SceneListMotion.OffsetArmRenderTicks == 2,
+                "Offset arm render tick delay did not match.");
+
+            Check(SceneListMotion.GetEntranceDelay(-5) == TimeSpan.Zero,
+                "Negative batch rank did not clamp to zero delay.");
+            for (var rank = 0; rank <= 8; rank++)
+            {
+                Check(SceneListMotion.GetEntranceDelay(rank) == TimeSpan.FromMilliseconds(rank * 33),
+                    $"Batch rank {rank} did not step by 33ms.");
+            }
+
+            Check(SceneListMotion.GetEntranceDelay(9) == TimeSpan.FromMilliseconds(264)
+                && SceneListMotion.GetEntranceDelay(100) == TimeSpan.FromMilliseconds(264),
+                "Stagger delay did not cap at rank 8 (264ms).");
+
+            var candidates = new (string Name, int Index)[]
+            {
+                ("fifth", 5),
+                ("unrealized-a", -1),
+                ("first", 1),
+                ("zero", 0),
+                ("unrealized-b", -3),
+                ("third", 3)
+            };
+            var ordered = SceneListMotion.OrderEntranceBatch(candidates, item => item.Index);
+            Check(ordered.Select(item => item.Name).SequenceEqual(["zero", "first", "third", "fifth"]),
+                "OrderEntranceBatch failed to filter negative indices or preserve ascending order.");
+        });
+
     internal static Task RunManagementAsync(Func<string, Func<Task>, Task> runAsync) =>
         runAsync("Scene management keeps editing and activation independent, filters metadata, and protects the active scene", async () =>
         {
@@ -49,9 +95,11 @@ internal static class SceneTests
                 using var editor = fixture.Editor();
                 var manager = fixture.Manager();
                 manager.RefreshScenes();
+                Check(manager.SceneCountText == "1 个场景", "Initial scene count text did not match.");
 
                 var activeId = fixture.Service.ActiveSceneId;
                 var created = manager.CreateScene("新场景");
+                Check(manager.SceneCountText == "2 个场景", "Scene count text did not update after creating a scene.");
                 editor.Open(created.SceneId);
                 var row = manager.FilteredScenes.Single(item => item.Id == created.SceneId);
                 var activeRow = manager.FilteredScenes.Single(item => item.Id == activeId);
@@ -87,19 +135,24 @@ internal static class SceneTests
                 Check(Directory.Exists(fixture.Service.GetSceneDirectory(active.SceneId)), "A rejected delete removed the active scene folder.");
 
                 manager.FilterText = "alice";
-                Check(manager.FilteredScenes.Count == 1 && ReferenceEquals(manager.FilteredScenes[0], row) && !manager.IsEmpty,
+                Check(manager.FilteredScenes.Count == 1 && ReferenceEquals(manager.FilteredScenes[0], row) && !manager.IsEmpty
+                    && manager.SceneCountText == "1 / 2 个场景",
                     "Filtering by author did not match the expected card.");
                 manager.FilterText = "cc by";
-                Check(manager.FilteredScenes.Count == 1 && ReferenceEquals(manager.FilteredScenes[0], row),
+                Check(manager.FilteredScenes.Count == 1 && ReferenceEquals(manager.FilteredScenes[0], row)
+                    && manager.SceneCountText == "1 / 2 个场景",
                     "Filtering by license did not match the expected card.");
                 manager.FilterText = "不存在的关键字";
-                Check(manager.FilteredScenes.Count == 0 && manager.IsEmpty,
+                Check(manager.FilteredScenes.Count == 0 && manager.IsEmpty
+                    && manager.SceneCountText == "0 / 2 个场景",
                     "An unmatched filter did not empty FilteredScenes.");
                 manager.FilterText = "";
-                Check(!manager.IsEmpty && manager.FilteredScenes.Count == 2,
+                Check(!manager.IsEmpty && manager.FilteredScenes.Count == 2
+                    && manager.SceneCountText == "2 个场景",
                     "Clearing the filter did not restore all scene cards.");
 
                 var copy = manager.DuplicateScene(active.SceneId);
+                Check(manager.SceneCountText == "3 个场景", "Scene count text did not update after duplicating a scene.");
                 editor.Open(copy.SceneId);
                 var sourceBlob = Path.Combine(fixture.Service.GetSceneDirectory(active.SceneId), "Blobs", blobId[..2], blobId);
                 var copiedBlob = Path.Combine(fixture.Service.GetSceneDirectory(copy.SceneId), "Blobs", blobId[..2], blobId);
@@ -113,7 +166,8 @@ internal static class SceneTests
                 Check(File.ReadAllText(sourceBlob) == "scene management test", "The copy shared its blob with the source.");
 
                 manager.DeleteScene(copy.SceneId);
-                Check(manager.FilteredScenes.All(item => item.Id != copy.SceneId) && manager.FilteredScenes.Count == 2,
+                Check(manager.FilteredScenes.All(item => item.Id != copy.SceneId) && manager.FilteredScenes.Count == 2
+                    && manager.SceneCountText == "2 个场景",
                     "Deleting the copied scene did not remove its card.");
 
                 fixture.Service.Reload();

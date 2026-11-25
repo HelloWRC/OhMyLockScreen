@@ -22,6 +22,9 @@ public sealed partial class SceneManagerViewModel : ObservableObject
     private bool _isBusy;
 
     [ObservableProperty]
+    private string _sceneCountText = "0 个场景";
+
+    [ObservableProperty]
     private string _dialogTitle = "";
 
     [ObservableProperty]
@@ -159,6 +162,9 @@ public sealed partial class SceneManagerViewModel : ObservableObject
         }
 
         IsEmpty = FilteredScenes.Count == 0;
+        SceneCountText = string.IsNullOrEmpty(query)
+            ? $"{_allItems.Count} 个场景"
+            : $"{FilteredScenes.Count} / {_allItems.Count} 个场景";
     }
 
     private static bool MatchesFilter(SceneCardItem item, string query) =>

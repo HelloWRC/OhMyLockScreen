@@ -38,6 +38,7 @@
     <Compile Include="../../OhMyLockScreen/Services/Scene/SceneLayoutEditing.cs" Link="Services/SceneLayoutEditing.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/SceneBlobStorageService.cs" Link="Services/SceneBlobStorageService.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/SceneService.cs" Link="Services/SceneService.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Scene/SceneService.Package.cs" Link="Services/SceneService.Package.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Scene/DefaultSceneFactory.cs" Link="Services/DefaultSceneFactory.cs" />
     <Compile Include="../../OhMyLockScreen/Services/SettingsService.cs" Link="Services/SettingsService.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Rules/*.xaml" Link="Controls/Rules/%(Filename)%(Extension)" />
@@ -88,6 +89,11 @@
     <Compile Include="../../OhMyLockScreen/Controls/Editor/ForegroundSettingsControl.xaml.cs" Link="Controls/Editor/ForegroundSettingsControl.xaml.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/ForegroundSettingsControl.xaml" Link="Controls/Editor/ForegroundSettingsControl.xaml" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/EditorResources.xaml" Link="Controls/Editor/EditorResources.xaml" />
+    <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneListMotion.cs" Link="Helpers/UI/SceneListMotion.cs" />
+    <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneListMotionController.cs" Link="Helpers/UI/SceneListMotionController.cs" />
+    <Compile Include="../../OhMyLockScreen/ViewModels/SceneCardItem.cs" Link="ViewModels/SceneCardItem.cs" />
+    <Compile Include="../../OhMyLockScreen/Controls/SceneManager/ScenePreviewCard.xaml.cs" Link="Controls/SceneManager/ScenePreviewCard.xaml.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/SceneManager/ScenePreviewCard.xaml" Link="Controls/SceneManager/ScenePreviewCard.xaml" />
   </ItemGroup>
   <Import Project="../../OhMyLockScreen.NativeHost/PackageNativeHost.targets" />
 </Project>

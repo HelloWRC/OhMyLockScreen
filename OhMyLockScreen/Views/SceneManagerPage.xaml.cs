@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
+using OhMyLockScreen.Helpers.UI;
 using OhMyLockScreen.Services.LockScreenProvider;
 using OhMyLockScreen.Services.Scene;
 using OhMyLockScreen.Shared;
@@ -23,9 +24,13 @@ namespace OhMyLockScreen.Views;
 /// <summary>应用桌面主页：展示、筛选、切换、导入导出及管理锁屏场景。</summary>
 public sealed partial class SceneManagerPage : Page
 {
+    private static readonly Uri SponsorUri = new("https://afdian.com/a/HelloWRC");
+    private static readonly Uri FeedbackUri = new("https://github.com/HelloWRC/OhMyLockScreen/issues");
+
     private readonly ISceneService _scenes;
     private readonly LockScreenReplacementService _lockScreenReplacement;
     private readonly ScenePackageImportQueue _importQueue;
+    private readonly SceneListMotionController _listMotion;
     private readonly SemaphoreSlim _dialogGate = new(1, 1);
     private readonly HashSet<ToastMessage> _pageToasts = [];
     private Window? _window;
@@ -35,6 +40,7 @@ public sealed partial class SceneManagerPage : Page
     private bool? _lastLockScreenEnabled;
 
     public SceneManagerViewModel ViewModel { get; }
+    public string DisplayVersion => App.AppVersionLong;
 
     public SceneManagerPage()
     {
@@ -43,6 +49,7 @@ public sealed partial class SceneManagerPage : Page
         _importQueue = IAppHost.GetRequiredService<ScenePackageImportQueue>();
         ViewModel = IAppHost.GetRequiredService<SceneManagerViewModel>();
         InitializeComponent();
+        _listMotion = new SceneListMotionController(ScenesRepeater);
         NavigationCacheMode = NavigationCacheMode.Enabled;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -65,10 +72,12 @@ public sealed partial class SceneManagerPage : Page
         _scenes.SceneSaved += OnSceneServiceChanged;
         _scenes.ActiveSceneChanged += OnSceneServiceChanged;
         _importQueue.PendingChanged += OnPendingImportsChanged;
+        _listMotion.Attach(_window.CoreWindow.Dispatcher);
 
         try
         {
             ViewModel.RefreshScenes();
+            _listMotion.QueueRealizedCardsEntrance();
             if (_scenes.LoadErrors.Count > 0)
             {
                 ShowMessage("部分场景未能加载", string.Join(Environment.NewLine, _scenes.LoadErrors), InfoBarSeverity.Warning);
@@ -91,6 +100,7 @@ public sealed partial class SceneManagerPage : Page
         }
 
         _loaded = false;
+        _listMotion.Detach();
         ClearPageToasts();
         _importQueue.PendingChanged -= OnPendingImportsChanged;
         _scenes.SceneSaved -= OnSceneServiceChanged;
@@ -528,6 +538,30 @@ public sealed partial class SceneManagerPage : Page
 
     private void OnPreviewActiveSceneClick(object sender, RoutedEventArgs args) =>
         TryAction(() => Frame.Navigate(typeof(ScenePreviewPage)));
+
+    private async void OnSponsorClick(object sender, RoutedEventArgs args) =>
+        await OpenExternalUriAsync(SponsorUri, "无法打开支持开发者页面");
+
+    private async void OnFeedbackClick(object sender, RoutedEventArgs args) =>
+        await OpenExternalUriAsync(FeedbackUri, "无法打开问题反馈页面");
+
+    private async Task OpenExternalUriAsync(Uri uri, string failureTitle)
+    {
+        try
+        {
+            if (!await Launcher.LaunchUriAsync(uri) && _loaded)
+            {
+                ShowMessage(failureTitle, uri.AbsoluteUri);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (_loaded)
+            {
+                ShowError(exception);
+            }
+        }
+    }
 
     private void OnSettingsClick(object sender, RoutedEventArgs args) =>
         TryAction(() => Frame.Navigate(typeof(ApplicationSettingsPage)));
