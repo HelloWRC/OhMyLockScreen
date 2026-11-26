@@ -173,6 +173,9 @@
                 Property="Background"
                 Value="{ThemeResource SystemControlTransparentBrush}" />
             <Setter
+                Property="AllowFocusOnInteraction"
+                Value="False" />
+            <Setter
                 Property="Visibility"
                 Value="Collapsed" />
         </Style>
@@ -336,14 +339,21 @@
                 <Canvas
                     x:Name="SelectionOverlay"
                     IsHitTestVisible="False">
-                    <Border
-                        BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-                        BorderThickness="2"
-                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.X, Mode=OneWay}"
-                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.Y, Mode=OneWay}"
-                        Width="{x:Bind ViewModel.SelectionGeometry.Width, Mode=OneWay}"
-                        Height="{x:Bind ViewModel.SelectionGeometry.Height, Mode=OneWay}"
+                    <Polygon
+                        x:Name="SelectionOutline"
+                        Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                        StrokeThickness="2"
+                        StrokeLineJoin="Miter"
+                        StrokeMiterLimit="2"
                         Visibility="{x:Bind ViewModel.ShowSelection, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
+                    <Line
+                        X1="{x:Bind ViewModel.SelectionGeometry.RotationStemStartX, Mode=OneWay}"
+                        Y1="{x:Bind ViewModel.SelectionGeometry.RotationStemStartY, Mode=OneWay}"
+                        X2="{x:Bind ViewModel.SelectionGeometry.RotationHandleCenterX, Mode=OneWay}"
+                        Y2="{x:Bind ViewModel.SelectionGeometry.RotationHandleCenterY, Mode=OneWay}"
+                        Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                        StrokeThickness="2"
+                        Visibility="{x:Bind ViewModel.ShowTransformHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
                 </Canvas>
                 <!-- 编辑态由透明层接管输入，避免组件内容参与命中测试。 -->
                 <Border
@@ -351,62 +361,138 @@
                     Background="{ThemeResource SystemControlTransparentBrush}" />
                 <Canvas
                     x:Name="ResizeOverlay"
+                    AllowFocusOnInteraction="False"
                     Background="{x:Null}">
                     <Border
                         x:Name="ResizeTopLeft"
                         Style="{StaticResource ResizeHandleStyle}"
                         Tag="TopLeft"
-                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.HandleLeft, Mode=OneWay}"
-                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.HandleTop, Mode=OneWay}"
-                        Visibility="{x:Bind ViewModel.ShowResizeHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.TopLeftHandleX, Mode=OneWay}"
+                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.TopLeftHandleY, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShowCornerHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
                         PointerPressed="OnResizePointerPressed"
-                        AutomationProperties.Name="左上角调整尺寸">
-                        <Ellipse
-                            Width="8"
-                            Height="8"
-                            Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                        AutomationProperties.Name="{x:Bind GetTopLeftHandleName(ViewModel.IsScaleHandleMode), Mode=OneWay}">
+                        <Grid IsHitTestVisible="False">
+                            <Ellipse
+                                Width="8"
+                                Height="8"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.IsScaleHandleMode, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}" />
+                            <Rectangle
+                                Width="8"
+                                Height="8"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.IsScaleHandleMode, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
+                        </Grid>
                     </Border>
                     <Border
                         x:Name="ResizeTopRight"
                         Style="{StaticResource ResizeHandleStyle}"
                         Tag="TopRight"
-                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.HandleRight, Mode=OneWay}"
-                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.HandleTop, Mode=OneWay}"
-                        Visibility="{x:Bind ViewModel.ShowResizeHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.TopRightHandleX, Mode=OneWay}"
+                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.TopRightHandleY, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShowCornerHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
                         PointerPressed="OnResizePointerPressed"
-                        AutomationProperties.Name="右上角调整尺寸">
-                        <Ellipse
-                            Width="8"
-                            Height="8"
-                            Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                        AutomationProperties.Name="{x:Bind GetTopRightHandleName(ViewModel.IsScaleHandleMode), Mode=OneWay}">
+                        <Grid IsHitTestVisible="False">
+                            <Ellipse
+                                Width="8"
+                                Height="8"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.IsScaleHandleMode, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}" />
+                            <Rectangle
+                                Width="8"
+                                Height="8"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.IsScaleHandleMode, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
+                        </Grid>
                     </Border>
                     <Border
                         x:Name="ResizeBottomLeft"
                         Style="{StaticResource ResizeHandleStyle}"
                         Tag="BottomLeft"
-                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.HandleLeft, Mode=OneWay}"
-                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.HandleBottom, Mode=OneWay}"
-                        Visibility="{x:Bind ViewModel.ShowResizeHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.BottomLeftHandleX, Mode=OneWay}"
+                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.BottomLeftHandleY, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShowCornerHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
                         PointerPressed="OnResizePointerPressed"
-                        AutomationProperties.Name="左下角调整尺寸">
-                        <Ellipse
-                            Width="8"
-                            Height="8"
-                            Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                        AutomationProperties.Name="{x:Bind GetBottomLeftHandleName(ViewModel.IsScaleHandleMode), Mode=OneWay}">
+                        <Grid IsHitTestVisible="False">
+                            <Ellipse
+                                Width="8"
+                                Height="8"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.IsScaleHandleMode, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}" />
+                            <Rectangle
+                                Width="8"
+                                Height="8"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.IsScaleHandleMode, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
+                        </Grid>
                     </Border>
                     <Border
                         x:Name="ResizeBottomRight"
                         Style="{StaticResource ResizeHandleStyle}"
                         Tag="BottomRight"
-                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.HandleRight, Mode=OneWay}"
-                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.HandleBottom, Mode=OneWay}"
-                        Visibility="{x:Bind ViewModel.ShowResizeHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.BottomRightHandleX, Mode=OneWay}"
+                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.BottomRightHandleY, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShowCornerHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
                         PointerPressed="OnResizePointerPressed"
-                        AutomationProperties.Name="右下角调整尺寸">
+                        AutomationProperties.Name="{x:Bind GetBottomRightHandleName(ViewModel.IsScaleHandleMode), Mode=OneWay}">
+                        <Grid IsHitTestVisible="False">
+                            <Ellipse
+                                Width="8"
+                                Height="8"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.IsScaleHandleMode, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, ConverterParameter=Inverse}" />
+                            <Rectangle
+                                Width="8"
+                                Height="8"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.IsScaleHandleMode, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}" />
+                        </Grid>
+                    </Border>
+                    <Border
+                        x:Name="RotateHandle"
+                        Style="{StaticResource ResizeHandleStyle}"
+                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.RotationHandleX, Mode=OneWay}"
+                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.RotationHandleY, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShowTransformHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+                        PointerPressed="OnRotateHandlePointerPressed"
+                        AutomationProperties.Name="旋转把柄">
                         <Ellipse
                             Width="8"
                             Height="8"
-                            Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                            Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                            IsHitTestVisible="False" />
+                    </Border>
+                    <Border
+                        x:Name="OriginHandle"
+                        Style="{StaticResource ResizeHandleStyle}"
+                        Canvas.Left="{x:Bind ViewModel.SelectionGeometry.OriginHandleX, Mode=OneWay}"
+                        Canvas.Top="{x:Bind ViewModel.SelectionGeometry.OriginHandleY, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShowTransformHandles, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}}"
+                        PointerPressed="OnOriginHandlePointerPressed"
+                        AutomationProperties.Name="变换中心把柄">
+                        <Grid
+                            Width="12"
+                            Height="12"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False">
+                            <Ellipse
+                                Width="8"
+                                Height="8"
+                                Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                                StrokeThickness="2" />
+                            <Rectangle
+                                Width="12"
+                                Height="1.5"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                            <Rectangle
+                                Width="1.5"
+                                Height="12"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                        </Grid>
                     </Border>
                 </Canvas>
             </Grid>

@@ -13,6 +13,7 @@ using OhMyLockScreen.Shared.Models.FeatureHost;
 using OhMyLockScreen.Shared.Models.Scene;
 using OhMyLockScreen.Shared.Services.Scene;
 using OhMyLockScreen.Shared.Helpers.Scene;
+using Windows.Foundation;
 using Windows.UI.Xaml.Controls;
 using OhMyLockScreen.Services;
 using OhMyLockScreen.Services.Scene;
@@ -70,6 +71,10 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _canResizeSelection;
     [ObservableProperty]
+    private bool _canEditTransform;
+    [ObservableProperty]
+    private bool _isScaleFieldFocused;
+    [ObservableProperty]
     private SceneSelectionGeometry _hoverGeometry;
     [ObservableProperty]
     private bool _showHover;
@@ -101,11 +106,15 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     public Thickness ViewportMargin => ShowComponents ? new Thickness(SidePanelWidth, 0, SidePanelWidth, 0) : default;
     public bool ShowSelection => ShowComponents && HasSelectionBounds;
     public bool ShowResizeHandles => ShowSelection && CanResizeSelection;
+    public bool ShowTransformHandles => ShowSelection && CanEditTransform;
+    public bool IsScaleHandleMode => ShowTransformHandles && IsScaleFieldFocused;
+    public bool ShowCornerHandles => ShowSelection && (CanResizeSelection || IsScaleHandleMode);
 
     public event EventHandler? SelectionChanged;
     public event EventHandler? StructureChanged;
     public event EventHandler? InspectorChanged;
     public event EventHandler? NodeStateChanged;
+    public event EventHandler? TransformVisualChanged;
     public event EventHandler<Exception>? Error;
     public SceneEditorViewModel(
         ISceneService scenes,
@@ -219,11 +228,20 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     partial void OnSelectedItemChanged(SceneTreeItem? value)
     {
         HasSelectionBounds = false;
-        CanResizeSelection = value is { Model: ComponentSettings component, IsEffectivelyVisible: true, IsEffectivelyLocked: false }
-            && SceneLayoutEditing.CanEditLayout(component);
+        IsScaleFieldFocused = false;
+        RefreshSelectionCapabilities();
         OnPropertyChanged(nameof(SelectedModel));
         OnPropertyChanged(nameof(CanEditSelection));
         SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void RefreshSelectionCapabilities()
+    {
+        var canEditComponent = SelectedItem is { Model: ComponentSettings component, IsEffectivelyVisible: true, IsEffectivelyLocked: false }
+            ? component
+            : null;
+        CanResizeSelection = canEditComponent != null && SceneLayoutEditing.CanEditLayout(canEditComponent);
+        CanEditTransform = canEditComponent != null && SceneTransformEditing.CanEditTransform(canEditComponent);
     }
 
     internal bool CanSelectOnCanvas(object model) =>
@@ -375,8 +393,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
         if (nodeStateChanged || structureChanged)
         {
-            CanResizeSelection = SelectedItem is { Model: ComponentSettings selectedComponent, IsEffectivelyVisible: true, IsEffectivelyLocked: false }
-                && SceneLayoutEditing.CanEditLayout(selectedComponent);
+            RefreshSelectionCapabilities();
         }
 
         if (nodeStateChanged)
@@ -389,7 +406,13 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             || ReferenceEquals(sender, SelectedModel) && property is "Features" or "Settings"
             || sender is FeatureInfo info && selectedFeatures?.Contains(info) == true && property is "Id" or "Settings" or nameof(FeatureInfo.IsEnabled))
         {
+            RefreshSelectionCapabilities();
             InspectorChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        if (sender is TransformFeatureSettings)
+        {
+            TransformVisualChanged?.Invoke(this, EventArgs.Empty);
         }
 
         if (ReferenceEquals(sender, Scene))
@@ -509,10 +532,15 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
     partial void OnHasSelectionBoundsChanged(bool value) => RefreshSelectionVisibility();
     partial void OnCanResizeSelectionChanged(bool value) => RefreshSelectionVisibility();
+    partial void OnCanEditTransformChanged(bool value) => RefreshSelectionVisibility();
+    partial void OnIsScaleFieldFocusedChanged(bool value) => RefreshSelectionVisibility();
     private void RefreshSelectionVisibility()
     {
         OnPropertyChanged(nameof(ShowSelection));
         OnPropertyChanged(nameof(ShowResizeHandles));
+        OnPropertyChanged(nameof(ShowTransformHandles));
+        OnPropertyChanged(nameof(IsScaleHandleMode));
+        OnPropertyChanged(nameof(ShowCornerHandles));
     }
 
     private bool CanAddComponent(ComponentRegisterInfo? info) => ShowComponents && info != null;
@@ -749,6 +777,9 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     public LayoutFeatureSettings? GetLayout(bool create)
         => SceneLayoutEditing.GetLayout(SelectedModel as IFeatureContainer, create);
 
+    public TransformFeatureSettings? GetTransform()
+        => SceneTransformEditing.GetTransform(SelectedModel as IFeatureContainer);
+
     public void Dispose()
     {
         _graph?.Dispose();
@@ -915,12 +946,61 @@ public enum SceneEditorTab
     Background
 }
 
-public readonly record struct SceneSelectionGeometry(double X, double Y, double Width, double Height)
+public readonly record struct SceneSelectionGeometry(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    Point TopLeft,
+    Point TopRight,
+    Point BottomRight,
+    Point BottomLeft,
+    Point Origin,
+    Point RotationStemStart,
+    Point RotationHandle)
 {
-    public double HandleLeft => X - 12;
-    public double HandleTop => Y - 12;
-    public double HandleRight => X + Width - 12;
-    public double HandleBottom => Y + Height - 12;
+    public const double HandleHalfSize = 12;
+    public const double RotationHandleOffset = 28;
+
+    public SceneSelectionGeometry(double x, double y, double width, double height)
+        : this(
+            x,
+            y,
+            width,
+            height,
+            new Point(x, y),
+            new Point(x + width, y),
+            new Point(x + width, y + height),
+            new Point(x, y + height),
+            new Point(x + width / 2, y + height / 2),
+            new Point(x + width / 2, y),
+            new Point(x + width / 2, y - RotationHandleOffset))
+    {
+    }
+
+    public double HandleLeft => X - HandleHalfSize;
+    public double HandleTop => Y - HandleHalfSize;
+    public double HandleRight => X + Width - HandleHalfSize;
+    public double HandleBottom => Y + Height - HandleHalfSize;
+
+    public double TopLeftHandleX => TopLeft.X - HandleHalfSize;
+    public double TopLeftHandleY => TopLeft.Y - HandleHalfSize;
+    public double TopRightHandleX => TopRight.X - HandleHalfSize;
+    public double TopRightHandleY => TopRight.Y - HandleHalfSize;
+    public double BottomLeftHandleX => BottomLeft.X - HandleHalfSize;
+    public double BottomLeftHandleY => BottomLeft.Y - HandleHalfSize;
+    public double BottomRightHandleX => BottomRight.X - HandleHalfSize;
+    public double BottomRightHandleY => BottomRight.Y - HandleHalfSize;
+
+    public double OriginHandleX => Origin.X - HandleHalfSize;
+    public double OriginHandleY => Origin.Y - HandleHalfSize;
+
+    public double RotationStemStartX => RotationStemStart.X;
+    public double RotationStemStartY => RotationStemStart.Y;
+    public double RotationHandleCenterX => RotationHandle.X;
+    public double RotationHandleCenterY => RotationHandle.Y;
+    public double RotationHandleX => RotationHandle.X - HandleHalfSize;
+    public double RotationHandleY => RotationHandle.Y - HandleHalfSize;
 }
 
 public sealed class InspectorSection : ObservableObject, IDisposable

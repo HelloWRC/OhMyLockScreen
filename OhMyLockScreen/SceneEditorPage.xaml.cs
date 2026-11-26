@@ -130,13 +130,19 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private bool _selectionPending;
     private IFeatureContainer? _featureTarget;
     private IDecoratorHost? _featureDecoratorHost;
+    private TransformSettingsControl? _observedTransformControl;
     private uint? _dragPointer;
-    private bool _resizing;
+    private CanvasDragMode _dragMode;
     private bool _dragChanged;
     private Point _dragStart;
     private Point _dragPanelStart;
     private GeneralTransform? _dragViewportToPanel;
     private LayoutFeatureSettings? _dragLayout;
+    private TransformFeatureSettings? _dragTransform;
+    private BrushEditorMatrix? _resizeLinearInverse;
+    private SceneTransformEditing.OriginDragState _originDragState;
+    private SceneTransformEditing.RotateDragState _rotateDragState;
+    private SceneTransformEditing.ScaleDragState _scaleDragState;
     private Panel? _dragPanel;
     private ComponentPresenter? _dragPresenter;
     private bool _dragPresenterHitTestVisible;
@@ -144,6 +150,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private Rect _startBounds;
     private Rect _layoutArea;
     private ResizeCorner _resizeCorner;
+    private (Point TopLeft, Point TopRight, Point BottomRight, Point BottomLeft)? _lastSelectionQuad;
     private SceneTreeItem? _draggedTreeItem;
     private SceneTreeItem? _pressedTreeItem;
     private SceneTreeItem? _hoveredTreeItem;
@@ -243,6 +250,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         ViewModel.StructureChanged += OnStructureChanged;
         ViewModel.InspectorChanged += OnInspectorChanged;
         ViewModel.NodeStateChanged += OnNodeStateChanged;
+        ViewModel.TransformVisualChanged += OnTransformVisualChanged;
         ViewModel.Error += OnEditorError;
         ViewModel.PropertyChanged += OnPanelViewModelPropertyChanged;
         ViewModel.PropertyChanged += OnMediaImportStateChanged;
@@ -334,6 +342,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         ViewModel.StructureChanged -= OnStructureChanged;
         ViewModel.InspectorChanged -= OnInspectorChanged;
         ViewModel.NodeStateChanged -= OnNodeStateChanged;
+        ViewModel.TransformVisualChanged -= OnTransformVisualChanged;
         ViewModel.Error -= OnEditorError;
         _scenes.SceneSaved -= OnSceneSaved;
         _scenes.ActiveSceneChanged -= OnSceneSaved;
@@ -389,10 +398,23 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     }
     private void OnInspectorChanged(object? sender, EventArgs args)
     {
+        if (_dragMode is CanvasDragMode.Origin or CanvasDragMode.Rotate or CanvasDragMode.Scale
+            && !ReferenceEquals(ViewModel.GetTransform(), _dragTransform))
+        {
+            EndDrag();
+        }
+
         RefreshInspector();
         if (!_selectionPending)
         {
             UpdateSelectionGeometry();
+        }
+    }
+    private void OnTransformVisualChanged(object? sender, EventArgs args)
+    {
+        if (_dragMode is not (CanvasDragMode.Origin or CanvasDragMode.Rotate or CanvasDragMode.Scale))
+        {
+            ScheduleSelectionGeometryUpdate();
         }
     }
     private void OnEditorError(object? sender, Exception error) => ShowError(error);
@@ -1274,6 +1296,45 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
                 editor.BlobUriConverter = blobContext;
             }
         }
+
+        TransformSettingsControl? activeTransformControl = null;
+        if (_loaded && ViewModel.ShowComponents
+            && ViewModel.SelectedItem is { Model: ComponentSettings, IsEffectivelyVisible: true, IsEffectivelyLocked: false })
+        {
+            activeTransformControl = ViewModel.InspectorSections
+                .FirstOrDefault(section => section.Editor is TransformSettingsControl
+                    && ReferenceEquals(section.Model, ViewModel.SelectedModel)
+                    && section.IsFeatureEnabled)
+                ?.Editor as TransformSettingsControl;
+        }
+
+        if (!ReferenceEquals(_observedTransformControl, activeTransformControl))
+        {
+            if (_observedTransformControl != null)
+            {
+                _observedTransformControl.ScaleFieldFocusChanged -= OnTransformScaleFieldFocusChanged;
+            }
+
+            _observedTransformControl = activeTransformControl;
+            if (_observedTransformControl != null)
+            {
+                _observedTransformControl.ScaleFieldFocusChanged += OnTransformScaleFieldFocusChanged;
+            }
+        }
+
+        ViewModel.IsScaleFieldFocused = _observedTransformControl?.IsScaleFieldFocused ?? false;
+    }
+
+    private void OnTransformScaleFieldFocusChanged(object? sender, EventArgs args)
+    {
+        if (_loaded && _observedTransformControl is { } control && ReferenceEquals(sender, control))
+        {
+            ViewModel.IsScaleFieldFocused = control.IsScaleFieldFocused;
+            if (_dragMode == CanvasDragMode.Scale && !ViewModel.IsScaleFieldFocused)
+            {
+                EndDrag();
+            }
+        }
     }
 
     private void OnFeatureDecoratorsChanged(object? sender, EventArgs args) => RefreshFeatureEditorTargets();
@@ -1458,21 +1519,59 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             return;
         }
 
-        StartDrag(args, resizing: false);
+        StartDrag(args, CanvasDragMode.Move);
     }
+
+    private static bool IsPrimaryCanvasPointer(PointerRoutedEventArgs args, UIElement relativeTo) =>
+        args.Pointer.PointerDeviceType != PointerDeviceType.Mouse
+        || args.GetCurrentPoint(relativeTo).Properties.IsLeftButtonPressed;
 
     private void OnResizePointerPressed(object sender, PointerRoutedEventArgs args)
     {
-        if (ViewModel.ActiveTab != SceneEditorTab.Components || sender is not FrameworkElement { Tag: string tag })
+        if (ViewModel.ActiveTab != SceneEditorTab.Components
+            || sender is not FrameworkElement { Tag: string tag }
+            || !IsPrimaryCanvasPointer(args, SceneViewport))
         {
             return;
         }
 
+        args.Handled = true;
         _resizeCorner = Enum.Parse<ResizeCorner>(tag);
-        StartDrag(args, resizing: true);
+        if (ViewModel.IsScaleHandleMode)
+        {
+            StartTransformDrag(args, CanvasDragMode.Scale);
+        }
+        else
+        {
+            StartDrag(args, CanvasDragMode.Resize);
+        }
     }
 
-    private void StartDrag(PointerRoutedEventArgs args, bool resizing)
+    private void OnRotateHandlePointerPressed(object sender, PointerRoutedEventArgs args)
+    {
+        if (ViewModel.ActiveTab != SceneEditorTab.Components
+            || !IsPrimaryCanvasPointer(args, SceneViewport))
+        {
+            return;
+        }
+
+        args.Handled = true;
+        StartTransformDrag(args, CanvasDragMode.Rotate);
+    }
+
+    private void OnOriginHandlePointerPressed(object sender, PointerRoutedEventArgs args)
+    {
+        if (ViewModel.ActiveTab != SceneEditorTab.Components
+            || !IsPrimaryCanvasPointer(args, SceneViewport))
+        {
+            return;
+        }
+
+        args.Handled = true;
+        StartTransformDrag(args, CanvasDragMode.Origin);
+    }
+
+    private void StartDrag(PointerRoutedEventArgs args, CanvasDragMode mode)
     {
         if (ViewModel.SelectedItem is not { Model: ComponentSettings component, IsEffectivelyLocked: false, IsEffectivelyVisible: true }
             || FindSelectedPresenter() is not ComponentPresenter target)
@@ -1488,6 +1587,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
         EndDrag();
         _pendingDropAlignments.Remove(component);
+        var resizing = mode == CanvasDragMode.Resize;
         _dragPanel = panel;
         _dragKind = panel switch
         {
@@ -1502,10 +1602,22 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         _startBounds = SceneLayoutEditing.GetLayoutBounds(target, panel, _layoutArea);
         _dragViewportToPanel = TryGetTransform(SceneViewport, panel);
         _dragLayout = stackMove ? null : ViewModel.GetLayout(create: true);
+        if (resizing)
+        {
+            var transform = SceneTransformEditing.GetTransform(component);
+            _resizeLinearInverse = transform != null && SceneTransformEditing.TryGetLinearInverse(transform, out var inverse)
+                ? inverse
+                : null;
+        }
+        else
+        {
+            _resizeLinearInverse = null;
+        }
+
         _dragStart = args.GetCurrentPoint(SceneViewport).Position;
         _dragPanelStart = TransformPoint(_dragViewportToPanel, _dragStart);
         _dragPointer = args.Pointer.PointerId;
-        _resizing = resizing;
+        _dragMode = mode;
         _dragChanged = false;
         _dragPresenter = target;
         _dragPresenterHitTestVisible = target.IsHitTestVisible;
@@ -1517,6 +1629,71 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         }
 
         args.Handled = true;
+    }
+
+    private void StartTransformDrag(PointerRoutedEventArgs args, CanvasDragMode mode)
+    {
+        if (ViewModel.SelectedItem is not { Model: ComponentSettings component, IsEffectivelyLocked: false, IsEffectivelyVisible: true }
+            || SceneTransformEditing.GetTransform(component) is not { } transform
+            || FindSelectedPresenter() is not ComponentPresenter target
+            || target.ActualWidth <= 0
+            || target.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        var panel = FindParent<Panel>(VisualTreeHelper.GetParent(target));
+        if (panel == null)
+        {
+            return;
+        }
+
+        EndDrag();
+        _pendingDropAlignments.Remove(component);
+        var targetToViewport = SceneTransformEditing.FromGeneralTransform(TryGetTransform(target, SceneViewport));
+        var panelToViewport = SceneTransformEditing.FromGeneralTransform(TryGetTransform(panel, SceneViewport));
+        var dragStart = args.GetCurrentPoint(SceneViewport).Position;
+
+        switch (mode)
+        {
+            case CanvasDragMode.Origin:
+                if (!SceneTransformEditing.TryBeginOriginDrag(
+                    transform, target.ActualWidth, target.ActualHeight, targetToViewport, panelToViewport, dragStart, out _originDragState))
+                {
+                    return;
+                }
+                break;
+            case CanvasDragMode.Rotate:
+                if (!SceneTransformEditing.TryBeginRotateDrag(
+                    transform, target.ActualWidth, target.ActualHeight, targetToViewport, panelToViewport, dragStart, out _rotateDragState))
+                {
+                    return;
+                }
+                break;
+            case CanvasDragMode.Scale:
+                if (!SceneTransformEditing.TryBeginScaleDrag(
+                    transform, target.ActualWidth, target.ActualHeight, _resizeCorner, targetToViewport, panelToViewport, dragStart, out _scaleDragState))
+                {
+                    return;
+                }
+                break;
+            default:
+                return;
+        }
+
+        _dragMode = mode;
+        _dragTransform = transform;
+        _dragPanel = panel;
+        _dragStart = dragStart;
+        _dragPointer = args.Pointer.PointerId;
+        _dragChanged = false;
+        _dragPresenter = target;
+        _dragPresenterHitTestVisible = target.IsHitTestVisible;
+        target.IsHitTestVisible = false;
+        if (!SceneViewport.CapturePointer(args.Pointer))
+        {
+            EndDrag();
+        }
     }
 
     private void OnCanvasPointerMoved(object sender, PointerRoutedEventArgs args)
@@ -1534,75 +1711,124 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         }
 
         var point = args.GetCurrentPoint(SceneViewport).Position;
-        if (!_resizing)
+        switch (_dragMode)
         {
-            point = ConstrainMove(args, point);
-            _dragChanged |= point.X != _dragStart.X || point.Y != _dragStart.Y;
-        }
-
-        if (!_resizing && _dragKind is LayoutKind.StackPanel or LayoutKind.WrapPanel)
-        {
-            ReorderStack(point);
-        }
-        else if (_dragLayout != null)
-        {
-            var panelPoint = TransformPoint(_dragViewportToPanel, point);
-            var deltaX = SceneLayoutEditing.Round(panelPoint.X - _dragPanelStart.X);
-            var deltaY = SceneLayoutEditing.Round(panelPoint.Y - _dragPanelStart.Y);
-            var left = _startBounds.Left;
-            var top = _startBounds.Top;
-            var right = _startBounds.Right;
-            var bottom = _startBounds.Bottom;
-            if (_resizing)
-            {
-                if (_resizeCorner is ResizeCorner.TopLeft or ResizeCorner.BottomLeft)
+            case CanvasDragMode.Origin:
+                if (_dragTransform != null)
                 {
-                    left = Math.Min(right - 8, left + deltaX);
+                    SceneTransformEditing.UpdateOriginDrag(
+                        _originDragState,
+                        _dragTransform,
+                        point,
+                        bypassSnap: IsControlPressed(args));
+                }
+                break;
+            case CanvasDragMode.Rotate:
+                if (_dragTransform != null)
+                {
+                    SceneTransformEditing.UpdateRotateDrag(
+                        ref _rotateDragState,
+                        _dragTransform,
+                        point,
+                        snapAngle: IsShiftPressed(args));
+                }
+                break;
+            case CanvasDragMode.Scale:
+                if (_dragTransform != null)
+                {
+                    SceneTransformEditing.UpdateScaleDrag(
+                        _scaleDragState,
+                        _dragTransform,
+                        point,
+                        toggleLock: IsShiftPressed(args));
+                }
+                break;
+            case CanvasDragMode.Move:
+                point = ConstrainMove(args, point);
+                _dragChanged |= point.X != _dragStart.X || point.Y != _dragStart.Y;
+                if (_dragKind is LayoutKind.StackPanel or LayoutKind.WrapPanel)
+                {
+                    ReorderStack(point);
                 }
                 else
                 {
-                    right = Math.Max(left + 8, right + deltaX);
+                    ApplyDragLayout(point, resizing: false);
                 }
-
-                if (_resizeCorner is ResizeCorner.TopLeft or ResizeCorner.TopRight)
-                {
-                    top = Math.Min(bottom - 8, top + deltaY);
-                }
-                else
-                {
-                    bottom = Math.Max(top + 8, bottom + deltaY);
-                }
-            }
-            else
-            {
-                left += deltaX;
-                right += deltaX;
-                top += deltaY;
-                bottom += deltaY;
-            }
-
-            if (_dragKind is LayoutKind.StackPanel or LayoutKind.WrapPanel)
-            {
-                SceneLayoutEditing.ResizeInStack(_dragLayout, right - left, bottom - top);
-            }
-            else
-            {
-                SceneLayoutEditing.ApplyBounds(
-                    _dragLayout,
-                    left,
-                    top,
-                    right - left,
-                    bottom - top,
-                    _layoutArea.Width,
-                    _layoutArea.Height,
-                    _resizing,
-                    _dragKind == LayoutKind.Canvas,
-                    _dragLayout.IsAutoAlignment);
-            }
+                break;
+            case CanvasDragMode.Resize:
+                ApplyDragLayout(point, resizing: true);
+                break;
         }
 
         UpdateSelectionGeometry();
         args.Handled = true;
+    }
+
+    private void ApplyDragLayout(Point point, bool resizing)
+    {
+        if (_dragLayout == null)
+        {
+            return;
+        }
+
+        var panelPoint = TransformPoint(_dragViewportToPanel, point);
+        var rawDeltaX = panelPoint.X - _dragPanelStart.X;
+        var rawDeltaY = panelPoint.Y - _dragPanelStart.Y;
+        var (mappedDeltaX, mappedDeltaY) = resizing
+            ? SceneTransformEditing.MapResizeDelta(_resizeLinearInverse, rawDeltaX, rawDeltaY)
+            : (rawDeltaX, rawDeltaY);
+        var deltaX = SceneLayoutEditing.Round(mappedDeltaX);
+        var deltaY = SceneLayoutEditing.Round(mappedDeltaY);
+        var left = _startBounds.Left;
+        var top = _startBounds.Top;
+        var right = _startBounds.Right;
+        var bottom = _startBounds.Bottom;
+        if (resizing)
+        {
+            if (_resizeCorner is ResizeCorner.TopLeft or ResizeCorner.BottomLeft)
+            {
+                left = Math.Min(right - 8, left + deltaX);
+            }
+            else
+            {
+                right = Math.Max(left + 8, right + deltaX);
+            }
+
+            if (_resizeCorner is ResizeCorner.TopLeft or ResizeCorner.TopRight)
+            {
+                top = Math.Min(bottom - 8, top + deltaY);
+            }
+            else
+            {
+                bottom = Math.Max(top + 8, bottom + deltaY);
+            }
+        }
+        else
+        {
+            left += deltaX;
+            right += deltaX;
+            top += deltaY;
+            bottom += deltaY;
+        }
+
+        if (_dragKind is LayoutKind.StackPanel or LayoutKind.WrapPanel)
+        {
+            SceneLayoutEditing.ResizeInStack(_dragLayout, right - left, bottom - top);
+        }
+        else
+        {
+            SceneLayoutEditing.ApplyBounds(
+                _dragLayout,
+                left,
+                top,
+                right - left,
+                bottom - top,
+                _layoutArea.Width,
+                _layoutArea.Height,
+                resizing,
+                _dragKind == LayoutKind.Canvas,
+                _dragLayout.IsAutoAlignment);
+        }
     }
 
     private void UpdateHover(PointerRoutedEventArgs args)
@@ -1689,6 +1915,13 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     }
 
     private static bool IsControlPressed(PointerRoutedEventArgs args) => (args.KeyModifiers & VirtualKeyModifiers.Control) != 0;
+
+    private static bool IsShiftPressed(PointerRoutedEventArgs args) => (args.KeyModifiers & VirtualKeyModifiers.Shift) != 0;
+
+    private string GetTopLeftHandleName(bool scaleMode) => scaleMode ? "左上角调整缩放" : "左上角调整尺寸";
+    private string GetTopRightHandleName(bool scaleMode) => scaleMode ? "右上角调整缩放" : "右上角调整尺寸";
+    private string GetBottomLeftHandleName(bool scaleMode) => scaleMode ? "左下角调整缩放" : "左下角调整尺寸";
+    private string GetBottomRightHandleName(bool scaleMode) => scaleMode ? "右下角调整缩放" : "右下角调整尺寸";
 
     private Point ConstrainMove(PointerRoutedEventArgs args, Point point)
     {
@@ -2032,7 +2265,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     {
         if (_dragPointer == args.Pointer.PointerId)
         {
-            if (_dragChanged && !_resizing && _dragPresenter?.Settings is { } settings)
+            if (_dragChanged && _dragMode == CanvasDragMode.Move && _dragPresenter?.Settings is { } settings)
             {
                 TryMoveOnCanvas(settings, ConstrainMove(args, args.GetCurrentPoint(SceneViewport).Position));
             }
@@ -2054,7 +2287,10 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private void EndDrag()
     {
         _dragPointer = null;
+        _dragMode = CanvasDragMode.None;
         _dragLayout = null;
+        _dragTransform = null;
+        _resizeLinearInverse = null;
         _dragPanel = null;
         _dragViewportToPanel = null;
         _dragChanged = false;
@@ -2080,6 +2316,12 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private void InvalidateSelectionGeometry()
     {
         ViewModel.HasSelectionBounds = false;
+        _lastSelectionQuad = null;
+        ScheduleSelectionGeometryUpdate();
+    }
+
+    private void ScheduleSelectionGeometryUpdate()
+    {
         _selectionPending = true;
         CompositionTarget.Rendering -= OnSelectionRendering;
         CompositionTarget.Rendering += OnSelectionRendering;
@@ -2104,14 +2346,54 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         if (target == null || target.Visibility != Visibility.Visible || target.ActualWidth <= 0 || target.ActualHeight <= 0)
         {
             ViewModel.HasSelectionBounds = false;
+            _lastSelectionQuad = null;
             return;
         }
 
-        var bounds = GetSceneViewportBounds(target);
-        ViewModel.SelectionGeometry = new SceneSelectionGeometry(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        var targetToViewport = SceneTransformEditing.FromGeneralTransform(TryGetTransform(target, SceneViewport));
+        BrushEditorMatrix? panelToViewport = null;
+        TransformFeatureSettings? transform = null;
+        if (target is ComponentPresenter componentPresenter)
+        {
+            if (FindParent<Panel>(VisualTreeHelper.GetParent(componentPresenter)) is { } panel)
+            {
+                panelToViewport = SceneTransformEditing.FromGeneralTransform(TryGetTransform(panel, SceneViewport));
+            }
+
+            transform = SceneTransformEditing.GetTransform(componentPresenter.Settings);
+        }
+
+        var geometry = SceneTransformEditing.ComputeSelectionGeometry(
+            target.ActualWidth,
+            target.ActualHeight,
+            targetToViewport,
+            panelToViewport,
+            transform);
+        ViewModel.SelectionGeometry = geometry;
+        UpdateSelectionOutline(geometry);
         ViewModel.CanResizeSelection = selected is { Model: ComponentSettings component, IsEffectivelyLocked: false }
             && SceneLayoutEditing.CanEditLayout(component);
+        ViewModel.CanEditTransform = selected is { Model: ComponentSettings transformComponent, IsEffectivelyLocked: false }
+            && SceneTransformEditing.CanEditTransform(transformComponent);
         ViewModel.HasSelectionBounds = true;
+    }
+
+    private void UpdateSelectionOutline(SceneSelectionGeometry geometry)
+    {
+        var quad = (geometry.TopLeft, geometry.TopRight, geometry.BottomRight, geometry.BottomLeft);
+        if (_lastSelectionQuad == quad)
+        {
+            return;
+        }
+
+        _lastSelectionQuad = quad;
+        SelectionOutline.Points = new PointCollection
+        {
+            geometry.TopLeft,
+            geometry.TopRight,
+            geometry.BottomRight,
+            geometry.BottomLeft
+        };
     }
 
     private Rect GetSceneViewportBounds(FrameworkElement element)
@@ -2293,11 +2575,13 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         }
     }
 
-    private enum ResizeCorner
+    private enum CanvasDragMode
     {
-        TopLeft,
-        TopRight,
-        BottomLeft,
-        BottomRight
+        None,
+        Move,
+        Resize,
+        Scale,
+        Rotate,
+        Origin
     }
 }

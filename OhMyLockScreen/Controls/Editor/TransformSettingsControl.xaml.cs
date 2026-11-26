@@ -1,6 +1,9 @@
 using OhMyLockScreen.ViewModels;
 using Windows.Globalization.NumberFormatting;
+using Windows.UI.Core;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Input;
+using Windows.UI.Xaml.Media;
 
 namespace OhMyLockScreen.Controls.Editor;
 
@@ -9,6 +12,10 @@ public sealed partial class TransformSettingsControl : TransformSettingsControlB
     private bool _loaded;
 
     public TransformSettingsViewModel? Values { get; private set; }
+
+    public bool IsScaleFieldFocused { get; private set; }
+
+    public event EventHandler? ScaleFieldFocusChanged;
 
     public TransformSettingsControl()
     {
@@ -37,6 +44,7 @@ public sealed partial class TransformSettingsControl : TransformSettingsControlB
 
     protected override void OnSettingsChanged()
     {
+        SetScaleFieldFocused(false);
         Values?.Dispose();
         Values = SettingsInternal == null ? null : new TransformSettingsViewModel(Settings);
         if (_loaded)
@@ -57,7 +65,59 @@ public sealed partial class TransformSettingsControl : TransformSettingsControlB
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
         _loaded = false;
+        SetScaleFieldFocused(false);
         Values?.Dispose();
+    }
+
+    private void OnScaleFieldGotFocus(object sender, RoutedEventArgs args)
+    {
+        if (_loaded)
+        {
+            SetScaleFieldFocused(true);
+        }
+    }
+
+    private void OnScaleFieldLostFocus(object sender, RoutedEventArgs args)
+    {
+        _ = Dispatcher.RunAsync(CoreDispatcherPriority.Low, RefreshScaleFieldFocus);
+    }
+
+    private void RefreshScaleFieldFocus()
+    {
+        if (!_loaded)
+        {
+            SetScaleFieldFocused(false);
+            return;
+        }
+
+        var focused = OperatingSystem.IsWindowsVersionAtLeast(10, 0, 18362) && XamlRoot != null
+            ? FocusManager.GetFocusedElement(XamlRoot) as DependencyObject
+            : FocusManager.GetFocusedElement() as DependencyObject;
+        SetScaleFieldFocused(IsWithin(focused, ScaleXInput) || IsWithin(focused, ScaleYInput));
+    }
+
+    private void SetScaleFieldFocused(bool focused)
+    {
+        if (IsScaleFieldFocused == focused)
+        {
+            return;
+        }
+
+        IsScaleFieldFocused = focused;
+        ScaleFieldFocusChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static bool IsWithin(DependencyObject? element, DependencyObject ancestor)
+    {
+        for (var current = element; current != null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (ReferenceEquals(current, ancestor))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private sealed class DegreeNumberFormatter : INumberFormatter2, INumberParser

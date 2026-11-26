@@ -353,6 +353,8 @@
                         x:Name="ScaleXInput"
                         Grid.Column="1"
                         Style="{StaticResource TransformPercentStyle}"
+                        GotFocus="OnScaleFieldGotFocus"
+                        LostFocus="OnScaleFieldLostFocus"
                         ToolTipService.ToolTip="水平缩放"
                         AutomationProperties.Name="水平缩放"
                         Value="{Binding ScaleX, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
@@ -371,6 +373,8 @@
                         x:Name="ScaleYInput"
                         Grid.Column="1"
                         Style="{StaticResource TransformPercentStyle}"
+                        GotFocus="OnScaleFieldGotFocus"
+                        LostFocus="OnScaleFieldLostFocus"
                         ToolTipService.ToolTip="竖直缩放"
                         AutomationProperties.Name="竖直缩放"
                         Value="{Binding ScaleY, Mode=TwoWay, Converter={StaticResource FiniteNumberConverter}}" />
