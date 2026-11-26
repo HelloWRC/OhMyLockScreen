@@ -18,4 +18,8 @@ public partial class ComponentSettings : SettingsWithClientSettingsBase<ICompone
     private string _id = "";
     [ObservableProperty]
     private ObservableCollection<FeatureInfo> _features = [];
+    [ObservableProperty]
+    private bool _isVisible = true;
+    [ObservableProperty]
+    private bool _isLocked;
 }

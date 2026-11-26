@@ -2391,6 +2391,179 @@ internal static class SceneTests
                 && importedFeature.GetSettings<ShadowFeatureSettings>() is { BlurRadius: 24, Opacity: 0.65, OffsetX: 4, OffsetY: 8 },
                 "Disabled feature state or settings did not survive .omls export/import.");
         });
+
+        await runAsync("Tree lock and visibility states default safely, persist through save/duplicate/import, propagate to descendants, and control Figma button slots", async () =>
+        {
+            using var legacyLayerStream = new MemoryStream("""{"Name":"旧图层","Children":[{"Id":"omls.components.text","Name":"旧文本"}]}"""u8.ToArray());
+            var legacyLayer = ConfigureFileHelper.LoadConfigUnWrapped<LayerSettings>(legacyLayerStream);
+            Check(legacyLayer is { IsVisible: true, IsLocked: false }
+                && legacyLayer.Children.Single() is { IsVisible: true, IsLocked: false },
+                "Legacy scene JSON did not default to visible and unlocked.");
+
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            var scene = fixture.Service.Create("锁定与显隐测试");
+            var firstLayer = scene.Layers[0];
+            var secondLayer = new LayerSettings { Name = "第二图层" };
+            var textChild = new ComponentSettings { Id = TextComponent.Id, Name = "嵌套文本" };
+            var container = new ComponentSettings
+            {
+                Id = ContainerComponent.Id,
+                Name = "容器",
+                Settings = new ContainerComponentSettings
+                {
+                    Children = [textChild]
+                }
+            };
+            firstLayer.Children.Add(container);
+            scene.Layers.Add(secondLayer);
+            fixture.Service.QueueSave(scene);
+            fixture.Service.FlushPending();
+
+            editor.Open(scene.SceneId);
+            var rootNode = editor.Roots[0];
+            var firstLayerNode = rootNode.Children[0];
+            var secondLayerNode = rootNode.Children.Last();
+            firstLayer = (LayerSettings)firstLayerNode.Model;
+            var containerNode = firstLayerNode.Children.Single(item => item.Title == "容器");
+            container = (ComponentSettings)containerNode.Model;
+            var textNode = containerNode.Children.Single(item => item.Title == "嵌套文本");
+            textChild = (ComponentSettings)textNode.Model;
+
+            Check(!rootNode.CanToggleState && !rootNode.ShowActionButtons,
+                "Scene root exposed lock/visibility toggles initially.");
+            rootNode.IsPointerOver = true;
+            Check(!rootNode.ShowActionButtons && !rootNode.ShowLockButton && !rootNode.IsVisibilityButtonInteractive,
+                "Hovering scene root exposed lock/visibility toggles.");
+            rootNode.IsPointerOver = false;
+
+            // 1) Default non-hovered state collapses right-side buttons.
+            Check(containerNode is
+            {
+                CanToggleState: true,
+                IsLocked: false,
+                IsVisible: true,
+                IsHidden: false,
+                ShowActionButtons: false,
+                ShowLockButton: false,
+                IsVisibilityButtonInteractive: false,
+                VisibilityButtonOpacity: 0.0,
+                ContentOpacity: 1.0,
+                LockIcon: Icon.LockOpen,
+                VisibilityIcon: Icon.Eye,
+                LockToolTip: "锁定",
+                VisibilityToolTip: "隐藏"
+            }, "Default tree node button state did not match Figma collapsed state.");
+
+            // 2) Hovering reveals both lock and visibility buttons.
+            containerNode.IsPointerOver = true;
+            Check(containerNode is
+            {
+                ShowActionButtons: true,
+                ShowLockButton: true,
+                IsVisibilityButtonInteractive: true,
+                VisibilityButtonOpacity: 1.0
+            }, "Hovering tree node did not show both action buttons.");
+            containerNode.IsPointerOver = false;
+
+            var nodeStateEvents = 0;
+            editor.NodeStateChanged += (_, _) => nodeStateEvents++;
+
+            // 3) Locked-only + not hovered: lock button shows while visibility slot stays reserved (Opacity=0, non-hit-testable).
+            containerNode.IsLocked = true;
+            Check(nodeStateEvents == 1
+                && containerNode is
+                {
+                    IsLocked: true,
+                    IsEffectivelyLocked: true,
+                    ShowActionButtons: true,
+                    ShowLockButton: true,
+                    IsVisibilityButtonInteractive: false,
+                    VisibilityButtonOpacity: 0.0,
+                    LockIcon: Icon.LockClosed,
+                    LockToolTip: "解锁"
+                }
+                && textNode is
+                {
+                    IsLocked: false,
+                    IsEffectivelyLocked: true
+                }
+                && !editor.CanSelectOnCanvas(container)
+                && !editor.CanSelectOnCanvas(textChild),
+                "Locking container did not update button slots, descendant lock state, or canvas selectability.");
+
+            editor.Select(textChild);
+            Check(!editor.CanResizeSelection, "Locked descendant remained resizable.");
+            containerNode.IsLocked = false;
+            Check(editor.CanResizeSelection && editor.CanSelectOnCanvas(textChild),
+                "Unlocking container did not restore descendant editability.");
+
+            // 4) Hidden-only + not hovered: lock slot collapses so eye-off stays pinned to the right edge.
+            firstLayerNode.IsHidden = true;
+            Check(firstLayerNode is
+            {
+                IsVisible: false,
+                IsHidden: true,
+                IsEffectivelyHidden: true,
+                IsEffectivelyVisible: false,
+                ContentOpacity: 0.45,
+                ShowActionButtons: true,
+                ShowLockButton: false,
+                IsVisibilityButtonInteractive: true,
+                VisibilityButtonOpacity: 1.0,
+                VisibilityIcon: Icon.EyeOff,
+                VisibilityToolTip: "显示"
+            }
+            && containerNode is
+            {
+                IsVisible: true,
+                IsHidden: false,
+                IsEffectivelyHidden: true,
+                IsEffectivelyVisible: false,
+                ContentOpacity: 0.45
+            }
+            && textNode is
+            {
+                IsVisible: true,
+                IsEffectivelyHidden: true,
+                ContentOpacity: 0.45
+            }
+            && !editor.CanSelectOnCanvas(firstLayer)
+            && !editor.CanSelectOnCanvas(container)
+            && !editor.CanSelectOnCanvas(textChild),
+                "Hiding layer did not collapse lock slot, preserve child IsVisible, or dim/block descendants.");
+
+            // GetCanvasLayer skips locked/hidden first layer when root is selected.
+            editor.Select(rootNode.Model);
+            Check(ReferenceEquals(editor.GetCanvasLayer(null), secondLayerNode),
+                "GetCanvasLayer did not skip hidden first layer.");
+            firstLayerNode.IsHidden = false;
+            firstLayerNode.IsLocked = true;
+            Check(ReferenceEquals(editor.GetCanvasLayer(null), secondLayerNode),
+                "GetCanvasLayer did not skip locked first layer.");
+
+            // Persistence across save/load, duplicate, and .omls export/import.
+            containerNode.IsHidden = true;
+            fixture.Service.FlushPending();
+            var reloaded = fixture.Service.Load(scene.SceneId);
+            Check(reloaded.Layers[0] is { IsLocked: true, IsVisible: true }
+                && reloaded.Layers[0].Children.Single(c => c.Name == "容器") is { IsLocked: false, IsVisible: false }
+                && reloaded.Layers[0].Children.Single(c => c.Name == "容器").GetSettings<ContainerComponentSettings>().Children[0] is { IsLocked: false, IsVisible: true },
+                "Layer/component lock and visibility states did not persist across save and load.");
+
+            var duplicated = fixture.Service.Duplicate(scene.SceneId);
+            Check(duplicated.Layers[0] is { IsLocked: true, IsVisible: true }
+                && duplicated.Layers[0].Children.Single(c => c.Name == "容器") is { IsVisible: false },
+                "Lock/visibility states did not survive Duplicate.");
+
+            using var archiveStream = new MemoryStream();
+            await fixture.Service.ExportAsync(scene.SceneId, archiveStream);
+            archiveStream.Position = 0;
+            var imported = await fixture.Service.ImportAsync(archiveStream);
+            Check(imported.Layers[0] is { IsLocked: true, IsVisible: true }
+                && imported.Layers[0].Children.Single(c => c.Name == "容器") is { IsVisible: false },
+                "Lock/visibility states did not survive .omls export/import.");
+        });
     }
 
     private static Task<SceneSettings> ImportArchiveBytesAsync(ISceneService service, Action<ZipArchive> build)

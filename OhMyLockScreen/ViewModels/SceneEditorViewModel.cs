@@ -105,6 +105,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     public event EventHandler? SelectionChanged;
     public event EventHandler? StructureChanged;
     public event EventHandler? InspectorChanged;
+    public event EventHandler? NodeStateChanged;
     public event EventHandler<Exception>? Error;
     public SceneEditorViewModel(
         ISceneService scenes,
@@ -218,11 +219,15 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     partial void OnSelectedItemChanged(SceneTreeItem? value)
     {
         HasSelectionBounds = false;
-        CanResizeSelection = value?.Model is ComponentSettings component && SceneLayoutEditing.CanEditLayout(component);
+        CanResizeSelection = value is { Model: ComponentSettings component, IsEffectivelyVisible: true, IsEffectivelyLocked: false }
+            && SceneLayoutEditing.CanEditLayout(component);
         OnPropertyChanged(nameof(SelectedModel));
         OnPropertyChanged(nameof(CanEditSelection));
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    internal bool CanSelectOnCanvas(object model) =>
+        FindItem(model) is { IsEffectivelyVisible: true, IsEffectivelyLocked: false };
 
     public void Select(object model)
     {
@@ -275,7 +280,8 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             }
         }
 
-        return Flatten(Roots).FirstOrDefault(item => item.Model is LayerSettings);
+        return Flatten(Roots).FirstOrDefault(item => item.Model is LayerSettings && item.IsEffectivelyVisible && !item.IsEffectivelyLocked)
+            ?? Flatten(Roots).FirstOrDefault(item => item.Model is LayerSettings);
     }
 
     internal static bool IsInCanvasLayer(SceneTreeItem item, SceneTreeItem layer)
@@ -300,6 +306,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
 
         var previousSelection = SelectedItem;
         var structureChanged = false;
+        var nodeStateChanged = false;
         var wasUpdatingTree = _updatingTree;
         _updatingTree = true;
         try
@@ -312,9 +319,19 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
                     structureChanged |= ReconcileChildren(node, children?.Cast<object>() ?? []);
                 }
 
-                if (ReferenceEquals(sender, node.Model) && property == "Name")
+                if (ReferenceEquals(sender, node.Model))
                 {
-                    node.RefreshTitle();
+                    if (property == "Name")
+                    {
+                        node.RefreshTitle();
+                    }
+
+                    if (string.IsNullOrEmpty(property)
+                        || property is nameof(LayerSettings.IsVisible) or nameof(LayerSettings.IsLocked))
+                    {
+                        node.RefreshNodeState();
+                        nodeStateChanged = true;
+                    }
                 }
             }
         }
@@ -354,6 +371,17 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
             }
 
             StructureChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        if (nodeStateChanged || structureChanged)
+        {
+            CanResizeSelection = SelectedItem is { Model: ComponentSettings selectedComponent, IsEffectivelyVisible: true, IsEffectivelyLocked: false }
+                && SceneLayoutEditing.CanEditLayout(selectedComponent);
+        }
+
+        if (nodeStateChanged)
+        {
+            NodeStateChanged?.Invoke(this, EventArgs.Empty);
         }
 
         var selectedFeatures = (SelectedModel as IFeatureContainer)?.Features;
@@ -751,10 +779,82 @@ public sealed partial class SceneTreeItem(object model, SceneTreeItem? parent, C
 {
     [ObservableProperty]
     private bool _isExpanded = true;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowActionButtons))]
+    [NotifyPropertyChangedFor(nameof(ShowLockButton))]
+    [NotifyPropertyChangedFor(nameof(IsVisibilityButtonInteractive))]
+    [NotifyPropertyChangedFor(nameof(VisibilityButtonOpacity))]
+    private bool _isPointerOver;
+
     public object Model { get; } = model;
     public SceneTreeItem? Parent { get; } = parent;
     public int Depth => Parent == null ? 0 : Parent.Depth + 1;
     public ObservableCollection<SceneTreeItem> Children { get; } = [];
+    public bool CanToggleState => Model is LayerSettings or ComponentSettings;
+
+    public bool IsLocked
+    {
+        get => Model switch
+        {
+            LayerSettings layer => layer.IsLocked,
+            ComponentSettings component => component.IsLocked,
+            _ => false
+        };
+        set
+        {
+            switch (Model)
+            {
+                case LayerSettings layer when layer.IsLocked != value:
+                    layer.IsLocked = value;
+                    break;
+                case ComponentSettings component when component.IsLocked != value:
+                    component.IsLocked = value;
+                    break;
+            }
+        }
+    }
+
+    public bool IsVisible
+    {
+        get => Model switch
+        {
+            LayerSettings layer => layer.IsVisible,
+            ComponentSettings component => component.IsVisible,
+            _ => true
+        };
+        set
+        {
+            switch (Model)
+            {
+                case LayerSettings layer when layer.IsVisible != value:
+                    layer.IsVisible = value;
+                    break;
+                case ComponentSettings component when component.IsVisible != value:
+                    component.IsVisible = value;
+                    break;
+            }
+        }
+    }
+
+    public bool IsHidden
+    {
+        get => !IsVisible;
+        set => IsVisible = !value;
+    }
+
+    public bool IsEffectivelyLocked => IsLocked || (Parent?.IsEffectivelyLocked ?? false);
+    public bool IsEffectivelyHidden => IsHidden || (Parent?.IsEffectivelyHidden ?? false);
+    public bool IsEffectivelyVisible => !IsEffectivelyHidden;
+    public double ContentOpacity => IsEffectivelyHidden ? 0.45 : 1.0;
+    public bool ShowActionButtons => CanToggleState && (IsPointerOver || IsLocked || IsHidden);
+    public bool ShowLockButton => CanToggleState && (IsPointerOver || IsLocked);
+    public bool IsVisibilityButtonInteractive => CanToggleState && (IsPointerOver || IsHidden);
+    public double VisibilityButtonOpacity => IsVisibilityButtonInteractive ? 1.0 : 0.0;
+    public Icon LockIcon => IsLocked ? Icon.LockClosed : Icon.LockOpen;
+    public Icon VisibilityIcon => IsHidden ? Icon.EyeOff : Icon.Eye;
+    public string LockToolTip => IsLocked ? "解锁" : "锁定";
+    public string VisibilityToolTip => IsHidden ? "显示" : "隐藏";
+
     public string Title => Model switch
     {
         SceneSettings scene => scene.Name,
@@ -777,6 +877,34 @@ public sealed partial class SceneTreeItem(object model, SceneTreeItem? parent, C
     {
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(IconSource));
+    }
+
+    internal void RefreshNodeState()
+    {
+        OnPropertyChanged(nameof(IsLocked));
+        OnPropertyChanged(nameof(IsVisible));
+        OnPropertyChanged(nameof(IsHidden));
+        OnPropertyChanged(nameof(ShowActionButtons));
+        OnPropertyChanged(nameof(ShowLockButton));
+        OnPropertyChanged(nameof(IsVisibilityButtonInteractive));
+        OnPropertyChanged(nameof(VisibilityButtonOpacity));
+        OnPropertyChanged(nameof(LockIcon));
+        OnPropertyChanged(nameof(VisibilityIcon));
+        OnPropertyChanged(nameof(LockToolTip));
+        OnPropertyChanged(nameof(VisibilityToolTip));
+        RefreshInheritedState();
+    }
+
+    internal void RefreshInheritedState()
+    {
+        OnPropertyChanged(nameof(IsEffectivelyLocked));
+        OnPropertyChanged(nameof(IsEffectivelyHidden));
+        OnPropertyChanged(nameof(IsEffectivelyVisible));
+        OnPropertyChanged(nameof(ContentOpacity));
+        foreach (var child in Children)
+        {
+            child.RefreshInheritedState();
+        }
     }
 }
 

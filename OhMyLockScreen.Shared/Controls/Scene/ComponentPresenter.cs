@@ -68,7 +68,10 @@ public sealed partial class ComponentPresenter : ContentPresenter, ISceneBlobCon
         RegisterPropertyChangedCallback(ContentProperty, (_, _) =>
         {
             ObserveContentHitTesting();
-            UpdateContentVisibility();
+            if (!_isUpdating)
+            {
+                UpdateContentVisibility();
+            }
         });
         RegisterPropertyChangedCallback(ForegroundProperty, OnForegroundChanged);
         Loaded += OnLoaded;
@@ -265,6 +268,7 @@ public sealed partial class ComponentPresenter : ContentPresenter, ISceneBlobCon
         }
 
         AttachFeatures();
+        UpdateContentVisibility();
         RefreshContentForeground(force: true);
     }
 }

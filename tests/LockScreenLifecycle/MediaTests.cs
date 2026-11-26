@@ -4,13 +4,17 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using OhMyLockScreen.Shared.Abstractions.Services.FeatureHost;
+using OhMyLockScreen.Shared.Abstractions.Services.Scene;
 using OhMyLockScreen.Shared.Services.FeatureHost;
+using OhMyLockScreen.Shared.Services.Scene;
 using OhMyLockScreen.Services.FeatureHost;
+using OhMyLockScreen.Services.Scene;
 using OhMyLockScreen.Controls.Components;
 using OhMyLockScreen.Models.Features.Visibility;
 using OhMyLockScreen.Services.Features.Visibility;
 using OhMyLockScreen.Shared.Abstractions.Services;
 using OhMyLockScreen.Shared.Extensions.Registry;
+using OhMyLockScreen.Shared.Extensions.Scene;
 using OhMyLockScreen.Services.Rules;
 using OhMyLockScreen.Models.Scene;
 using OhMyLockScreen.Services.Media;
@@ -115,6 +119,79 @@ internal static class MediaTests
             first.Unload();
             presenter.Unload();
             Check(ReferenceEquals(presenter.ReadLocalValue(UIElement.VisibilityProperty), DependencyProperty.UnsetValue), "Unloading left a local visibility override.");
+        });
+
+        run("Manual component visibility overrides rulesets and runtime hiding in both editor and runtime", () =>
+        {
+            var ruleSatisfied = true;
+            IAppHost.Host = new HostBuilder().ConfigureServices(services =>
+            {
+                services.AddLogging();
+                services.AddSingleton<IRulesetService, RulesetService>();
+                services.AddRule("hidden", onHandle: _ => ruleSatisfied);
+                services.AddSingleton<FeatureRegistryService>();
+                services.AddSingleton<IFeatureService, FeatureService>();
+                services.AddSingleton<IComponentsService, ComponentsService>();
+                services.AddComponent<TextComponent>();
+            }).Build();
+
+            var service = new ObservableMediaService();
+            var component = CreateComponent(service);
+            var settings = new ComponentSettings { IsVisible = true };
+            var presenter = new ComponentPresenter { Settings = settings };
+            presenter.Load();
+            presenter.Content = component;
+            presenter.IsEditing = true;
+
+            var rules = IAppHost.GetRequiredService<IRulesetService>();
+            using var rule = new HideByRulesFeature(rules);
+            var ruleSettings = new HideByRulesSettings();
+            ruleSettings.Ruleset.Groups[0].Rules[0].Id = "hidden";
+            rule.SetSettings(ruleSettings);
+            rule.Attach(presenter);
+            Check(presenter.Visibility == Visibility.Visible && presenter.IsHiddenInEditor,
+                "Rule did not trigger initial editor stripe mask.");
+
+            // Manual hide beats satisfied rule and component runtime hidden in editor.
+            settings.IsVisible = false;
+            Check(presenter.Visibility == Visibility.Collapsed && !presenter.IsHiddenInEditor,
+                "Manual hide did not collapse component or clear editor stripes.");
+
+            // Changing rule while manually hidden does not bring component back in editor.
+            ruleSatisfied = false;
+            rules.NotifyStatusChanged();
+            presenter.Dispatcher.Drain();
+            Check(presenter.Visibility == Visibility.Collapsed && !presenter.IsHiddenInEditor,
+                "Rule update surfaced a manually hidden component in editor.");
+
+            // Restoring IsVisible surfaces component and re-evaluates rules/runtime hiding.
+            ruleSatisfied = true;
+            rules.NotifyStatusChanged();
+            presenter.Dispatcher.Drain();
+            settings.IsVisible = true;
+            Check(presenter.Visibility == Visibility.Visible && presenter.IsHiddenInEditor,
+                "Restoring visibility did not restore stripe mask for active rule/runtime hiding.");
+
+            // Runtime preview respects manual hide even when rule and media session want Visible.
+            ruleSatisfied = false;
+            rules.NotifyStatusChanged();
+            presenter.Dispatcher.Drain();
+            service.State = new MediaState { HasSession = true };
+            presenter.IsEditing = false;
+            Check(presenter.Visibility == Visibility.Visible, "Preview did not show unhidden visible component.");
+            settings.IsVisible = false;
+            Check(presenter.Visibility == Visibility.Collapsed, "Manual hide did not collapse runtime preview.");
+            settings.IsVisible = true;
+            Check(presenter.Visibility == Visibility.Visible, "Restoring visibility did not show runtime preview.");
+
+            // ComponentSettings without ComponentBase content still honors IsVisible.
+            presenter.Content = null;
+            settings.IsVisible = false;
+            Check(presenter.Visibility == Visibility.Collapsed, "Manual hide without ComponentBase content did not collapse.");
+
+            presenter.Unload();
+            Check(ReferenceEquals(presenter.ReadLocalValue(UIElement.VisibilityProperty), DependencyProperty.UnsetValue),
+                "Unloading left a local visibility override after manual visibility test.");
         });
 
         run("Media components recover while hidden and editor placeholders stay local to each view", () =>

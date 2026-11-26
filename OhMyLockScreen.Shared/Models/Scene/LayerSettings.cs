@@ -25,4 +25,8 @@ public partial class LayerSettings : ObservableObject, IFeatureContainer, ILayou
     private ObservableCollection<GridElement> _columns = [];
     [ObservableProperty]
     private Orientation _orientation;
+    [ObservableProperty]
+    private bool _isVisible = true;
+    [ObservableProperty]
+    private bool _isLocked;
 }

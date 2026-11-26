@@ -220,6 +220,57 @@ internal static class PresenterFeatureTests
                 item.Presenter.Unload();
             }
         });
+        run("Layer presenter synchronizes Layer.IsVisible across load, replacement, cross-thread updates, and unload", () =>
+        {
+            CreateHost();
+            var hiddenLayer = new LayerSettings { IsVisible = false };
+            var visibleLayer = new LayerSettings { IsVisible = true };
+            var presenter = new LayerPresenter { Layer = hiddenLayer };
+            Check(ReferenceEquals(presenter.ReadLocalValue(UIElement.VisibilityProperty), DependencyProperty.UnsetValue),
+                "Unloaded LayerPresenter mutated Visibility eagerly.");
+
+            presenter.Load();
+            Check(presenter.Visibility == Visibility.Collapsed, "Loaded LayerPresenter did not apply initial IsVisible = false.");
+
+            hiddenLayer.IsVisible = true;
+            Check(presenter.Visibility == Visibility.Visible, "Layer.IsVisible = true did not reveal LayerPresenter.");
+
+            // Cross-thread property change dispatches back to owning dispatcher and ignores stale layer switches.
+            var ownerWindow = Window.Current;
+            Window.Current = new Window();
+            hiddenLayer.IsVisible = false;
+            Window.Current = ownerWindow;
+            presenter.Layer = visibleLayer;
+            Check(presenter.Visibility == Visibility.Visible, "Switching to visible layer kept old visibility.");
+            presenter.Dispatcher.Drain();
+            Check(presenter.Visibility == Visibility.Visible, "Stale queued update from old layer hid new layer.");
+
+            Window.Current = new Window();
+            visibleLayer.IsVisible = false;
+            Window.Current = ownerWindow;
+            presenter.Dispatcher.Drain();
+            Check(presenter.Visibility == Visibility.Collapsed, "Cross-thread Layer.IsVisible update did not dispatch to owning view.");
+
+            // Stale Unloaded while IsLoaded stays true must not clear binding.
+            presenter.RaiseStaleUnloadForTest();
+            visibleLayer.IsVisible = true;
+            Check(presenter.Visibility == Visibility.Visible, "Stale Unloaded broke layer visibility binding.");
+
+            presenter.Layer = null;
+            Check(ReferenceEquals(presenter.ReadLocalValue(UIElement.VisibilityProperty), DependencyProperty.UnsetValue),
+                "Clearing Layer left a local visibility override.");
+
+            presenter.Layer = hiddenLayer;
+            hiddenLayer.IsVisible = false;
+            Check(presenter.Visibility == Visibility.Collapsed, "Assigning a new layer while loaded did not bind visibility.");
+
+            presenter.Unload();
+            Check(ReferenceEquals(presenter.ReadLocalValue(UIElement.VisibilityProperty), DependencyProperty.UnsetValue),
+                "Unloading LayerPresenter left a local visibility override.");
+            hiddenLayer.IsVisible = true;
+            Check(ReferenceEquals(presenter.ReadLocalValue(UIElement.VisibilityProperty), DependencyProperty.UnsetValue),
+                "Unloaded LayerPresenter reacted to subsequent layer visibility changes.");
+        });
     }
 
     private static FeatureInfo Info(string id) => new()

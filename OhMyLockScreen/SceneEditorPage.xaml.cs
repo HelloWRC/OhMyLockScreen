@@ -146,6 +146,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private ResizeCorner _resizeCorner;
     private SceneTreeItem? _draggedTreeItem;
     private SceneTreeItem? _pressedTreeItem;
+    private SceneTreeItem? _hoveredTreeItem;
     private Pointer? _treePointer;
     private Point _treePressPoint;
     private ComponentRegisterInfo? _draggedLibraryItem;
@@ -241,6 +242,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         ViewModel.SelectionChanged += OnSelectionChanged;
         ViewModel.StructureChanged += OnStructureChanged;
         ViewModel.InspectorChanged += OnInspectorChanged;
+        ViewModel.NodeStateChanged += OnNodeStateChanged;
         ViewModel.Error += OnEditorError;
         ViewModel.PropertyChanged += OnPanelViewModelPropertyChanged;
         ViewModel.PropertyChanged += OnMediaImportStateChanged;
@@ -301,6 +303,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         CancelPreviewCapture();
         EndDrag();
         ClearTreePointer();
+        SetHoveredTreeItem(null);
         ViewModel.PropertyChanged -= OnPanelViewModelPropertyChanged;
         ViewModel.PropertyChanged -= OnMetadataViewModelPropertyChanged;
         StopPanelAnimations();
@@ -330,6 +333,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         ViewModel.SelectionChanged -= OnSelectionChanged;
         ViewModel.StructureChanged -= OnStructureChanged;
         ViewModel.InspectorChanged -= OnInspectorChanged;
+        ViewModel.NodeStateChanged -= OnNodeStateChanged;
         ViewModel.Error -= OnEditorError;
         _scenes.SceneSaved -= OnSceneSaved;
         _scenes.ActiveSceneChanged -= OnSceneSaved;
@@ -361,7 +365,28 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         RefreshInspector();
     }
 
-    private void OnStructureChanged(object? sender, EventArgs args) => InvalidateSelectionGeometry();
+    private void OnStructureChanged(object? sender, EventArgs args)
+    {
+        if (_hoveredTreeItem != null && ViewModel.FindItem(_hoveredTreeItem.Model) == null)
+        {
+            SetHoveredTreeItem(null);
+        }
+
+        RefreshFeatureEditorTargets();
+        InvalidateSelectionGeometry();
+    }
+
+    private void OnNodeStateChanged(object? sender, EventArgs args)
+    {
+        if (_dragPresenter?.Settings is { } dragged && !ViewModel.CanSelectOnCanvas(dragged))
+        {
+            EndDrag();
+        }
+
+        ClearHover();
+        RefreshFeatureEditorTargets();
+        InvalidateSelectionGeometry();
+    }
     private void OnInspectorChanged(object? sender, EventArgs args)
     {
         RefreshInspector();
@@ -464,6 +489,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     {
         EndDrag();
         ClearTreePointer();
+        SetHoveredTreeItem(null);
         ClearHover();
         ViewModel.ActiveTab = tab;
         RefreshFeatureEditorTargets();
@@ -876,6 +902,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             }
 
             _draggedTreeItem = item;
+            SetHoveredTreeItem(null);
             ViewModel.Select(item.Model);
             CapturePointer(args.Pointer);
         }
@@ -996,6 +1023,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         _treePointer = null;
         _pressedTreeItem = null;
         _draggedTreeItem = null;
+        SetHoveredTreeItem(null);
         TreeDropIndicator.Visibility = Visibility.Collapsed;
         TreeDragHintPopup.IsOpen = false;
         if (pointer != null)
@@ -1003,6 +1031,79 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             ReleasePointerCapture(pointer);
         }
     }
+
+    private void SetHoveredTreeItem(SceneTreeItem? item)
+    {
+        if (ReferenceEquals(_hoveredTreeItem, item))
+        {
+            return;
+        }
+
+        if (_hoveredTreeItem != null)
+        {
+            _hoveredTreeItem.IsPointerOver = false;
+        }
+
+        _hoveredTreeItem = item;
+        if (_hoveredTreeItem != null)
+        {
+            _hoveredTreeItem.IsPointerOver = true;
+        }
+    }
+
+    private SceneTreeItem? ResolveTreeItem(object sender)
+    {
+        if (sender is not TreeViewItem row)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (SceneTree.ItemFromContainer(row) is SceneTreeItem item)
+            {
+                return item;
+            }
+        }
+        catch
+        {
+        }
+
+        return row.DataContext as SceneTreeItem;
+    }
+
+    private void OnTreeItemPointerEntered(object sender, PointerRoutedEventArgs args)
+    {
+        if (!_loaded || _draggedTreeItem != null)
+        {
+            return;
+        }
+
+        if (ResolveTreeItem(sender) is { } item)
+        {
+            SetHoveredTreeItem(item);
+        }
+    }
+
+    private void OnTreeItemPointerExited(object sender, PointerRoutedEventArgs args)
+    {
+        if (ResolveTreeItem(sender) is { } item && ReferenceEquals(_hoveredTreeItem, item))
+        {
+            SetHoveredTreeItem(null);
+        }
+    }
+
+    private void OnTreeItemUnloaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is TreeViewItem row && ReferenceEquals(_hoveredTreeItem, row.DataContext))
+        {
+            SetHoveredTreeItem(null);
+        }
+    }
+
+    private void OnSceneTreePointerExited(object sender, PointerRoutedEventArgs args) => SetHoveredTreeItem(null);
+
+    private void OnTreeActionDoubleTapped(object sender, DoubleTappedRoutedEventArgs args) => args.Handled = true;
 
     private void OnDragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args) => ClearDragPayload();
 
@@ -1147,6 +1248,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             }
         }
 
+        var selectedVisible = ViewModel.SelectedItem is not { IsEffectivelyHidden: true };
         var featureTarget = BackgroundFeature.ResolveBackgroundTarget(presenter);
         foreach (var section in ViewModel.InspectorSections)
         {
@@ -1156,7 +1258,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
             }
 
             var target = ReferenceEquals(section.Model, ViewModel.SelectedModel) && section.IsFeatureEnabled
-                ? editor is LayoutSettingsControl ? presenter : featureTarget
+                ? editor is LayoutSettingsControl ? presenter : (selectedVisible ? featureTarget : null)
                 : null;
 
             if (!ReferenceEquals(editor.TargetElement, target))
@@ -1372,7 +1474,8 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void StartDrag(PointerRoutedEventArgs args, bool resizing)
     {
-        if (ViewModel.SelectedModel is not ComponentSettings component || FindSelectedPresenter() is not ComponentPresenter target)
+        if (ViewModel.SelectedItem is not { Model: ComponentSettings component, IsEffectivelyLocked: false, IsEffectivelyVisible: true }
+            || FindSelectedPresenter() is not ComponentPresenter target)
         {
             return;
         }
@@ -1544,7 +1647,8 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     {
         var source = FindVisuals(EditorPresenter)
             .OfType<ComponentPresenter>()
-            .Where(presenter => presenter.Settings is not null
+            .Where(presenter => presenter.Settings is { } settings
+                && ViewModel.CanSelectOnCanvas(settings)
                 && presenter.IsContentHitTestVisible
                 && presenter.Visibility == Visibility.Visible
                 && presenter.ActualWidth > 0
@@ -1792,7 +1896,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         }
 
         var layer = ViewModel.GetCanvasLayer(movingModel);
-        if (layer == null)
+        if (layer == null || !layer.IsEffectivelyVisible || layer.IsEffectivelyLocked)
         {
             return null;
         }
@@ -1803,8 +1907,10 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         foreach (var item in ViewModel.GetAllItems())
         {
             if (!SceneEditorViewModel.IsInCanvasLayer(item, layer)
+                || !item.IsEffectivelyVisible
+                || item.IsEffectivelyLocked
                 || !SceneHierarchyEditing.CanAccept(item.Model, movingModel)
-                || FindModelPresenter(item.Model) is not { ActualWidth: > 0, ActualHeight: > 0 } presenter)
+                || FindModelPresenter(item.Model) is not { Visibility: Visibility.Visible, ActualWidth: > 0, ActualHeight: > 0 } presenter)
             {
                 continue;
             }
@@ -1991,8 +2097,11 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void UpdateSelectionGeometry()
     {
-        var target = ViewModel.ActiveTab == SceneEditorTab.Components ? FindSelectedPresenter() : null;
-        if (target == null || target.ActualWidth <= 0 || target.ActualHeight <= 0)
+        var selected = ViewModel.SelectedItem;
+        var target = ViewModel.ActiveTab == SceneEditorTab.Components && selected is { IsEffectivelyVisible: true }
+            ? FindSelectedPresenter()
+            : null;
+        if (target == null || target.Visibility != Visibility.Visible || target.ActualWidth <= 0 || target.ActualHeight <= 0)
         {
             ViewModel.HasSelectionBounds = false;
             return;
@@ -2000,7 +2109,8 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
         var bounds = GetSceneViewportBounds(target);
         ViewModel.SelectionGeometry = new SceneSelectionGeometry(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-        ViewModel.CanResizeSelection = ViewModel.SelectedModel is ComponentSettings component && SceneLayoutEditing.CanEditLayout(component);
+        ViewModel.CanResizeSelection = selected is { Model: ComponentSettings component, IsEffectivelyLocked: false }
+            && SceneLayoutEditing.CanEditLayout(component);
         ViewModel.HasSelectionBounds = true;
     }
 
