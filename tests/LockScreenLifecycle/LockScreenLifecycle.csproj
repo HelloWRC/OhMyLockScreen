@@ -27,6 +27,7 @@
     <Compile Include="../../OhMyLockScreen/Views/ScenePreviewPage.xaml.cs" Link="Views/ScenePreviewPage.xaml.cs" />
     <Compile Include="../../OhMyLockScreen/SceneEditorPage.Tree.cs" Link="SceneEditorPage.Tree.cs" />
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneListMotion.cs" Link="Helpers/UI/SceneListMotion.cs" />
+    <Compile Include="../../OhMyLockScreen/Helpers/UI/ScenePreviewCardMotion.cs" Link="Helpers/UI/ScenePreviewCardMotion.cs" />
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneSaveToastTracker.cs" Link="Helpers/UI/SceneSaveToastTracker.cs" />
   </ItemGroup>
   <ItemGroup>

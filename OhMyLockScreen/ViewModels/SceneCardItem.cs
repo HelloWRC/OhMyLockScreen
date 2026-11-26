@@ -15,9 +15,11 @@ public sealed partial class SceneCardItem(Guid id) : ObservableObject
     private string _description = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAuthor), nameof(HasMetadata))]
     private string _author = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLicense), nameof(HasMetadata))]
     private string _license = "";
 
     [ObservableProperty]
@@ -32,6 +34,9 @@ public sealed partial class SceneCardItem(Guid id) : ObservableObject
     private bool _isActive;
 
     public bool HasDescription => !string.IsNullOrWhiteSpace(Description);
+    public bool HasAuthor => !string.IsNullOrWhiteSpace(Author);
+    public bool HasLicense => !string.IsNullOrWhiteSpace(License);
+    public bool HasMetadata => HasAuthor || HasLicense;
     public bool HasPreviewImage => PreviewImageUri != null;
     public bool CanDelete => !IsActive;
     public bool CanSetActive => !IsActive;

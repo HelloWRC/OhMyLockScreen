@@ -5,10 +5,12 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:icons="using:FluentIcons.Uwp"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
     mc:Ignorable="d"
     Width="356"
     Height="200"
+    CornerRadius="8"
     IsTabStop="True"
     UseSystemFocusVisuals="True"
     AutomationProperties.Name="{x:Bind Item.ActiveAutomationName, Mode=OneWay}"
@@ -16,7 +18,8 @@
     <UserControl.Resources>
         <MenuFlyout
             x:Key="CardOptionsFlyout"
-            Opening="OnOptionsFlyoutOpening">
+            Opening="OnOptionsFlyoutOpening"
+            Closed="OnOptionsFlyoutClosed">
             <MenuFlyoutItem
                 x:Name="SetActiveMenuItem"
                 Text="设为锁屏"
@@ -77,9 +80,10 @@
             </MenuFlyoutItem>
         </MenuFlyout>
     </UserControl.Resources>
+    <!-- 固定命中区承接指针，避免内部卡片上移 2px 时引起底部边缘悬停抖动 -->
     <Grid
-        x:Name="CardRoot"
-        CornerRadius="8"
+        x:Name="InteractionRoot"
+        Background="Transparent"
         PointerEntered="OnCardPointerEntered"
         PointerExited="OnCardPointerExited"
         PointerPressed="OnCardPointerPressed"
@@ -89,19 +93,6 @@
         Tapped="OnCardTapped"
         RightTapped="OnCardRightTapped">
         <VisualStateManager.VisualStateGroups>
-            <VisualStateGroup x:Name="CommonStates">
-                <VisualState x:Name="Normal" />
-                <VisualState x:Name="PointerOver">
-                    <VisualState.Setters>
-                        <Setter Target="HoverOverlay.Opacity" Value="1" />
-                    </VisualState.Setters>
-                </VisualState>
-                <VisualState x:Name="Pressed">
-                    <VisualState.Setters>
-                        <Setter Target="HoverOverlay.Opacity" Value="0.6" />
-                    </VisualState.Setters>
-                </VisualState>
-            </VisualStateGroup>
             <VisualStateGroup x:Name="SelectionStates">
                 <VisualState x:Name="Unselected" />
                 <VisualState x:Name="Selected">
@@ -113,60 +104,57 @@
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <!-- 默认渐变底色（与 Figma 占位一致） -->
-        <Border CornerRadius="8">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.58">
-                    <GradientStop Color="#805ED5D1" Offset="0.008" />
-                    <GradientStop Color="#803FC3BE" Offset="0.992" />
-                </LinearGradientBrush>
-            </Border.Background>
-        </Border>
-
-        <!-- 预览图 -->
-        <Border
-            x:Name="PreviewImageLayer"
-            CornerRadius="8"
-            IsHitTestVisible="False" />
-
-        <!-- 悬停态轻量高亮 -->
-        <Border
-            x:Name="HoverOverlay"
-            CornerRadius="8"
-            Background="#14FFFFFF"
-            Opacity="0"
-            IsHitTestVisible="False" />
-
-        <!-- 底部信息叠层：固定深色前景色确保浅色壁纸下也可读 -->
-        <Grid
-            VerticalAlignment="Bottom"
-            RequestedTheme="Dark">
-            <Border
-                CornerRadius="0,0,8,8"
-                IsHitTestVisible="False">
-                <Border.Background>
-                    <ui:MaskedBackdropBlurBrush
-                        BlurAmount="16"
-                        TintColor="#A3000000" />
-                </Border.Background>
-            </Border>
+        <Grid x:Name="CardRoot">
             <Grid
-                Padding="10,12,4,6"
-                ColumnSpacing="4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                x:Name="CardClipHost"
+                SizeChanged="OnCardClipHostSizeChanged">
+                <!-- 默认渐变底色（与 Figma 占位一致） -->
+                <Border
+                    CornerRadius="8"
+                    IsHitTestVisible="False">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.58">
+                            <GradientStop Color="#805ED5D1" Offset="0.008" />
+                            <GradientStop Color="#803FC3BE" Offset="0.992" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
 
+                <!-- 预览图 -->
+                <Border
+                    x:Name="PreviewImageLayer"
+                    CornerRadius="8"
+                    IsHitTestVisible="False" />
+
+                <!-- 渐进背景模糊深色遮罩：由 Composition 遮罩偏移在底部 54px 与整卡 200px 间滑动 -->
+                <Border
+                    x:Name="BackdropMaskLayer"
+                    CornerRadius="8"
+                    IsHitTestVisible="False">
+                    <Border.Background>
+                        <ui:MaskedBackdropBlurBrush
+                            x:Name="CardBackdropBrush"
+                            BlurAmount="30"
+                            TintColor="#A3000000"
+                            MaskFadeHeight="54"
+                            MaskOffsetY="146" />
+                    </Border.Background>
+                </Border>
+
+                <!-- 顶部信息层：标题在非悬停态下移至底部，悬停时滑移至顶部并淡入描述 -->
                 <StackPanel
-                    Grid.Column="0"
-                    Spacing="2"
-                    VerticalAlignment="Center">
+                    x:Name="HeaderOverlay"
+                    VerticalAlignment="Top"
+                    Padding="8"
+                    Spacing="4"
+                    IsHitTestVisible="False"
+                    RequestedTheme="Dark">
                     <TextBlock
+                        x:Name="TitleTextBlock"
                         Text="{x:Bind Item.Name, Mode=OneWay}"
                         FontSize="13"
                         LineHeight="16"
-                        Foreground="White"
+                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                         MaxLines="1"
                         TextTrimming="CharacterEllipsis" />
 
@@ -175,38 +163,140 @@
                         Text="{x:Bind Item.Description, Mode=OneWay}"
                         FontSize="10"
                         LineHeight="13"
-                        Foreground="#BFFFFFFF"
-                        MaxLines="2"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        MaxLines="5"
                         TextWrapping="Wrap"
                         TextTrimming="CharacterEllipsis"
                         Visibility="{x:Bind Item.HasDescription, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, FallbackValue=Collapsed}" />
                 </StackPanel>
 
-                <Button
-                    x:Name="MoreButton"
-                    Grid.Column="1"
-                    Style="{StaticResource EditorTransparentIconButtonStyle}"
-                    Width="32"
-                    Height="32"
+                <!-- 底部元信息与操作栏：悬停或选项菜单打开时淡入并启用命中 -->
+                <Grid
+                    x:Name="FooterOverlay"
                     VerticalAlignment="Bottom"
-                    Foreground="White"
-                    ToolTipService.ToolTip="更多操作"
-                    AutomationProperties.Name="场景操作菜单"
-                    Tapped="OnMoreButtonTapped"
-                    Click="OnMoreButtonClick">
-                    <icons:FluentIcon
-                        Icon="MoreHorizontal"
-                        FontSize="16" />
-                </Button>
-            </Grid>
-        </Grid>
+                    MinHeight="56"
+                    Padding="8"
+                    ColumnSpacing="10"
+                    RequestedTheme="Dark"
+                    IsHitTestVisible="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-        <!-- 边框叠层：保持内部布局尺寸在未选中/选中态之间不抖动 -->
-        <Border
-            x:Name="OutlineBorder"
-            CornerRadius="8"
-            BorderThickness="1"
-            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-            IsHitTestVisible="False" />
+                    <toolkit:WrapPanel
+                        x:Name="MetadataPanel"
+                        Grid.Column="0"
+                        HorizontalSpacing="6"
+                        VerticalSpacing="6"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,0,10"
+                        Opacity="0.75"
+                        Visibility="{x:Bind Item.HasMetadata, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, FallbackValue=Collapsed}">
+                        <Grid
+                            ColumnSpacing="2"
+                            Visibility="{x:Bind Item.HasAuthor, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, FallbackValue=Collapsed}"
+                            ToolTipService.ToolTip="{x:Bind Item.Author, Mode=OneWay}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <icons:FluentIcon
+                                Icon="Person"
+                                FontSize="16"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="{x:Bind Item.Author, Mode=OneWay}"
+                                FontSize="12"
+                                LineHeight="12"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                MaxLines="1"
+                                TextTrimming="CharacterEllipsis" />
+                        </Grid>
+
+                        <Grid
+                            ColumnSpacing="2"
+                            Visibility="{x:Bind Item.HasLicense, Mode=OneWay, Converter={StaticResource BooleanVisibilityConverter}, FallbackValue=Collapsed}"
+                            ToolTipService.ToolTip="{x:Bind Item.License, Mode=OneWay}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <icons:FluentIcon
+                                Icon="Scales"
+                                FontSize="16"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="{x:Bind Item.License, Mode=OneWay}"
+                                FontSize="12"
+                                LineHeight="12"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                MaxLines="1"
+                                TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </toolkit:WrapPanel>
+
+                    <StackPanel
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="4"
+                        VerticalAlignment="Bottom">
+                        <Button
+                            x:Name="EditButton"
+                            Style="{StaticResource EditorToolbarIconButtonStyle}"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            IsTabStop="False"
+                            ToolTipService.ToolTip="编辑…"
+                            AutomationProperties.Name="编辑场景"
+                            Tapped="OnActionButtonTapped"
+                            Click="OnEditClick">
+                            <icons:FluentIcon
+                                Icon="Edit"
+                                FontSize="20" />
+                        </Button>
+                        <Button
+                            x:Name="PreviewButton"
+                            Style="{StaticResource EditorToolbarIconButtonStyle}"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            IsTabStop="False"
+                            ToolTipService.ToolTip="预览"
+                            AutomationProperties.Name="预览场景"
+                            Tapped="OnActionButtonTapped"
+                            Click="OnPreviewClick">
+                            <icons:FluentIcon
+                                Icon="Play"
+                                FontSize="20" />
+                        </Button>
+                        <Button
+                            x:Name="MoreButton"
+                            Style="{StaticResource EditorToolbarIconButtonStyle}"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            IsTabStop="False"
+                            ToolTipService.ToolTip="更多选项"
+                            AutomationProperties.Name="更多选项"
+                            Tapped="OnActionButtonTapped"
+                            Click="OnMoreButtonClick">
+                            <icons:FluentIcon
+                                Icon="MoreHorizontal"
+                                FontSize="20" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- 边框叠层：保持内部布局尺寸在未选中/选中态之间不抖动 -->
+            <Border
+                x:Name="OutlineBorder"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                IsHitTestVisible="False" />
+        </Grid>
     </Grid>
 </UserControl>

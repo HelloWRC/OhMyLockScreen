@@ -91,6 +91,7 @@
     <Page Include="../../OhMyLockScreen/Controls/Editor/EditorResources.xaml" Link="Controls/Editor/EditorResources.xaml" />
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneListMotion.cs" Link="Helpers/UI/SceneListMotion.cs" />
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneListMotionController.cs" Link="Helpers/UI/SceneListMotionController.cs" />
+    <Compile Include="../../OhMyLockScreen/Helpers/UI/ScenePreviewCardMotion.cs" Link="Helpers/UI/ScenePreviewCardMotion.cs" />
     <Compile Include="../../OhMyLockScreen/ViewModels/SceneCardItem.cs" Link="ViewModels/SceneCardItem.cs" />
     <Compile Include="../../OhMyLockScreen/Controls/SceneManager/ScenePreviewCard.xaml.cs" Link="Controls/SceneManager/ScenePreviewCard.xaml.cs" />
     <Page Include="../../OhMyLockScreen/Controls/SceneManager/ScenePreviewCard.xaml" Link="Controls/SceneManager/ScenePreviewCard.xaml" />

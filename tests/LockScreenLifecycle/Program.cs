@@ -102,6 +102,7 @@ if (args.Contains("--activation-only"))
 if (args.Contains("--scene-management-only"))
 {
     SceneTests.RunListMotion(Run);
+    SceneTests.RunPreviewCardMotion(Run);
     await SceneTests.RunManagementAsync(RunAsync);
     return;
 }
@@ -118,6 +119,7 @@ if (args.Contains("--parallax-only"))
 if (args.Contains("--scene-only"))
 {
     SceneTests.RunListMotion(Run);
+    SceneTests.RunPreviewCardMotion(Run);
     await SceneTests.RunManagementAsync(RunAsync);
     await SceneTests.RunAsync(Run, RunAsync);
     await SceneMediaImportTests.RunAsync(RunAsync);
@@ -256,6 +258,7 @@ ShadowFeatureTests.Run(Run);
 LayoutTests.Run(Run);
 EditorConverterTests.Run(Run);
 SceneTests.RunListMotion(Run);
+SceneTests.RunPreviewCardMotion(Run);
 await SceneTests.RunManagementAsync(RunAsync);
 await SceneTests.RunAsync(Run, RunAsync);
 await SceneMediaImportTests.RunAsync(RunAsync);

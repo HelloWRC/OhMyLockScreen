@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Reactive.Disposables;
+using System.Runtime.Versioning;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Windows.UI;
@@ -24,8 +25,26 @@ public sealed class MaskedBackdropBlurBrush : XamlCompositionBrushBase
         typeof(MaskedBackdropBlurBrush),
         new PropertyMetadata(Color.FromArgb(0xA3, 0, 0, 0), OnVisualPropertyChanged));
 
+    public static readonly DependencyProperty MaskFadeHeightProperty = DependencyProperty.Register(
+        nameof(MaskFadeHeight),
+        typeof(double),
+        typeof(MaskedBackdropBlurBrush),
+        new PropertyMetadata(0.0, OnVisualPropertyChanged));
+
+    public static readonly DependencyProperty MaskOffsetYProperty = DependencyProperty.Register(
+        nameof(MaskOffsetY),
+        typeof(double),
+        typeof(MaskedBackdropBlurBrush),
+        new PropertyMetadata(0.0, OnVisualPropertyChanged));
+
     private CompositeDisposable? _resources;
     private CompositionEffectBrush? _effectBrush;
+    private CompositionLinearGradientBrush? _maskBrush;
+    private CompositionColorGradientStop[]? _tintStops;
+    private readonly List<(Vector2 Cp1, Vector2 Cp2, CubicBezierEasingFunction Easing)> _maskEasings = [];
+    private bool _isTintOnlyGradient;
+    private float _targetMaskOffsetY;
+    private bool _hasExplicitTargetOffset;
 
     public double BlurAmount
     {
@@ -39,15 +58,76 @@ public sealed class MaskedBackdropBlurBrush : XamlCompositionBrushBase
         set => SetValue(TintColorProperty, value);
     }
 
-    protected override void OnConnected()
+    public double MaskFadeHeight
     {
-        FallbackColor = TintColor;
-        if (CompositionBrush != null)
+        get => (double)GetValue(MaskFadeHeightProperty)!;
+        set => SetValue(MaskFadeHeightProperty, value);
+    }
+
+    public double MaskOffsetY
+    {
+        get => (double)GetValue(MaskOffsetYProperty)!;
+        set => SetValue(MaskOffsetYProperty, value);
+    }
+
+    public bool SupportsAnimatedMask => _maskBrush != null;
+
+    public void SetMaskOffsetYImmediate(float targetY)
+    {
+        _hasExplicitTargetOffset = true;
+        _targetMaskOffsetY = targetY;
+        if (_maskBrush == null)
         {
             return;
         }
 
-        if (!CompositionCapabilities.GetForCurrentView().AreEffectsSupported())
+        _maskBrush.StopAnimation("Offset");
+        _maskBrush.Offset = new Vector2(0f, targetY);
+    }
+
+    public void AnimateMaskOffsetY(float targetY, TimeSpan duration, Vector2 controlPoint1, Vector2 controlPoint2)
+    {
+        _hasExplicitTargetOffset = true;
+        _targetMaskOffsetY = targetY;
+        if (_maskBrush == null)
+        {
+            return;
+        }
+
+        if (duration <= TimeSpan.Zero)
+        {
+            SetMaskOffsetYImmediate(targetY);
+            return;
+        }
+
+        var compositor = _maskBrush.Compositor;
+        CubicBezierEasingFunction? easing = null;
+        for (var index = 0; index < _maskEasings.Count; index++)
+        {
+            if (_maskEasings[index].Cp1 == controlPoint1 && _maskEasings[index].Cp2 == controlPoint2)
+            {
+                easing = _maskEasings[index].Easing;
+                break;
+            }
+        }
+
+        if (easing == null)
+        {
+            easing = compositor.CreateCubicBezierEasingFunction(controlPoint1, controlPoint2);
+            _maskEasings.Add((controlPoint1, controlPoint2, easing));
+        }
+
+        var animation = compositor.CreateVector2KeyFrameAnimation();
+        animation.Duration = duration;
+        // 省略 0.0f 关键帧，使悬停态中途反转时可直接从当前实时值平滑衔接。
+        animation.InsertKeyFrame(1.0f, new Vector2(0f, targetY), easing);
+        _maskBrush.StartAnimation("Offset", animation);
+    }
+
+    protected override void OnConnected()
+    {
+        FallbackColor = TintColor;
+        if (CompositionBrush != null)
         {
             return;
         }
@@ -58,10 +138,41 @@ public sealed class MaskedBackdropBlurBrush : XamlCompositionBrushBase
             return;
         }
 
+        var fadeHeight = MaskFadeHeight;
+        var initialOffsetY = _hasExplicitTargetOffset ? _targetMaskOffsetY : (float)MaskOffsetY;
         var resources = new CompositeDisposable();
         CompositionEffectBrush? effectBrush = null;
+        CompositionLinearGradientBrush? maskBrush = null;
+
         try
         {
+            if (!CompositionCapabilities.GetForCurrentView().AreEffectsSupported())
+            {
+                if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 18362))
+                {
+                    var tintGradient = CreateMaskGradient(
+                        compositor,
+                        resources,
+                        fadeHeight,
+                        initialOffsetY,
+                        TintColor,
+                        includeBrushInResources: false,
+                        out var tintStops);
+
+                    _resources = resources;
+                    _maskBrush = tintGradient;
+                    _tintStops = tintStops;
+                    _isTintOnlyGradient = true;
+                    CompositionBrush = tintGradient;
+                }
+                else
+                {
+                    resources.Dispose();
+                }
+
+                return;
+            }
+
             using var blurEffect = new GaussianBlurEffect
             {
                 Name = "Blur",
@@ -95,25 +206,18 @@ public sealed class MaskedBackdropBlurBrush : XamlCompositionBrushBase
                 };
 
                 using var factory = compositor.CreateEffectFactory(alphaMaskEffect, (string[])["Blur.BlurAmount", "Tint.Color"]);
-                var gradient = compositor.CreateLinearGradientBrush();
-                resources.Add(gradient);
-                gradient.MappingMode = CompositionMappingMode.Relative;
-                gradient.StartPoint = new Vector2(0f, 0f);
-                gradient.EndPoint = new Vector2(0f, 1f);
-
-                var stopTop = compositor.CreateColorGradientStop(0f, Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF));
-                var stopMid = compositor.CreateColorGradientStop(0.32f, Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF));
-                var stopBottom = compositor.CreateColorGradientStop(1f, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
-                resources.Add(stopTop);
-                resources.Add(stopMid);
-                resources.Add(stopBottom);
-                gradient.ColorStops.Add(stopTop);
-                gradient.ColorStops.Add(stopMid);
-                gradient.ColorStops.Add(stopBottom);
+                maskBrush = CreateMaskGradient(
+                    compositor,
+                    resources,
+                    fadeHeight,
+                    initialOffsetY,
+                    Colors.White,
+                    includeBrushInResources: true,
+                    out _);
 
                 effectBrush = factory.CreateBrush();
                 effectBrush.SetSourceParameter("backdrop", backdrop);
-                effectBrush.SetSourceParameter("mask", gradient);
+                effectBrush.SetSourceParameter("mask", maskBrush);
             }
             else
             {
@@ -124,11 +228,19 @@ public sealed class MaskedBackdropBlurBrush : XamlCompositionBrushBase
 
             _resources = resources;
             _effectBrush = effectBrush;
+            _maskBrush = maskBrush;
+            _tintStops = null;
+            _isTintOnlyGradient = false;
             CompositionBrush = effectBrush;
         }
         catch
         {
             effectBrush?.Dispose();
+            if (maskBrush != null && !resources.Contains(maskBrush))
+            {
+                maskBrush.Dispose();
+            }
+
             resources.Dispose();
             throw;
         }
@@ -139,9 +251,84 @@ public sealed class MaskedBackdropBlurBrush : XamlCompositionBrushBase
         CompositionBrush?.Dispose();
         CompositionBrush = null;
         _effectBrush = null;
+        _maskBrush = null;
+        _tintStops = null;
+        _isTintOnlyGradient = false;
+        foreach (var (_, _, easing) in _maskEasings)
+        {
+            easing.Dispose();
+        }
+        _maskEasings.Clear();
         _resources?.Dispose();
         _resources = null;
     }
+
+    [SupportedOSPlatform("windows10.0.18362.0")]
+    private static CompositionLinearGradientBrush CreateMaskGradient(
+        Compositor compositor,
+        CompositeDisposable resources,
+        double fadeHeight,
+        float initialOffsetY,
+        Color baseColor,
+        bool includeBrushInResources,
+        out CompositionColorGradientStop[] stops)
+    {
+        var gradient = compositor.CreateLinearGradientBrush();
+        if (includeBrushInResources)
+        {
+            resources.Add(gradient);
+        }
+
+        if (fadeHeight > 0)
+        {
+            gradient.MappingMode = CompositionMappingMode.Absolute;
+            gradient.StartPoint = Vector2.Zero;
+            gradient.EndPoint = new Vector2(0f, (float)fadeHeight);
+            gradient.ExtendMode = CompositionGradientExtendMode.Clamp;
+            gradient.Offset = new Vector2(0f, initialOffsetY);
+        }
+        else
+        {
+            gradient.MappingMode = CompositionMappingMode.Relative;
+            gradient.StartPoint = Vector2.Zero;
+            gradient.EndPoint = new Vector2(0f, 1f);
+        }
+
+        var spec = GetGradientStopsSpec(fadeHeight, baseColor);
+        stops = new CompositionColorGradientStop[spec.Length];
+        for (var index = 0; index < spec.Length; index++)
+        {
+            var stop = compositor.CreateColorGradientStop(spec[index].Offset, spec[index].Color);
+            resources.Add(stop);
+            gradient.ColorStops.Add(stop);
+            stops[index] = stop;
+        }
+
+        return gradient;
+    }
+
+    private static (float Offset, Color Color)[] GetGradientStopsSpec(double fadeHeight, Color baseColor)
+    {
+        if (fadeHeight > 0)
+        {
+            return
+            [
+                (0f, ScaleAlpha(baseColor, 0f)),
+                (0.25f, ScaleAlpha(baseColor, 0.4f)),
+                (1f, ScaleAlpha(baseColor, 1f))
+            ];
+        }
+
+        return
+        [
+            (0f, ScaleAlpha(baseColor, 0f)),
+            (0.32f, ScaleAlpha(baseColor, 0.7529412f)),
+            (1f, ScaleAlpha(baseColor, 1f))
+        ];
+    }
+
+    private static Color ScaleAlpha(Color color, float factor) =>
+        Color.FromArgb((byte)Math.Round(color.A * Math.Clamp(factor, 0f, 1f)), color.R, color.G, color.B);
 
     private static void OnVisualPropertyChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
@@ -155,10 +342,39 @@ public sealed class MaskedBackdropBlurBrush : XamlCompositionBrushBase
             var color = (Color)args.NewValue!;
             brush.FallbackColor = color;
             brush._effectBrush?.Properties.InsertColor("Tint.Color", color);
+            if (brush._isTintOnlyGradient && brush._tintStops is { Length: > 0 } stops)
+            {
+                var spec = GetGradientStopsSpec(brush.MaskFadeHeight, color);
+                for (var index = 0; index < stops.Length && index < spec.Length; index++)
+                {
+                    stops[index].Color = spec[index].Color;
+                }
+            }
         }
         else if (args.Property == BlurAmountProperty)
         {
             brush._effectBrush?.Properties.InsertScalar("Blur.BlurAmount", (float)Math.Max(0, (double)args.NewValue!));
+        }
+        else if (args.Property == MaskFadeHeightProperty)
+        {
+            var fadeHeight = (double)args.NewValue!;
+            if (brush._maskBrush != null && fadeHeight > 0)
+            {
+                brush._maskBrush.MappingMode = CompositionMappingMode.Absolute;
+                brush._maskBrush.EndPoint = new Vector2(0f, (float)fadeHeight);
+                brush._maskBrush.ExtendMode = CompositionGradientExtendMode.Clamp;
+            }
+        }
+        else if (args.Property == MaskOffsetYProperty)
+        {
+            var offsetY = (float)(double)args.NewValue!;
+            brush._hasExplicitTargetOffset = false;
+            brush._targetMaskOffsetY = offsetY;
+            if (brush._maskBrush != null)
+            {
+                brush._maskBrush.StopAnimation("Offset");
+                brush._maskBrush.Offset = new Vector2(0f, offsetY);
+            }
         }
     }
 }

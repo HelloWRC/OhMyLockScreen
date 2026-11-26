@@ -81,6 +81,79 @@ internal static class SceneTests
                 "OrderEntranceBatch failed to filter negative indices or preserve ascending order.");
         });
 
+    internal static void RunPreviewCardMotion(Action<string, Action> run) =>
+        run("Scene preview card motion defines hover curves, spring lift offsets, and metadata visibility flags", () =>
+        {
+            Check(ScenePreviewCardMotion.HoverEnterDuration == TimeSpan.FromMilliseconds(333)
+                && ScenePreviewCardMotion.HoverEnterControlPoint1 == new System.Numerics.Vector2(0.0f, 0.0f)
+                && ScenePreviewCardMotion.HoverEnterControlPoint2 == new System.Numerics.Vector2(0.0f, 1.0f),
+                "Hover enter duration or cubic-bezier curve did not match Figma spec.");
+            Check(ScenePreviewCardMotion.HoverLeaveDuration == TimeSpan.FromMilliseconds(167)
+                && ScenePreviewCardMotion.HoverLeaveControlPoint1 == new System.Numerics.Vector2(1.0f, 0.0f)
+                && ScenePreviewCardMotion.HoverLeaveControlPoint2 == new System.Numerics.Vector2(1.0f, 1.0f),
+                "Hover leave duration or cubic-bezier curve did not match Figma spec.");
+            Check(ScenePreviewCardMotion.HoverLiftOffsetY == -2.0f
+                && ScenePreviewCardMotion.PressedLiftOffsetY == -0.75f
+                && ScenePreviewCardMotion.RestLiftOffsetY == 0.0f
+                && ScenePreviewCardMotion.LiftSpringDampingRatio == 0.65f
+                && ScenePreviewCardMotion.LiftSpringPeriod == TimeSpan.FromMilliseconds(50),
+                "Spring lift parameters did not match.");
+            Check(ScenePreviewCardMotion.GetRestMaskOffsetY(200.0f) == 146.0f
+                && ScenePreviewCardMotion.HoverMaskOffsetY == -54.0f
+                && ScenePreviewCardMotion.GetRestHeaderOffsetY(200.0f) == 172.0f
+                && ScenePreviewCardMotion.HoverHeaderOffsetY == 0.0f,
+                "Mask or header rest/hover Y offsets did not match 356x200 card geometry.");
+
+            Check(ScenePreviewCardMotion.GetTargetLiftOffsetY(isExpanded: false, isPressed: false, animationsEnabled: true) == 0.0f
+                && ScenePreviewCardMotion.GetTargetLiftOffsetY(isExpanded: true, isPressed: false, animationsEnabled: true) == -2.0f
+                && ScenePreviewCardMotion.GetTargetLiftOffsetY(isExpanded: true, isPressed: true, animationsEnabled: true) == -0.75f
+                && ScenePreviewCardMotion.GetTargetLiftOffsetY(isExpanded: false, isPressed: true, animationsEnabled: true) == 0.0f
+                && ScenePreviewCardMotion.GetTargetLiftOffsetY(isExpanded: true, isPressed: false, animationsEnabled: false) == 0.0f
+                && ScenePreviewCardMotion.GetTargetLiftOffsetY(isExpanded: true, isPressed: true, animationsEnabled: false) == 0.0f
+                && ScenePreviewCardMotion.GetTargetLiftOffsetY(isExpanded: false, isPressed: false, animationsEnabled: false) == 0.0f
+                && ScenePreviewCardMotion.GetTargetLiftOffsetY(isExpanded: false, isPressed: true, animationsEnabled: false) == 0.0f,
+                "GetTargetLiftOffsetY returned unexpected vertical offset for interaction state.");
+
+            var card = new SceneCardItem(Guid.NewGuid());
+            var changed = new List<string>();
+            card.PropertyChanged += (_, args) =>
+            {
+                if (!string.IsNullOrEmpty(args.PropertyName))
+                {
+                    changed.Add(args.PropertyName);
+                }
+            };
+
+            Check(!card.HasAuthor && !card.HasLicense && !card.HasMetadata,
+                "Empty SceneCardItem unexpectedly reported metadata.");
+
+            card.Author = "   ";
+            Check(!card.HasAuthor && !card.HasMetadata,
+                "Whitespace-only Author should not enable HasAuthor or HasMetadata.");
+
+            changed.Clear();
+            card.Author = "HelloWRC";
+            Check(card.HasAuthor && !card.HasLicense && card.HasMetadata
+                && changed.Contains(nameof(SceneCardItem.HasAuthor))
+                && changed.Contains(nameof(SceneCardItem.HasMetadata)),
+                "Setting Author did not update HasAuthor/HasMetadata or raise PropertyChanged.");
+
+            changed.Clear();
+            card.License = "GPL-3.0";
+            Check(card.HasAuthor && card.HasLicense && card.HasMetadata
+                && changed.Contains(nameof(SceneCardItem.HasLicense))
+                && changed.Contains(nameof(SceneCardItem.HasMetadata)),
+                "Setting License did not update HasLicense/HasMetadata or raise PropertyChanged.");
+
+            card.Author = "";
+            Check(!card.HasAuthor && card.HasLicense && card.HasMetadata,
+                "Clearing Author while License remains set should keep HasMetadata true.");
+
+            card.License = "";
+            Check(!card.HasAuthor && !card.HasLicense && !card.HasMetadata,
+                "Clearing both Author and License should reset HasMetadata to false.");
+        });
+
     internal static Task RunManagementAsync(Func<string, Func<Task>, Task> runAsync) =>
         runAsync("Scene management keeps editing and activation independent, filters metadata, and protects the active scene", async () =>
         {

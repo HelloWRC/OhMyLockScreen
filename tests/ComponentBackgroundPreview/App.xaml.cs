@@ -55,6 +55,12 @@ public sealed partial class App : Application
             return;
         }
 
+        if (args.Arguments.Contains("scene-preview-card", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchScenePreviewCardPreview();
+            return;
+        }
+
         if (args.Arguments.Contains("scene-list-motion", StringComparison.OrdinalIgnoreCase))
         {
             LaunchSceneListMotionPreview();
