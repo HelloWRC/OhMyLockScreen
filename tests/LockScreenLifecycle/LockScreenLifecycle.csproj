@@ -66,6 +66,7 @@
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/BrushGradientAdorner.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/NumberBoxBehavior.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/ShadowDecorator.cs" />
+    <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/OpacityDecorator.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/StrokeDecorator.cs" />
     <Compile Remove="../../OhMyLockScreen.Shared/Controls/UI/StripeMaskDecorator.cs" />
   </ItemGroup>

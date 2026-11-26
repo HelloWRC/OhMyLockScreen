@@ -7,6 +7,7 @@
         <ResourceDictionary Source="ms-appx:///OhMyLockScreen.Shared/Controls/Scene/LayerPresenter.xaml" />
         <ResourceDictionary Source="ms-appx:///OhMyLockScreen.Shared/Controls/UI/ChainedDecorator.xaml" />
         <ResourceDictionary Source="ms-appx:///OhMyLockScreen.Shared/Controls/UI/Empty.xaml" />
+        <ResourceDictionary Source="ms-appx:///OhMyLockScreen.Shared/Controls/UI/OpacityDecorator.xaml" />
         <ResourceDictionary Source="ms-appx:///OhMyLockScreen.Shared/Controls/UI/ShadowDecorator.xaml" />
         <ResourceDictionary Source="ms-appx:///OhMyLockScreen.Shared/Controls/UI/StrokeDecorator.xaml" />
         <ResourceDictionary Source="ms-appx:///OhMyLockScreen.Shared/Controls/UI/StripeMaskDecorator.xaml" />

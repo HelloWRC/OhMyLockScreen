@@ -27,6 +27,7 @@
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BorderFeature.cs" Link="Services/BorderFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/StrokeFeature.cs" Link="Services/StrokeFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/ShadowFeature.cs" Link="Services/ShadowFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/OpacityFeature.cs" Link="Services/OpacityFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/BackgroundFeature.cs" Link="Services/BackgroundFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/TextFeature.cs" Link="Services/TextFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/FontFeature.cs" Link="Services/FontFeature.cs" />
@@ -69,6 +70,7 @@
     <Compile Include="../../OhMyLockScreen/ViewModels/LayoutMarginsViewModel.cs" Link="ViewModels/LayoutMarginsViewModel.cs" />
     <Compile Include="../../OhMyLockScreen/ViewModels/StrokeSettingsViewModel.cs" Link="ViewModels/StrokeSettingsViewModel.cs" />
     <Compile Include="../../OhMyLockScreen/ViewModels/ShadowSettingsViewModel.cs" Link="ViewModels/ShadowSettingsViewModel.cs" />
+    <Compile Include="../../OhMyLockScreen/ViewModels/OpacitySettingsViewModel.cs" Link="ViewModels/OpacitySettingsViewModel.cs" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/LayoutSettingsControl.xaml.cs" Link="Controls/Editor/LayoutSettingsControl.xaml.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/LayoutSettingsControl.xaml" Link="Controls/Editor/LayoutSettingsControl.xaml" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/EditorViewBases.cs" Link="Controls/Editor/EditorViewBases.cs" />
@@ -84,6 +86,8 @@
     <Page Include="../../OhMyLockScreen/Controls/Editor/StrokeSettingsControl.xaml" Link="Controls/Editor/StrokeSettingsControl.xaml" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/ShadowSettingsControl.xaml.cs" Link="Controls/Editor/ShadowSettingsControl.xaml.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/ShadowSettingsControl.xaml" Link="Controls/Editor/ShadowSettingsControl.xaml" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/OpacitySettingsControl.xaml.cs" Link="Controls/Editor/OpacitySettingsControl.xaml.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/Editor/OpacitySettingsControl.xaml" Link="Controls/Editor/OpacitySettingsControl.xaml" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/BackgroundSettingsControl.xaml.cs" Link="Controls/Editor/BackgroundSettingsControl.xaml.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/BackgroundSettingsControl.xaml" Link="Controls/Editor/BackgroundSettingsControl.xaml" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/ForegroundSettingsControl.xaml.cs" Link="Controls/Editor/ForegroundSettingsControl.xaml.cs" />

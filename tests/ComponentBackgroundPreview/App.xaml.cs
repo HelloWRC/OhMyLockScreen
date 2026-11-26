@@ -67,6 +67,12 @@ public sealed partial class App : Application
             return;
         }
 
+        if (args.Arguments.Contains("opacity", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchOpacityPreview();
+            return;
+        }
+
         if (args.Arguments.Contains("stroke", StringComparison.OrdinalIgnoreCase))
         {
             LaunchStrokePreview();

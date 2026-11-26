@@ -10,7 +10,7 @@ using Windows.UI.Xaml.Hosting;
 namespace OhMyLockScreen.Shared.Controls.UI;
 
 /// <summary>在内容后方按实际 Alpha 轮廓投射自定义外阴影的通用装饰容器。</summary>
-public sealed class ShadowDecorator : ContentControl
+public sealed class ShadowDecorator : ContentControl, IVisualOutsetProvider
 {
     public static readonly DependencyProperty ShadowSpecProperty = DependencyProperty.Register(
         nameof(ShadowSpec),
@@ -35,6 +35,8 @@ public sealed class ShadowDecorator : ContentControl
     private CompositionPropertySet? _props;
     private LayerVisual? _layer;
     private RedirectVisual? _redirect;
+    private Thickness _visualOutsetThickness;
+    private double _visualOutset;
     private bool _isLoaded;
 
     public ShadowEffectSpec? ShadowSpec
@@ -50,6 +52,12 @@ public sealed class ShadowDecorator : ContentControl
         set => SetValue(SourceElementProperty, value);
     }
 
+    public double VisualOutset => _visualOutset;
+
+    public Thickness VisualOutsetThickness => _visualOutsetThickness;
+
+    public event EventHandler? VisualOutsetChanged;
+
     public ShadowDecorator()
     {
         DefaultStyleKey = typeof(ShadowDecorator);
@@ -61,7 +69,7 @@ public sealed class ShadowDecorator : ContentControl
     protected override void OnApplyTemplate()
     {
         base.OnApplyTemplate();
-        ReleaseShadow();
+        ReleaseShadowVisualsOnly();
         _shadowHost = GetTemplateChild("PART_ShadowHost") as FrameworkElement;
         _contentPresenter = GetTemplateChild("PART_Content") as FrameworkElement;
         SyncShadow();
@@ -88,19 +96,20 @@ public sealed class ShadowDecorator : ContentControl
 
     private void SyncShadow()
     {
-        if (ShadowSpec is not { } spec
-            || !_isLoaded
-            || _shadowHost is not { } host
-            || !CompositionCapabilities.GetForCurrentView().AreEffectsSupported())
+        if (!_isLoaded)
         {
             ReleaseShadow();
             return;
         }
 
         var effectiveSource = ResolveEffectiveSource();
-        if (effectiveSource is not { } source)
+        if (ShadowSpec is not { } spec
+            || _shadowHost is not { } host
+            || !CompositionCapabilities.GetForCurrentView().AreEffectsSupported()
+            || effectiveSource is not { } source)
         {
             ReleaseShadowVisualsOnly();
+            SetVisualOutset(OpacityEffectHelper.NormalizeOutset(_observedOutsetProvider?.VisualOutsetThickness ?? default));
             return;
         }
 
@@ -109,6 +118,7 @@ public sealed class ShadowDecorator : ContentControl
             ReleaseShadowVisualsOnly();
             if (!CreateShadowVisuals(host, source))
             {
+                SetVisualOutset(OpacityEffectHelper.NormalizeOutset(_observedOutsetProvider?.VisualOutsetThickness ?? default));
                 return;
             }
         }
@@ -258,11 +268,13 @@ public sealed class ShadowDecorator : ContentControl
             return;
         }
 
+        var childThickness = OpacityEffectHelper.NormalizeOutset(_observedOutsetProvider?.VisualOutsetThickness ?? default);
         var opacity = double.IsFinite(spec.Opacity) ? spec.Opacity : 0;
         var effectiveOpacity = (float)Math.Clamp((spec.Color.A / 255.0) * opacity, 0, 1);
         if (effectiveOpacity <= 0f)
         {
             _layer.IsVisible = false;
+            SetVisualOutset(childThickness);
             return;
         }
 
@@ -275,9 +287,9 @@ public sealed class ShadowDecorator : ContentControl
         _brush.Properties.InsertScalar("ShadowBlur.BlurAmount", blurRadius / 3f);
 
         // 为软边界高斯模糊及子级描边外扩预留四周边距，防止 LayerVisual 尺寸边界硬裁剪。
-        var childOutset = _observedOutsetProvider?.VisualOutset ?? 0;
+        var childOutset = OpacityEffectHelper.GetMaxOutset(childThickness);
         var basePad = blurRadius > 0f ? MathF.Ceiling(blurRadius) + 2f : 0f;
-        var outsetPad = double.IsFinite(childOutset) && childOutset > 0 ? (float)Math.Ceiling(childOutset) : 0f;
+        var outsetPad = childOutset > 0 ? (float)Math.Ceiling(childOutset) : 0f;
         var pad = basePad + outsetPad;
         _props.InsertScalar("pad", pad);
         _redirect.Offset = new Vector3(pad, pad, 0f);
@@ -285,12 +297,32 @@ public sealed class ShadowDecorator : ContentControl
         var offsetX = double.IsFinite(spec.OffsetX) ? (float)spec.OffsetX : 0f;
         var offsetY = double.IsFinite(spec.OffsetY) ? (float)spec.OffsetY : 0f;
         _layer.Offset = new Vector3(offsetX - pad, offsetY - pad, 0f);
+
+        var combined = new Thickness(
+            Math.Max(childThickness.Left, Math.Max(0, pad - offsetX)),
+            Math.Max(childThickness.Top, Math.Max(0, pad - offsetY)),
+            Math.Max(childThickness.Right, Math.Max(0, pad + offsetX)),
+            Math.Max(childThickness.Bottom, Math.Max(0, pad + offsetY)));
+        SetVisualOutset(OpacityEffectHelper.NormalizeOutset(combined));
     }
 
     private void ReleaseShadow()
     {
         ReleaseObservedProviders();
         ReleaseShadowVisualsOnly();
+        SetVisualOutset(default);
+    }
+
+    private void SetVisualOutset(Thickness value)
+    {
+        if (_visualOutsetThickness == value)
+        {
+            return;
+        }
+
+        _visualOutsetThickness = value;
+        _visualOutset = OpacityEffectHelper.GetMaxOutset(value);
+        VisualOutsetChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void ReleaseShadowVisualsOnly()

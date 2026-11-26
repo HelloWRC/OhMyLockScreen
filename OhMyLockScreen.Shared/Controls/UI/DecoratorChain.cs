@@ -33,6 +33,7 @@ public interface ISharedDecoratorRegistration<out TElement> : IDisposable where 
 public static class DecoratorPriorities
 {
     public const int Parallax = -200;
+    public const int Opacity = -150;
     public const int Shadow = -100;
     public const int EditorOverlay = -50;
     public const int Default = 0;

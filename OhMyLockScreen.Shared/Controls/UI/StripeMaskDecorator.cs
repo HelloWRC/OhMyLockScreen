@@ -29,6 +29,7 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
     private LayerVisual? _layer;
     private RedirectVisual? _redirect;
     private IVisualOutsetProvider? _observedOutsetProvider;
+    private Thickness _lastOutsetThickness;
     private double _lastOutset;
     private bool _isLoaded;
 
@@ -43,6 +44,8 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
     public event EventHandler? VisualRedirectSourceChanged;
 
     public double VisualOutset => _observedOutsetProvider?.VisualOutset ?? 0;
+
+    public Thickness VisualOutsetThickness => _observedOutsetProvider?.VisualOutsetThickness ?? default;
 
     public event EventHandler? VisualOutsetChanged;
 
@@ -129,9 +132,11 @@ public sealed class StripeMaskDecorator : ContentControl, IVisualRedirectSourceP
         }
 
         var current = VisualOutset;
-        if (_lastOutset != current)
+        var currentThickness = VisualOutsetThickness;
+        if (_lastOutset != current || _lastOutsetThickness != currentThickness)
         {
             _lastOutset = current;
+            _lastOutsetThickness = currentThickness;
             VisualOutsetChanged?.Invoke(this, EventArgs.Empty);
         }
     }

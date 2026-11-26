@@ -165,6 +165,13 @@ if (args.Contains("--shadow-only"))
     return;
 }
 
+if (args.Contains("--opacity-only"))
+{
+    OpacityFeatureTests.Run(Run);
+    Console.WriteLine($"All {passed} opacity checks passed using simulated UWP controls.");
+    return;
+}
+
 if (args.Contains("--stroke-only"))
 {
     StrokeFeatureTests.Run(Run);
@@ -190,6 +197,7 @@ if (args.Contains("--binding-only"))
     BorderFeatureTests.Run(Run);
     StrokeFeatureTests.Run(Run);
     ShadowFeatureTests.Run(Run);
+    OpacityFeatureTests.Run(Run);
     ForegroundFeatureTests.Run(Run);
     TypographyFeatureTests.Run(Run);
     Console.WriteLine($"All {passed} property binding checks passed using simulated UWP controls.");
@@ -255,6 +263,7 @@ TypographyFeatureTests.Run(Run);
 FeatureTests.Run(Run);
 StrokeFeatureTests.Run(Run);
 ShadowFeatureTests.Run(Run);
+OpacityFeatureTests.Run(Run);
 LayoutTests.Run(Run);
 EditorConverterTests.Run(Run);
 SceneTests.RunListMotion(Run);

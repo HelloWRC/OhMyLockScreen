@@ -318,7 +318,7 @@ namespace OhMyLockScreen.Shared.Controls.Scene
 
 namespace OhMyLockScreen.Shared.Controls.UI
 {
-    public sealed class ShadowDecorator : Windows.UI.Xaml.Controls.ContentControl
+    public sealed class ShadowDecorator : Windows.UI.Xaml.Controls.ContentControl, IVisualOutsetProvider
     {
         public static readonly Windows.UI.Xaml.DependencyProperty ShadowSpecProperty = Windows.UI.Xaml.DependencyProperty.Register(
             nameof(ShadowSpec), typeof(ShadowEffectSpec), typeof(ShadowDecorator), new Windows.UI.Xaml.PropertyMetadata(null));
@@ -337,6 +337,41 @@ namespace OhMyLockScreen.Shared.Controls.UI
             get => (Windows.UI.Xaml.FrameworkElement?)GetValue(SourceElementProperty);
             set => SetValue(SourceElementProperty, value);
         }
+
+        public double VisualOutset => 0;
+
+        public event EventHandler? VisualOutsetChanged;
+
+        internal void NotifyVisualOutsetChanged() => VisualOutsetChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public sealed class OpacityDecorator : Windows.UI.Xaml.Controls.ContentControl, IVisualOutsetProvider
+    {
+        public static readonly Windows.UI.Xaml.DependencyProperty OpacitySpecProperty = Windows.UI.Xaml.DependencyProperty.Register(
+            nameof(OpacitySpec), typeof(OpacityEffectSpec), typeof(OpacityDecorator), new Windows.UI.Xaml.PropertyMetadata(null));
+
+        public static readonly Windows.UI.Xaml.DependencyProperty SourceElementProperty = Windows.UI.Xaml.DependencyProperty.Register(
+            nameof(SourceElement), typeof(Windows.UI.Xaml.FrameworkElement), typeof(OpacityDecorator), new Windows.UI.Xaml.PropertyMetadata(null));
+
+        public OpacityEffectSpec? OpacitySpec
+        {
+            get => (OpacityEffectSpec?)GetValue(OpacitySpecProperty);
+            set => SetValue(OpacitySpecProperty, value);
+        }
+
+        public Windows.UI.Xaml.FrameworkElement? SourceElement
+        {
+            get => (Windows.UI.Xaml.FrameworkElement?)GetValue(SourceElementProperty);
+            set => SetValue(SourceElementProperty, value);
+        }
+
+        public double VisualOutset => 0;
+
+        public Windows.UI.Xaml.Thickness VisualOutsetThickness => default;
+
+        public event EventHandler? VisualOutsetChanged;
+
+        internal void NotifyVisualOutsetChanged() => VisualOutsetChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public sealed class StrokeDecorator : Windows.UI.Xaml.Controls.ContentControl, IVisualOutsetProvider
