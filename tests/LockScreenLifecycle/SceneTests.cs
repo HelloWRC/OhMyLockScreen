@@ -1705,6 +1705,130 @@ internal static class SceneTests
             first.Settings.Text = "共享模型，独立控件";
             Check(((TextComponent)factory.CreateComponent(component)!).Settings.Text == first.Settings.Text, "The renderer did not receive the edited settings instance.");
         });
+        run("FeatureInfo.IsEnabled defaults to true, updates InspectorSection and ViewModel state, and protects disabled layout helpers", () =>
+        {
+            const string legacyJson = """
+                {
+                  "Name": "Legacy",
+                  "Features": [
+                    { "Id": "omls.features.appearance.background" }
+                  ]
+                }
+                """;
+            using var legacyStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(legacyJson));
+            var legacyScene = ConfigureFileHelper.LoadConfigUnWrapped<SceneSettings>(legacyStream);
+            Check(legacyScene.Features.Count == 1 && legacyScene.Features[0].IsEnabled,
+                "Legacy scene JSON without IsEnabled did not default to true.");
+
+            var component = new ComponentSettings { Id = TextComponent.Id };
+            var disabledLayout = new FeatureInfo
+            {
+                Id = "omls.features.layout.layout",
+                IsEnabled = false,
+                Settings = new LayoutFeatureSettings
+                {
+                    Width = 320,
+                    Height = 140,
+                    Margin = new Thickness(12, 34, 56, 78)
+                }
+            };
+            var disabledGrid = new FeatureInfo
+            {
+                Id = "omls.features.layout.grid",
+                IsEnabled = false,
+                Settings = new GridLayoutFeatureSettings { Row = 1, Column = 1 }
+            };
+            component.Features.Add(disabledLayout);
+            component.Features.Add(disabledGrid);
+
+            Check(!SceneLayoutEditing.CanEditLayout(component), "CanEditLayout reported true when layout feature was disabled.");
+            Check(SceneLayoutEditing.GetLayout(component, create: false) == null
+                && SceneLayoutEditing.GetLayout(component, create: true) == null
+                && component.Features.Count == 2,
+                "GetLayout duplicated or returned a disabled layout feature.");
+
+            var gridPanel = new Grid { ActualWidth = 400, ActualHeight = 400 };
+            gridPanel.RowDefinitions.Add(new RowDefinition { ActualHeight = 200 });
+            gridPanel.RowDefinitions.Add(new RowDefinition { ActualHeight = 200 });
+            gridPanel.ColumnDefinitions.Add(new ColumnDefinition { ActualWidth = 200 });
+            gridPanel.ColumnDefinitions.Add(new ColumnDefinition { ActualWidth = 200 });
+            SceneLayoutEditing.ApplyDropPosition(component, gridPanel, new Point(25, 35));
+            var savedLayout = disabledLayout.GetSettings<LayoutFeatureSettings>();
+            Check(savedLayout.Margin == new Thickness(12, 34, 56, 78) && savedLayout.Width == 320,
+                "ApplyDropPosition mutated a disabled layout feature.");
+
+            disabledLayout.IsEnabled = true;
+            Check(SceneLayoutEditing.CanEditLayout(component)
+                && ReferenceEquals(SceneLayoutEditing.GetLayout(component, create: false), savedLayout),
+                "Re-enabling layout feature did not restore layout editing.");
+            SceneLayoutEditing.ApplyDropPosition(component, gridPanel, new Point(25, 35));
+            Check(savedLayout.Margin == new Thickness(25, 35, 0, 0),
+                "ApplyDropPosition did not ignore disabled grid layout feature (expected row 0, col 0 origin).");
+
+            using var plainSection = new InspectorSection("文本", null, component, component.Settings);
+            Check(!plainSection.CanRemove && plainSection.IsFeatureEnabled && plainSection.EditorOpacity == 1.0,
+                "Non-feature InspectorSection did not default to enabled and full opacity.");
+
+            var toggleFeature = new FeatureInfo
+            {
+                Id = "omls.features.appearance.shadow",
+                Settings = new ShadowFeatureSettings()
+            };
+            using var featureSection = new InspectorSection("阴影", null, component, toggleFeature.Settings, component, toggleFeature);
+            var changedProps = new List<string>();
+            featureSection.PropertyChanged += (_, args) =>
+            {
+                if (!string.IsNullOrEmpty(args.PropertyName))
+                {
+                    changedProps.Add(args.PropertyName);
+                }
+            };
+            Check(featureSection.CanRemove && featureSection.IsFeatureEnabled && featureSection.EditorOpacity == 1.0
+                && featureSection.ToggleEnabledIcon == Icon.Eye && featureSection.ToggleEnabledToolTip == "禁用特性",
+                "Enabled feature section did not report expected initial UI state.");
+
+            featureSection.ToggleEnabledCommand.Execute(null);
+            Check(!toggleFeature.IsEnabled && !featureSection.IsFeatureEnabled && featureSection.EditorOpacity == 0.5
+                && featureSection.ToggleEnabledIcon == Icon.EyeOff && featureSection.ToggleEnabledToolTip == "启用特性"
+                && changedProps.Contains(nameof(InspectorSection.IsFeatureEnabled))
+                && changedProps.Contains(nameof(InspectorSection.EditorOpacity))
+                && changedProps.Contains(nameof(InspectorSection.ToggleEnabledIcon))
+                && changedProps.Contains(nameof(InspectorSection.ToggleEnabledToolTip)),
+                "Toggling InspectorSection off did not update feature state, opacity, icon, tooltip, or notifications.");
+
+            changedProps.Clear();
+            toggleFeature.IsEnabled = true;
+            Check(featureSection.IsFeatureEnabled && featureSection.EditorOpacity == 1.0
+                && featureSection.ToggleEnabledIcon == Icon.Eye && featureSection.ToggleEnabledToolTip == "禁用特性"
+                && changedProps.Count == 4,
+                "External IsEnabled update did not refresh InspectorSection.");
+
+            featureSection.Dispose();
+            featureSection.Dispose();
+            changedProps.Clear();
+            toggleFeature.IsEnabled = false;
+            Check(changedProps.Count == 0, "Disposed InspectorSection retained FeatureInfo subscription.");
+
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var targetComponent = editor.Scene!.Layers[0].Children[0];
+            var targetLayout = targetComponent.Features.First(feature => feature.Id == "omls.features.layout.layout");
+            editor.Select(targetComponent);
+            Check(editor.CanResizeSelection, "Selected component with enabled layout should be resizable.");
+            var inspectorEvents = 0;
+            editor.InspectorChanged += (_, _) => inspectorEvents++;
+            targetLayout.IsEnabled = false;
+            Check(inspectorEvents == 1 && fixture.Service.HasPendingChanges(editor.Scene.SceneId),
+                "Toggling FeatureInfo.IsEnabled did not notify inspector or queue save.");
+            editor.Select(editor.Roots[0].Model);
+            editor.Select(targetComponent);
+            Check(!editor.CanResizeSelection, "Selected component with disabled layout should not allow canvas resizing.");
+            fixture.Service.FlushPending();
+            var reloaded = fixture.Service.Load(editor.Scene.SceneId);
+            Check(!reloaded.Layers[0].Children[0].Features.First(feature => feature.Id == "omls.features.layout.layout").IsEnabled,
+                "Persisted scene did not keep disabled IsEnabled state.");
+        });
         await runAsync("Manual launches open the editor; hosted launches and lock activations open the lock view", async () =>
         {
             var app = new App();
@@ -2218,6 +2342,54 @@ internal static class SceneTests
             queue.Clear(window2);
             Check(!queue.HasPending(window2) && !queue.TryDequeue(window2, out _), "Clear did not empty window2 queue.");
             return Task.CompletedTask;
+        });
+
+        await runAsync("Disabled features and their settings round-trip through save, duplicate, and .omls export/import", async () =>
+        {
+            using var fixture = new Fixture();
+            var source = fixture.Service.Create("禁用特性测试");
+            var layer = source.Layers[0];
+            var component = new ComponentSettings
+            {
+                Id = TextComponent.Id,
+                Name = "测试文本"
+            };
+            component.Features.Add(new FeatureInfo
+            {
+                Id = "omls.features.appearance.shadow",
+                IsEnabled = false,
+                Settings = new ShadowFeatureSettings
+                {
+                    BlurRadius = 24,
+                    Opacity = 0.65,
+                    OffsetX = 4,
+                    OffsetY = 8
+                }
+            });
+            layer.Children.Add(component);
+            fixture.Service.QueueSave(source);
+            fixture.Service.FlushPending();
+
+            var loaded = fixture.Service.Load(source.SceneId);
+            var loadedFeature = loaded.Layers[0].Children.Single(item => item.Name == "测试文本").Features.Single(feature => feature.Id == "omls.features.appearance.shadow");
+            Check(!loadedFeature.IsEnabled
+                && loadedFeature.GetSettings<ShadowFeatureSettings>() is { BlurRadius: 24, Opacity: 0.65, OffsetX: 4, OffsetY: 8 },
+                "Disabled feature state or settings did not survive save/load.");
+
+            var duplicated = fixture.Service.Duplicate(source.SceneId);
+            var duplicatedFeature = duplicated.Layers[0].Children.Single(item => item.Name == "测试文本").Features.Single(feature => feature.Id == "omls.features.appearance.shadow");
+            Check(!duplicatedFeature.IsEnabled
+                && duplicatedFeature.GetSettings<ShadowFeatureSettings>() is { BlurRadius: 24, Opacity: 0.65 },
+                "Disabled feature state or settings did not survive Duplicate.");
+
+            using var archiveStream = new MemoryStream();
+            await fixture.Service.ExportAsync(source.SceneId, archiveStream);
+            archiveStream.Position = 0;
+            var imported = await fixture.Service.ImportAsync(archiveStream);
+            var importedFeature = imported.Layers[0].Children.Single(item => item.Name == "测试文本").Features.Single(feature => feature.Id == "omls.features.appearance.shadow");
+            Check(!importedFeature.IsEnabled
+                && importedFeature.GetSettings<ShadowFeatureSettings>() is { BlurRadius: 24, Opacity: 0.65, OffsetX: 4, OffsetY: 8 },
+                "Disabled feature state or settings did not survive .omls export/import.");
         });
     }
 

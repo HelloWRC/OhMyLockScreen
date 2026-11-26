@@ -362,7 +362,14 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     }
 
     private void OnStructureChanged(object? sender, EventArgs args) => InvalidateSelectionGeometry();
-    private void OnInspectorChanged(object? sender, EventArgs args) => RefreshInspector();
+    private void OnInspectorChanged(object? sender, EventArgs args)
+    {
+        RefreshInspector();
+        if (!_selectionPending)
+        {
+            UpdateSelectionGeometry();
+        }
+    }
     private void OnEditorError(object? sender, Exception error) => ShowError(error);
     private void OnBackgroundFailed(object? sender, string message) => ShowMessage("背景加载失败", message);
 
@@ -1075,6 +1082,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
                         featureEditor.TargetElement = null;
                         featureEditor.BlobUriConverter = null;
                     }
+                    removed.Dispose();
                     ViewModel.InspectorSections.Remove(removed);
                 }
 
@@ -1102,6 +1110,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
                     featureEditor.TargetElement = null;
                     featureEditor.BlobUriConverter = null;
                 }
+                section.Dispose();
             }
             ViewModel.InspectorSections.Clear();
             ShowError(exception);
@@ -1146,7 +1155,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
                 continue;
             }
 
-            var target = ReferenceEquals(section.Model, ViewModel.SelectedModel)
+            var target = ReferenceEquals(section.Model, ViewModel.SelectedModel) && section.IsFeatureEnabled
                 ? editor is LayoutSettingsControl ? presenter : featureTarget
                 : null;
 
@@ -1991,7 +2000,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
         var bounds = GetSceneViewportBounds(target);
         ViewModel.SelectionGeometry = new SceneSelectionGeometry(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-        ViewModel.CanResizeSelection = ViewModel.SelectedModel is ComponentSettings;
+        ViewModel.CanResizeSelection = ViewModel.SelectedModel is ComponentSettings component && SceneLayoutEditing.CanEditLayout(component);
         ViewModel.HasSelectionBounds = true;
     }
 

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FluentIcons.Common;
@@ -217,7 +218,7 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     partial void OnSelectedItemChanged(SceneTreeItem? value)
     {
         HasSelectionBounds = false;
-        CanResizeSelection = value?.Model is ComponentSettings;
+        CanResizeSelection = value?.Model is ComponentSettings component && SceneLayoutEditing.CanEditLayout(component);
         OnPropertyChanged(nameof(SelectedModel));
         OnPropertyChanged(nameof(CanEditSelection));
         SelectionChanged?.Invoke(this, EventArgs.Empty);
@@ -356,7 +357,9 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
         }
 
         var selectedFeatures = (SelectedModel as IFeatureContainer)?.Features;
-        if (ReferenceEquals(sender, selectedFeatures) || ReferenceEquals(sender, SelectedModel) && property is "Features" or "Settings" || sender is FeatureInfo info && selectedFeatures?.Contains(info) == true && property is "Id" or "Settings")
+        if (ReferenceEquals(sender, selectedFeatures)
+            || ReferenceEquals(sender, SelectedModel) && property is "Features" or "Settings"
+            || sender is FeatureInfo info && selectedFeatures?.Contains(info) == true && property is "Id" or "Settings" or nameof(FeatureInfo.IsEnabled))
         {
             InspectorChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -722,6 +725,10 @@ public sealed partial class SceneEditorViewModel : ObservableObject, IDisposable
     {
         _graph?.Dispose();
         _graph = null;
+        foreach (var section in InspectorSections)
+        {
+            section.Dispose();
+        }
         InspectorSections.Clear();
         _scenes.FlushPending();
     }
@@ -788,9 +795,11 @@ public readonly record struct SceneSelectionGeometry(double X, double Y, double 
     public double HandleBottom => Y + Height - 12;
 }
 
-public sealed class InspectorSection
+public sealed class InspectorSection : ObservableObject, IDisposable
 {
     private readonly IFeatureContainer? _owner;
+    private bool _disposed;
+
     public InspectorSection(string title, UserControl? editor, object model, object? settings, IFeatureContainer? owner = null, FeatureInfo? feature = null)
     {
         Title = title;
@@ -800,6 +809,11 @@ public sealed class InspectorSection
         Feature = feature;
         _owner = owner;
         RemoveCommand = new RelayCommand(RemoveFeature);
+        ToggleEnabledCommand = new RelayCommand(ToggleEnabled);
+        if (Feature != null)
+        {
+            Feature.PropertyChanged += OnFeaturePropertyChanged;
+        }
     }
 
     public string Title
@@ -823,9 +837,50 @@ public sealed class InspectorSection
         get;
     }
     public bool CanRemove => _owner != null && Feature != null;
+    public bool IsFeatureEnabled => Feature?.IsEnabled ?? true;
+    public double EditorOpacity => IsFeatureEnabled ? 1.0 : 0.5;
+    public Icon ToggleEnabledIcon => IsFeatureEnabled ? Icon.Eye : Icon.EyeOff;
+    public string ToggleEnabledToolTip => IsFeatureEnabled ? "禁用特性" : "启用特性";
     public IRelayCommand RemoveCommand
     {
         get;
+    }
+    public IRelayCommand ToggleEnabledCommand
+    {
+        get;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        if (Feature != null)
+        {
+            Feature.PropertyChanged -= OnFeaturePropertyChanged;
+        }
+    }
+
+    private void ToggleEnabled()
+    {
+        if (Feature != null)
+        {
+            Feature.IsEnabled = !Feature.IsEnabled;
+        }
+    }
+
+    private void OnFeaturePropertyChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (string.IsNullOrEmpty(args.PropertyName) || args.PropertyName == nameof(FeatureInfo.IsEnabled))
+        {
+            OnPropertyChanged(nameof(IsFeatureEnabled));
+            OnPropertyChanged(nameof(EditorOpacity));
+            OnPropertyChanged(nameof(ToggleEnabledIcon));
+            OnPropertyChanged(nameof(ToggleEnabledToolTip));
+        }
     }
 
     private void RemoveFeature()

@@ -7,4 +7,6 @@ namespace OhMyLockScreen.Shared.Models.FeatureHost;
 public partial class FeatureInfo : SettingsWithClientSettingsBase<IFeatureSettings>
 {
     [ObservableProperty] private string _id = "";
+
+    [ObservableProperty] private bool _isEnabled = true;
 }

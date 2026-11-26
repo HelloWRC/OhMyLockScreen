@@ -13,6 +13,9 @@ internal static class SceneLayoutEditing
     internal static bool ReordersChildrenOnCanvasDrop(Panel panel) =>
         panel is StackPanel or CommunityToolkit.WinUI.Controls.WrapPanel;
 
+    internal static bool CanEditLayout(IFeatureContainer? container) =>
+        container?.Features.FirstOrDefault(item => item.Id == "omls.features.layout.layout") is not { IsEnabled: false };
+
     internal static LayoutFeatureSettings? GetLayout(IFeatureContainer? container, bool create)
     {
         if (container == null)
@@ -21,17 +24,24 @@ internal static class SceneLayoutEditing
         }
 
         var feature = container.Features.FirstOrDefault(item => item.Id == "omls.features.layout.layout");
-        if (feature == null && create)
+        if (feature != null)
         {
-            feature = new FeatureInfo
-            {
-                Id = "omls.features.layout.layout",
-                Settings = new LayoutFeatureSettings()
-            };
-            container.Features.Add(feature);
+            return feature.IsEnabled ? feature.GetSettingsOrCreate<LayoutFeatureSettings>() : null;
         }
 
-        return feature?.GetSettingsOrCreate<LayoutFeatureSettings>();
+        if (!create)
+        {
+            return null;
+        }
+
+        feature = new FeatureInfo
+        {
+            Id = "omls.features.layout.layout",
+            Settings = new LayoutFeatureSettings()
+        };
+        container.Features.Add(feature);
+
+        return feature.GetSettingsOrCreate<LayoutFeatureSettings>();
     }
 
     internal static void ApplyDropPosition(ComponentSettings component, Panel panel, Point point)
@@ -41,11 +51,15 @@ internal static class SceneLayoutEditing
             return;
         }
 
-        var gridSettings = component.Features.FirstOrDefault(feature => feature.Id == "omls.features.layout.grid")
+        var gridSettings = component.Features.FirstOrDefault(feature => feature.Id == "omls.features.layout.grid" && feature.IsEnabled)
             ?.TryGetSettings<GridLayoutFeatureSettings>();
         var area = GetLayoutArea(panel, gridSettings?.Row ?? 0, gridSettings?.Column ?? 0,
             gridSettings?.RowSpan ?? 1, gridSettings?.ColumnSpan ?? 1);
-        var layout = GetLayout(component, create: true)!;
+        if (GetLayout(component, create: true) is not { } layout)
+        {
+            return;
+        }
+
         layout.HorizontalAlignment = HorizontalAlignment.Left;
         layout.VerticalAlignment = VerticalAlignment.Top;
         layout.Margin = new Thickness(Round(point.X - area.X), Round(point.Y - area.Y), 0, 0);
@@ -58,7 +72,7 @@ internal static class SceneLayoutEditing
             return;
         }
 
-        var gridSettings = component.Features.FirstOrDefault(feature => feature.Id == "omls.features.layout.grid")
+        var gridSettings = component.Features.FirstOrDefault(feature => feature.Id == "omls.features.layout.grid" && feature.IsEnabled)
             ?.TryGetSettings<GridLayoutFeatureSettings>();
         var area = GetLayoutArea(panel, gridSettings?.Row ?? 0, gridSettings?.Column ?? 0,
             gridSettings?.RowSpan ?? 1, gridSettings?.ColumnSpan ?? 1);

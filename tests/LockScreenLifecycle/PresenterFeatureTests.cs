@@ -189,6 +189,37 @@ internal static class PresenterFeatureTests
             presenter.Unload();
             Check(last.DetachCalls == 1 && last.AttachedContent is TextComponent && ReferenceEquals(last.DetachedContent, last.AttachedContent) && presenter.Content == null, "Component unload cleared content before cleaning up features.");
         });
+        run("Presenters detach and reattach features when IsEnabled is toggled", () =>
+        {
+            var log = CreateHost();
+            foreach (var item in Cases())
+            {
+                var first = Info("first");
+                var second = Info(item.FeatureId);
+                var container = item.CreateContainer();
+                container.Features = [first, second];
+                item.SetContainer(item.Presenter, container);
+                item.Presenter.Load();
+                Check(log.Entries.TakeLast(2).Select(entry => entry.Id).SequenceEqual(["first", item.FeatureId]),
+                    "Presenter did not initially attach both enabled features.");
+
+                var countBeforeDisable = log.Entries.Count;
+                second.IsEnabled = false;
+                Check(log.Entries.Skip(countBeforeDisable).Select(entry => entry.Id).SequenceEqual(["first"])
+                    && log.Entries[countBeforeDisable - 1].DetachCalls == 1
+                    && log.Entries[countBeforeDisable - 2].DetachCalls == 1,
+                    "Disabling a feature on a loaded presenter did not detach and keep only enabled features.");
+
+                ExpectCreated(log, () => second.IsEnabled = true, "first", item.FeatureId);
+
+                item.Presenter.Unload();
+                var countWhileUnloaded = log.Entries.Count;
+                second.IsEnabled = false;
+                Check(log.Entries.Count == countWhileUnloaded, "Toggling IsEnabled while unloaded recreated features.");
+                ExpectCreated(log, item.Presenter.Load, "first");
+                item.Presenter.Unload();
+            }
+        });
     }
 
     private static FeatureInfo Info(string id) => new()

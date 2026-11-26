@@ -413,6 +413,83 @@ internal static class FeatureAttacherTests
             Throws<ObjectDisposedException>(() => attacher.FeatureContainer = container);
             Throws<ObjectDisposedException>(() => _ = attacher.FeatureContainer);
         });
+
+        run("Feature attachers skip disabled features, reload on IsEnabled changes, and preserve attachment order", () =>
+        {
+            var fixture = new Fixture();
+            fixture.Register<object>("one", withSettings: true);
+            fixture.Register<object>("two", withSettings: true);
+            fixture.Register<object>("three");
+            var one = Info("one");
+            one.IsEnabled = false;
+            var two = Info("two");
+            two.IsEnabled = false;
+            var three = Info("three");
+            var unknownDisabled = Info("unknown");
+            unknownDisabled.IsEnabled = false;
+            var container = new ProbeContainer
+            {
+                Features = [one, two, three, unknownDisabled]
+            };
+            using var attacher = fixture.Attacher(container);
+            attacher.Attach();
+            Check(fixture.Created.Select(probe => probe.Id).SequenceEqual(["three"])
+                && fixture.Attempts.SequenceEqual(["three"])
+                && one.Settings == null && two.Settings == null && fixture.Logger.Warnings.Count == 0,
+                "Initially disabled features were created, initialized, or logged warnings.");
+
+            ExpectReload(fixture, () => two.IsEnabled = true, "two", "three");
+            var count = fixture.Created.Count;
+            two.IsEnabled = true;
+            Check(fixture.Created.Count == count, "Assigning the same IsEnabled value caused a reload.");
+            ExpectReload(fixture, () => one.IsEnabled = true, "one", "two", "three");
+            ExpectReload(fixture, () => two.IsEnabled = false, "one", "three");
+
+            var dupFixture = new Fixture();
+            dupFixture.Register<object>("three");
+            var duplicate = Info("three");
+            var dupContainer = new ProbeContainer { Features = [duplicate, duplicate] };
+            using var dupAttacher = dupFixture.Attacher(dupContainer);
+            dupAttacher.Attach();
+            var beforeToggle = dupFixture.Created.Count;
+            duplicate.IsEnabled = false;
+            Check(dupFixture.Created.Count == beforeToggle && dupFixture.Created.Skip(beforeToggle - 2).All(probe => probe.DetachCalls == 1),
+                "Disabling a shared FeatureInfo did not cleanly detach duplicate entries.");
+            ExpectReload(dupFixture, () => duplicate.IsEnabled = true, "three", "three");
+
+            var reentrant = Info("one");
+            var reentrantContainer = new ProbeContainer { Features = [reentrant] };
+            var reentrantFixture = new Fixture();
+            reentrantFixture.Register<object>("one", withSettings: true);
+            var toggled = false;
+            reentrantFixture.Creating = _ =>
+            {
+                if (!toggled)
+                {
+                    toggled = true;
+                    reentrant.IsEnabled = false;
+                }
+            };
+            using var reentrantAttacher = reentrantFixture.Attacher(reentrantContainer);
+            reentrantAttacher.Attach();
+            Check(reentrantFixture.Created.Count == 1 && reentrantFixture.Created[0].AttachCalls == 0
+                && reentrantFixture.Created[0].DetachCalls == 1,
+                "Disabling a feature during construction left it attached.");
+
+            var detachBeforeCount = fixture.Created.Count;
+            attacher.Detach();
+            one.IsEnabled = false;
+            two.IsEnabled = true;
+            Check(fixture.Created.Count == detachBeforeCount, "Detached attacher still reacted to IsEnabled changes.");
+            attacher.Attach();
+            Check(fixture.Created.Skip(detachBeforeCount).Select(probe => probe.Id).SequenceEqual(["two", "three"]),
+                "Reattaching did not reflect IsEnabled edits made while detached.");
+
+            attacher.Dispose();
+            var disposeCount = fixture.Created.Count;
+            three.IsEnabled = false;
+            Check(fixture.Created.Count == disposeCount, "Disposed attacher still reacted to IsEnabled changes.");
+        });
     }
 
     private static FeatureInfo Info(string id) => new() { Id = id };
@@ -621,6 +698,8 @@ internal static class FeatureAttacherTests
 
     private sealed class ProbeLogger : ILogger<FeatureAttacher>
     {
+        public List<string> Warnings { get; } = [];
+
         public List<string> Errors { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
@@ -631,7 +710,11 @@ internal static class FeatureAttacherTests
             LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            if (logLevel == LogLevel.Error)
+            if (logLevel == LogLevel.Warning)
+            {
+                Warnings.Add(formatter(state, exception));
+            }
+            else if (logLevel == LogLevel.Error)
             {
                 Errors.Add(formatter(state, exception));
             }

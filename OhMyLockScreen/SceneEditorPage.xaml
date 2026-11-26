@@ -737,29 +737,48 @@
                                                 Margin="0,0,0,8">
                                                 <Grid
                                                     Height="40">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
                                                     <TextBlock
                                                         Text="{x:Bind Title}"
                                                         FontWeight="Bold"
-                                                        Margin="12,0,40,0"
+                                                        Margin="12,0,4,0"
+                                                        TextTrimming="CharacterEllipsis"
                                                         VerticalAlignment="Center" />
                                                     <Border
                                                         Style="{StaticResource EditorSectionPillStyle}"
                                                         Margin="12,0,0,0" />
-                                                    <Button
-                                                        HorizontalAlignment="Right"
-                                                        Style="{StaticResource EditorToolbarIconButtonStyle}"
-                                                        Command="{x:Bind RemoveCommand}"
-                                                        ToolTipService.ToolTip="移除特性"
-                                                        AutomationProperties.Name="移除特性"
+                                                    <StackPanel
+                                                        Grid.Column="1"
+                                                        Orientation="Horizontal"
+                                                        VerticalAlignment="Center"
                                                         Visibility="{x:Bind CanRemove, Converter={StaticResource BooleanVisibilityConverter}}">
-                                                        <icons:FluentIcon
-                                                            Icon="Dismiss"
-                                                            FontSize="12" />
-                                                    </Button>
+                                                        <Button
+                                                            Style="{StaticResource EditorToolbarIconButtonStyle}"
+                                                            Command="{x:Bind ToggleEnabledCommand}"
+                                                            ToolTipService.ToolTip="{x:Bind ToggleEnabledToolTip, Mode=OneWay}"
+                                                            AutomationProperties.Name="{x:Bind ToggleEnabledToolTip, Mode=OneWay}">
+                                                            <icons:FluentIcon
+                                                                Icon="{x:Bind ToggleEnabledIcon, Mode=OneWay}"
+                                                                FontSize="14" />
+                                                        </Button>
+                                                        <Button
+                                                            Style="{StaticResource EditorToolbarIconButtonStyle}"
+                                                            Command="{x:Bind RemoveCommand}"
+                                                            ToolTipService.ToolTip="移除特性"
+                                                            AutomationProperties.Name="移除特性">
+                                                            <icons:FluentIcon
+                                                                Icon="Dismiss"
+                                                                FontSize="12" />
+                                                        </Button>
+                                                    </StackPanel>
                                                 </Grid>
                                                 <ContentControl
                                                     Content="{x:Bind}"
                                                     HorizontalContentAlignment="Stretch"
+                                                    Opacity="{x:Bind EditorOpacity, Mode=OneWay}"
                                                     ContentTemplateSelector="{StaticResource InspectorEditorTemplateSelector}" />
                                             </StackPanel>
                                         </DataTemplate>

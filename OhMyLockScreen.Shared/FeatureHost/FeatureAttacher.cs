@@ -160,6 +160,7 @@ public sealed class FeatureAttacher : ObservableObject, IDisposable
                     // 同一配置对象可出现多次；属性只监听一次，挂载仍按原集合逐项进行。
                     changes.DistinctValues(feature => feature)
                         .AutoRefresh(feature => feature.Id)
+                        .AutoRefresh(feature => feature.IsEnabled)
                         .AutoRefreshOnObservable(feature => feature
                             .WhenPropertyChanged(settings => settings.Settings, notifyOnInitialValue: false)
                             .Where(_ => !ReferenceEquals(_initializingFeature, feature)))
@@ -231,6 +232,11 @@ public sealed class FeatureAttacher : ObservableObject, IDisposable
 
     private void AttachFeature(FeatureInfo settings)
     {
+        if (!settings.IsEnabled)
+        {
+            return;
+        }
+
         var id = settings.Id;
         var registration = _registry.Find(id);
         if (registration == null)
