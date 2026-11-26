@@ -7,8 +7,8 @@
     <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
     <RuntimeIdentifier>win-$(Platform)</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <PublishAot>true</PublishAot>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishSelfContained>true</PublishSelfContained>
+    <PublishAot>false</PublishAot>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -26,4 +26,12 @@
              Link="LockScreenProviderProtocol.cs" />
     <Compile Include="../OhMyLockScreen.Shared/Models/EditorWindowRecoveryProtocol.cs" Link="EditorWindowRecoveryProtocol.cs" />
   </ItemGroup>
+  <Target Name="GetNativeHostPublishItems"
+          DependsOnTargets="Build;ComputeFilesToPublish"
+          Returns="@(_NativeHostPublishItem)">
+    <ItemGroup>
+      <!-- Resolve relative obj/bin paths in NativeHost's project directory while preserving RelativePath metadata. -->
+      <_NativeHostPublishItem Include="@(ResolvedFileToPublish->'%(FullPath)')" />
+    </ItemGroup>
+  </Target>
 </Project>
