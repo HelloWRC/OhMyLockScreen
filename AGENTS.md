@@ -63,6 +63,7 @@
 - 不透明度特性（`omls.features.appearance.opacity`）面向 `IDecoratorHost`（覆盖场景、图层与组件），在目标 `Decorators` 注册 `OpacityDecorator`（优先级 `DecoratorPriorities.Opacity`，位于视差之内、阴影之外）并绑定 `OpacityEffectSpec`（不透明度与 `Normal` 加 21 种 Composition 硬件混合方式）：全不透明正常或全透明走零表面直设快路径；`Normal` 半透明与非正常混合均通过高 DPI `CompositionVisualSurface` + `SpriteVisual` 实现整组编组合成，混合分支使用按 `Compositor` 缓存的 `Blend(Content, Backdrop) - DestinationOut(Backdrop, Content)` 保持前景轮廓 Alpha（显式对调 D2D `BlendEffect` 输入以对齐 Photoshop/W3C 语义），并通过 `IVisualOutsetProvider` 汇总并转发含 `ShadowDecorator` 非对称外扩在内的渲染边距。
 - 图层（`LayerSettings`）与组件（`ComponentSettings`）持久化 `IsVisible`（默认 `true`）和 `IsLocked`（默认 `false`），由场景树行右侧透明切换按钮控制：显隐优先级高于规则集（`HideByRulesFeature`）与组件运行时隐藏，隐藏后在编辑器与运行态均完全折叠（不显示斜条纹遮罩）并沿子树继承；锁定后节点仍正常显示，但在编辑器画布内不可悬停、选中、拖拽、缩放或作为画布拖放落点，保留树内选择与属性面板编辑。
 - 组件拥有已启用的变换特性（`omls.features.layout.transform`）且未被隐藏或锁定时，画布选中框贴合变换后的四边形并在变换四角放置把柄，额外展示可拖拽的变换原点把柄（九宫格吸附、`Ctrl` 取消，自动补偿平移保持视觉静止）与顶边外法线旋转把柄（`Shift` 按 15° 吸附）；输入焦点位于变换面板缩放字段时，四角把柄切换为绕变换原点调整 `ScaleX`/`ScaleY`（遵循等比锁定、`Shift` 临时切换），`ResizeOverlay` 及把柄设置 `AllowFocusOnInteraction="False"` 防止 `DrawerHost` 抢占输入框焦点。
+- 构建默认剥离 `System.Reactive` 传递引入的 `Microsoft.WindowsDesktop.App` 框架引用（主应用与 `NativeHost` 不得依赖 WPF/WinForms 调度器），且 `LibVLC.UWP` 通过 `TrimLibVlc.targets` 仅按白名单打包本地视频/音频/D3D11/截图所需插件（剔除 `sdk`/`lua`/网络/字幕/推流插件）。
 
 ## 验证原则
 

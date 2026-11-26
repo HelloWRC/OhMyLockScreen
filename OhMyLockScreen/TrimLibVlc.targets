@@ -1,0 +1,135 @@
+<Project>
+  <!-- LibVLC.UWP injects all 522 files under win10-{arch}\ into @(None).
+       Keep only core DLLs and plugins needed for local video playback, audio output, D3D11 rendering, and PNG snapshots. -->
+  <Target Name="TrimLibVlcPackageFiles"
+          BeforeTargets="AssignTargetPaths;GetCopyToOutputDirectoryItems;ComputeFilesToPublish"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_NonLibVlcNone Include="@(None)"
+                      Exclude="@(VlcUWPX64IncludeFilesFullPath);@(VlcUWPX86IncludeFilesFullPath);@(VlcUWPARM64IncludeFilesFullPath)" />
+      <_LibVlcNoneRaw Include="@(None)" Exclude="@(_NonLibVlcNone)" />
+      <_LibVlcNone Include="@(_LibVlcNoneRaw)" Condition="'%(_LibVlcNoneRaw.Link)' != ''">
+        <_NormalizedLink>$([System.String]::Copy('%(_LibVlcNoneRaw.Link)').Replace('/', '\'))</_NormalizedLink>
+      </_LibVlcNone>
+
+      <_LibVlcKeepPathRaw Include="libvlc.dll" />
+      <_LibVlcKeepPathRaw Include="libvlccore.dll" />
+
+      <_LibVlcKeepPathRaw Include="plugins\access\libfilesystem_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\access\libaccess_winrt_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\access\libimem_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\access\libaccess_imem_plugin.dll" />
+
+      <_LibVlcKeepPathRaw Include="plugins\video_output\libdirect3d11_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\video_output\libvdummy_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\d3d11\libdirect3d11_filters_plugin.dll" />
+
+      <_LibVlcKeepPathRaw Include="plugins\audio_output\libwinstore_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_output\libwasapi_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_output\libadummy_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_mixer\libfloat_mixer_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_mixer\libinteger_mixer_plugin.dll" />
+
+      <_LibVlcKeepPathRaw Include="plugins\audio_filter\libaudio_format_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_filter\libspeex_resampler_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_filter\libugly_resampler_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_filter\libsimple_channel_mixer_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_filter\libtrivial_channel_mixer_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_filter\libscaletempo_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_filter\libgain_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\audio_filter\libremap_plugin.dll" />
+
+      <_LibVlcKeepPathRaw Include="plugins\demux\libmp4_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libmkv_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libavi_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libts_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libps_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libogg_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libasf_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libh26x_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libes_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libmpgv_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libvc1_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libmjpeg_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\librawvid_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libwav_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libflacsys_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libimage_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libdirectory_demux_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\demux\libnoseek_plugin.dll" />
+
+      <_LibVlcKeepPathRaw Include="plugins\codec\libavcodec_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libd3d11va_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libmft_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libdav1d_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libvpx_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libfaad_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libopus_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libvorbis_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libmpg123_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libflac_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libtheora_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libpng_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libjpeg_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\librawvideo_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libadpcm_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libaraw_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\liblpcm_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libg711_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\codec\libddummy_plugin.dll" />
+
+      <_LibVlcKeepPathRaw Include="plugins\video_filter\libtransform_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\video_filter\librotate_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\video_filter\libscale_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\video_filter\libdeinterlace_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\video_filter\libcroppadd_plugin.dll" />
+
+      <_LibVlcKeepPathRaw Include="plugins\stream_filter\libcache_read_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\stream_filter\libcache_block_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\stream_filter\libinflate_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\stream_filter\libskiptags_plugin.dll" />
+
+      <_LibVlcKeepPathRaw Include="plugins\logger\libconsole_logger_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\logger\libfile_logger_plugin.dll" />
+      <_LibVlcKeepPathRaw Include="plugins\misc\liblogger_plugin.dll" />
+
+      <_LibVlcKeepPath Include="@(_LibVlcKeepPathRaw)">
+        <_NormalizedLink>%(Identity)</_NormalizedLink>
+      </_LibVlcKeepPath>
+
+      <_LibVlcNoneToRemove Include="@(_LibVlcNone)"
+                           Condition="!$([System.String]::Copy('%(_LibVlcNone._NormalizedLink)').StartsWith('plugins\video_chroma\', System.StringComparison.OrdinalIgnoreCase)) And !$([System.String]::Copy('%(_LibVlcNone._NormalizedLink)').StartsWith('plugins\packetizer\', System.StringComparison.OrdinalIgnoreCase))" />
+      <_LibVlcNoneToRemove Remove="@(_LibVlcKeepPath)"
+                           MatchOnMetadata="_NormalizedLink"
+                           MatchOnMetadataOptions="CaseInsensitive" />
+
+      <None Remove="@(_LibVlcNoneToRemove)" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'@(_LibVlcNone)' != ''">
+      <_LibVlcRemainingRaw Include="@(None)" Exclude="@(_NonLibVlcNone)" />
+      <_LibVlcRemaining Include="@(_LibVlcRemainingRaw)" Condition="'%(_LibVlcRemainingRaw.Link)' != ''">
+        <_NormalizedLink>$([System.String]::Copy('%(_LibVlcRemainingRaw.Link)').Replace('/', '\'))</_NormalizedLink>
+      </_LibVlcRemaining>
+      <_LibVlcCritical Include="libvlc.dll" />
+      <_LibVlcCritical Include="libvlccore.dll" />
+      <_LibVlcCritical Include="plugins\access\libfilesystem_plugin.dll" />
+      <_LibVlcCritical Include="plugins\video_output\libdirect3d11_plugin.dll" />
+      <_LibVlcCritical Include="plugins\audio_output\libwinstore_plugin.dll" />
+      <_LibVlcCritical Include="plugins\audio_output\libwasapi_plugin.dll" />
+      <_LibVlcCritical Include="plugins\codec\libavcodec_plugin.dll" />
+      <_LibVlcCritical Include="plugins\codec\libd3d11va_plugin.dll" />
+      <_LibVlcCritical Include="plugins\codec\libpng_plugin.dll" />
+      <_LibVlcCriticalWithMeta Include="@(_LibVlcCritical)">
+        <_NormalizedLink>%(Identity)</_NormalizedLink>
+      </_LibVlcCriticalWithMeta>
+      <_LibVlcMissingCritical Include="@(_LibVlcCriticalWithMeta)" />
+      <_LibVlcMissingCritical Remove="@(_LibVlcRemaining)"
+                              MatchOnMetadata="_NormalizedLink"
+                              MatchOnMetadataOptions="CaseInsensitive" />
+    </ItemGroup>
+
+    <Error Condition="'@(_LibVlcNone)' != '' And '@(_LibVlcMissingCritical)' != ''"
+           Text="LibVLC whitelist trim detected missing critical files: @(_LibVlcMissingCritical->'%(_NormalizedLink)', ', ')" />
+  </Target>
+</Project>

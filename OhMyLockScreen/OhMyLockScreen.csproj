@@ -56,5 +56,6 @@
       <FileWrites Include="$(_AppxManifestVersionInput);$(_VersionedAppxManifest)" />
     </ItemGroup>
   </Target>
+  <Import Project="TrimLibVlc.targets" />
   <Import Project="..\OhMyLockScreen.NativeHost\PackageNativeHost.targets" />
 </Project>

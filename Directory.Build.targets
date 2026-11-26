@@ -56,4 +56,31 @@
       <AssemblyMetadata Include="GitBranch" Value="$(GitBranch)" />
     </ItemGroup>
   </Target>
+
+  <!-- System.Reactive 6.1.0's net6.0-windows10.0.19041 TFM transitively declares Microsoft.WindowsDesktop.App
+       for WPF/WinForms schedulers that this UWP app and NativeHost do not use. Strip it unless opted into WPF/WinForms. -->
+  <Target Name="RemoveTransitiveWindowsDesktopFrameworkReference"
+          AfterTargets="AddTransitiveFrameworkReferences"
+          BeforeTargets="ResolveFrameworkReferences;ResolveTargetingPackAssets;ResolveRuntimePackAssets"
+          Condition="'$(UseWPF)' != 'true' And '$(UseWindowsForms)' != 'true'">
+    <ItemGroup>
+      <TransitiveFrameworkReference Remove="Microsoft.WindowsDesktop.App;Microsoft.WindowsDesktop.App.WPF;Microsoft.WindowsDesktop.App.WindowsForms" />
+      <FrameworkReference Remove="Microsoft.WindowsDesktop.App;Microsoft.WindowsDesktop.App.WPF;Microsoft.WindowsDesktop.App.WindowsForms"
+                          Condition="'%(FrameworkReference.IsTransitiveFrameworkReference)' == 'true'" />
+      <RuntimeFramework Remove="Microsoft.WindowsDesktop.App;Microsoft.WindowsDesktop.App.WPF;Microsoft.WindowsDesktop.App.WindowsForms" />
+      <TargetingPack Remove="Microsoft.WindowsDesktop.App.Ref" />
+      <_WindowsDesktopRuntimePackToRemove Include="@(RuntimePack)"
+                                          Condition="$([System.String]::Copy('%(Identity)').StartsWith('Microsoft.WindowsDesktop.App.Runtime.', System.StringComparison.OrdinalIgnoreCase))" />
+      <RuntimePack Remove="@(_WindowsDesktopRuntimePackToRemove)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="InvalidateRuntimeConfigOnProjectChange"
+          BeforeTargets="_GenerateRuntimeConfigurationFilesInputCache"
+          Condition="'$(UseWPF)' != 'true' And '$(UseWindowsForms)' != 'true'">
+    <ItemGroup>
+      <GenerateRuntimeConfigurationFilesInputs Include="$(MSBuildAllProjects)" />
+      <_GenerateRuntimeConfigurationPropertyInputsCacheToHash Include="@(RuntimeFramework->'%(Identity)%(Version)')" />
+    </ItemGroup>
+  </Target>
 </Project>

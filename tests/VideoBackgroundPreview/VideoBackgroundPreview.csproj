@@ -23,6 +23,6 @@
     <Compile Include="../../OhMyLockScreen.Shared/Controls/Scene/BackgroundVideoView.cs" Link="BackgroundVideoView.cs" />
     <Compile Include="../../OhMyLockScreen.Shared/Controls/Scene/VideoSwapChain.cs" Link="VideoSwapChain.cs" />
     <Content Include="../../OhMyLockScreen/Assets/*.png" Link="Assets/%(Filename)%(Extension)" />
-    <Content Include="../../OhMyLockScreen/Assets/Videos/testbg.mp4" Link="TestVideo.mp4" />
+    <Content Include="TestVideo.mp4" />
   </ItemGroup>
 </Project>
