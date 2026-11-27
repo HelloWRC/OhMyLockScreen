@@ -203,6 +203,7 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext, IDe
         Bindings.Update();
         _featureAttacher ??= new FeatureAttacher(this) { FeatureContainer = Scene };
         _featureAttacher.Attach();
+        AttachParallaxComposition();
         RefreshParallaxStrength();
         AttachBackground();
     }
@@ -215,8 +216,7 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext, IDe
         }
 
         IsActive = false;
-        RefreshParallaxStrength();
-        DetachParallaxTimer();
+        DetachParallaxComposition();
         DetachBackground();
         CancelUnlockAnimation();
         ResetUnlockDrag();
@@ -231,7 +231,7 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext, IDe
     private Task PlayUnlockAnimationCoreAsync()
     {
         StopUnlockReturnAnimation();
-        StopParallaxTimer();
+        FreezeParallaxMotion();
 
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var storyboard = new Storyboard();
@@ -245,9 +245,9 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext, IDe
             AddDoubleAnimation(storyboard, LayersTransform, nameof(TranslateTransform.Y), LayersTransform.Y, _unlockTargetY, UnlockDuration);
             AddDoubleAnimation(storyboard, LayersLayer, nameof(UIElement.Opacity), LayersLayer.Opacity, 0, UnlockDuration);
             AddDoubleAnimation(storyboard, BackgroundViewport, nameof(UIElement.Opacity), BackgroundViewport.Opacity, 0, UnlockDuration);
-            AddParallaxUnlockAnimations(storyboard);
 
             storyboard.Begin();
+            StartParallaxUnlockAnimation();
         }
         catch (Exception exception)
         {
@@ -304,6 +304,7 @@ public sealed partial class ScenePresenter : UserControl, ISceneBlobContext, IDe
         var completion = _unlockCompletion;
         _unlockStoryboard = null;
         _unlockCompletion = null;
+        StopParallaxUnlockAnimation();
 
         if (storyboard != null)
         {

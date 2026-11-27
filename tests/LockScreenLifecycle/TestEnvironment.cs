@@ -45,6 +45,8 @@ internal sealed class TestEnvironment : IDisposable
         OhMyLockScreen.Shared.Controls.Scene.VideoSwapChain.Created.Clear();
         OhMyLockScreen.Shared.Controls.Scene.VideoSwapChain.FailOnCreate = false;
         DispatcherTimer.Created.Clear();
+        Windows.UI.Xaml.Hosting.ElementCompositionPreview.Reset();
+        Windows.UI.Composition.Compositor.Reset();
         ConfigureFileHelper.Errors.Clear();
         ConfigureFileHelper.IsBackupEnabled = true;
     }

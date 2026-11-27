@@ -1,22 +1,27 @@
+using System.Numerics;
+using OhMyLockScreen.Shared.Helpers.UI;
 using OhMyLockScreen.Shared.Models.Scene;
 using Windows.Devices.Input;
 using Windows.Foundation;
+using Windows.UI.Composition;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Hosting;
 using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
-using Windows.UI.Xaml.Media.Animation;
 
 namespace OhMyLockScreen.Shared.Controls.Scene;
 
 public sealed partial class ScenePresenter : ISceneParallaxHost
 {
-    private const double DefaultParallaxStrength = 100;
-    private const double DefaultParallaxAmount = 0.02;
-    private const double ParallaxSaturationBase = 0.999;
-    private const double ParallaxPositionDuration = 100;
-    private const double ParallaxScaleDuration = 1000;
-    private const double ParallaxEpsilon = 0.001;
-    private static readonly TimeSpan ParallaxTickInterval = TimeSpan.FromMilliseconds(1000d / 60);
+    private const string SceneViewportSizeProperty = "ViewportSize";
+    private const string SceneMultiplierProperty = "Multiplier";
+    private const string MotionOffsetProperty = "Offset";
+    private const string MotionScaleProperty = "Scale";
+    private const string MotionMaxAmountProperty = "MaxAmount";
+    private const string MotionClampedOffsetProperty = "ClampedOffset";
+    private const string MotionEffectiveScaleProperty = "EffectiveScale";
+    private const string VisualTranslationProperty = "Translation";
+    private const string VisualScaleProperty = "Scale";
+    private const string VisualCenterPointProperty = "CenterPoint";
 
     public static readonly DependencyProperty ParallaxInputSurfaceProperty = DependencyProperty.Register(
         nameof(ParallaxInputSurface), typeof(UIElement), typeof(ScenePresenter),
@@ -36,18 +41,57 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
 
     internal event EventHandler? LayerParallaxUpdated;
 
+    internal bool HasActiveLayerParallaxAnimation
+    {
+        get
+        {
+            if (!IsActive || _layerParallaxes.Count == 0)
+            {
+                return false;
+            }
+
+            var now = _parallaxClock.GetTimestamp();
+            if (_isUnlockAnimatingMultiplier && IsMultiplierUnlockAnimatingAt(now))
+            {
+                return true;
+            }
+
+            foreach (var entry in _layerParallaxes)
+            {
+                if (entry.Motion.IsAnimatingAt(now))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
     private ParallaxMotion _backgroundParallax = null!;
     private readonly List<LayerParallaxRegistration> _layerParallaxes = [];
     private UIElement? _parallaxInput;
     private Point? _parallaxPointer;
     private double _parallaxMultiplier = 1;
     private TimeProvider _parallaxClock = TimeProvider.System;
-    private DispatcherTimer? _parallaxTimer;
-    private long _lastParallaxTick;
+    private bool _isParallaxFrozen;
+    private bool _isUnlockAnimatingMultiplier;
+    private double _multiplierUnlockStart = 1;
+    private long _multiplierUnlockStartTimestamp;
+
+    private Compositor? _parallaxCompositor;
+    private CompositionPropertySet? _sceneParallaxProps;
+    private CubicBezierEasingFunction? _parallaxOutQuintEasing;
+    private CubicBezierEasingFunction? _parallaxUnlockEasing;
+    private ExpressionAnimation? _parallaxCenterPointExpression;
+    private ExpressionAnimation? _parallaxFreezeExpression;
+
+    private bool CanAnimateParallax =>
+        IsActive && !_backgroundSuspended && _parallaxMultiplier == 1 && _unlockStoryboard == null;
 
     private void InitializeParallax()
     {
-        _backgroundParallax = new ParallaxMotion(BackgroundParallaxTransform);
+        _backgroundParallax = new ParallaxMotion(BackgroundParallaxHost, _parallaxClock);
     }
 
     private static void OnParallaxInputSurfaceChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
@@ -57,31 +101,223 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
         presenter.UpdateParallaxTarget();
     }
 
-    ISceneParallaxRegistration ISceneParallaxHost.Register(CompositeTransform transform, double? strengthOverride)
+    ISceneParallaxRegistration ISceneParallaxHost.Register(UIElement target, double? strengthOverride)
     {
-        ArgumentNullException.ThrowIfNull(transform);
+        ArgumentNullException.ThrowIfNull(target);
 
         var registration = new LayerParallaxRegistration(
             this,
-            new ParallaxMotion(transform),
-            NormalizeStrengthOverride(strengthOverride));
+            new ParallaxMotion(target, _parallaxClock),
+            ParallaxMotionMath.NormalizeStrengthOverride(strengthOverride));
         _layerParallaxes.Add(registration);
 
-        var width = BackgroundViewport.ActualWidth;
-        var height = BackgroundViewport.ActualHeight;
-        var changed = registration.Motion.SetStrength(
-            GetLayerParallaxStrength(registration.StrengthOverride),
-            width,
-            height,
-            _parallaxMultiplier);
-        registration.Motion.UpdateTarget(GetPointerInScene(width, height), width, height);
-        EnsureParallaxTimer();
-        if (changed)
+        var now = _parallaxClock.GetTimestamp();
+        if (IsActive && EnsureParallaxComposition())
         {
-            RaiseLayerParallaxUpdated();
+            registration.Motion.Attach(
+                _parallaxCompositor!,
+                _sceneParallaxProps!,
+                _parallaxCenterPointExpression!);
+
+            var width = BackgroundViewport.ActualWidth;
+            var height = BackgroundViewport.ActualHeight;
+            var canAnimate = CanAnimateParallax && !_isParallaxFrozen;
+            var changed = registration.Motion.SetStrength(
+                GetLayerParallaxStrength(registration.StrengthOverride),
+                now,
+                canAnimate,
+                _parallaxOutQuintEasing);
+            changed |= registration.Motion.UpdateTarget(
+                GetPointerInScene(width, height),
+                width,
+                height,
+                now,
+                canAnimate,
+                _parallaxOutQuintEasing);
+            if (changed)
+            {
+                RaiseLayerParallaxUpdated();
+            }
         }
 
         return registration;
+    }
+
+    internal void SampleParallaxPointer(PointerRoutedEventArgs args)
+    {
+        if (args.Pointer.PointerDeviceType != PointerDeviceType.Mouse || _parallaxInput == null)
+        {
+            return;
+        }
+
+        SampleParallaxPoint(args.GetCurrentPoint(_parallaxInput).Position);
+    }
+
+    internal void SampleParallaxPoint(Point position)
+    {
+        if (_parallaxInput == null)
+        {
+            return;
+        }
+
+        _parallaxPointer = position;
+        UpdateParallaxTarget();
+    }
+
+    internal bool TryGetLayerParallaxMatrix(UIElement target, out BrushEditorMatrix matrix)
+    {
+        matrix = BrushEditorMatrix.Identity;
+        if (!IsActive)
+        {
+            return false;
+        }
+
+        foreach (var entry in _layerParallaxes)
+        {
+            if (!ReferenceEquals(entry.Motion.Target, target))
+            {
+                continue;
+            }
+
+            var now = _parallaxClock.GetTimestamp();
+            var viewportWidth = BackgroundViewport.ActualWidth;
+            var viewportHeight = BackgroundViewport.ActualHeight;
+            var targetWidth = target is FrameworkElement fe && fe.ActualWidth > 0 ? fe.ActualWidth : viewportWidth;
+            var targetHeight = target is FrameworkElement fe2 && fe2.ActualHeight > 0 ? fe2.ActualHeight : viewportHeight;
+            var multiplier = EvaluateParallaxMultiplier(now);
+            matrix = entry.Motion.EvaluateMatrix(
+                now,
+                viewportWidth,
+                viewportHeight,
+                targetWidth,
+                targetHeight,
+                multiplier);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void AttachParallaxComposition()
+    {
+        _backgroundParallax.Clock = _parallaxClock;
+        foreach (var entry in _layerParallaxes)
+        {
+            entry.Motion.Clock = _parallaxClock;
+        }
+
+        if (!EnsureParallaxComposition())
+        {
+            return;
+        }
+
+        _backgroundParallax.Attach(_parallaxCompositor!, _sceneParallaxProps!, _parallaxCenterPointExpression!);
+        foreach (var entry in _layerParallaxes)
+        {
+            entry.Motion.Attach(_parallaxCompositor!, _sceneParallaxProps!, _parallaxCenterPointExpression!);
+        }
+
+        SyncSceneViewportSize();
+        SyncSceneMultiplier();
+    }
+
+    private void DetachParallaxComposition()
+    {
+        UpdateParallaxInput();
+        _isParallaxFrozen = false;
+        _isUnlockAnimatingMultiplier = false;
+
+        _backgroundParallax.Detach(resetVisual: true);
+        var layerChanged = false;
+        foreach (var entry in _layerParallaxes)
+        {
+            layerChanged |= entry.Motion.Detach(resetVisual: true);
+        }
+
+        ReleaseSceneParallaxResources();
+        if (layerChanged)
+        {
+            RaiseLayerParallaxUpdated();
+        }
+    }
+
+    private bool EnsureParallaxComposition()
+    {
+        var visual = ElementCompositionPreview.GetElementVisual(BackgroundParallaxHost);
+        var compositor = visual.Compositor;
+        if (ReferenceEquals(_parallaxCompositor, compositor)
+            && _sceneParallaxProps != null
+            && _parallaxOutQuintEasing != null
+            && _parallaxUnlockEasing != null
+            && _parallaxCenterPointExpression != null
+            && _parallaxFreezeExpression != null)
+        {
+            return true;
+        }
+
+        _backgroundParallax.Detach(resetVisual: true);
+        foreach (var entry in _layerParallaxes)
+        {
+            entry.Motion.Detach(resetVisual: true);
+        }
+
+        ReleaseSceneParallaxResources();
+
+        _parallaxCompositor = compositor;
+        _sceneParallaxProps = compositor.CreatePropertySet();
+        _sceneParallaxProps.InsertVector2(
+            SceneViewportSizeProperty,
+            new Vector2((float)Math.Max(0, BackgroundViewport.ActualWidth), (float)Math.Max(0, BackgroundViewport.ActualHeight)));
+        _sceneParallaxProps.InsertScalar(SceneMultiplierProperty, (float)_parallaxMultiplier);
+
+        _parallaxOutQuintEasing = compositor.CreateCubicBezierEasingFunction(
+            ParallaxMotionMath.OutQuintControlPoint1,
+            ParallaxMotionMath.OutQuintControlPoint2);
+        _parallaxUnlockEasing = compositor.CreateCubicBezierEasingFunction(
+            ParallaxMotionMath.UnlockControlPoint1,
+            ParallaxMotionMath.UnlockControlPoint2);
+        _parallaxCenterPointExpression = compositor.CreateExpressionAnimation(
+            "Vector3(this.Target.Size.X * 0.5, this.Target.Size.Y * 0.5, 0)");
+        _parallaxFreezeExpression = compositor.CreateExpressionAnimation("this.StartingValue");
+        return true;
+    }
+
+    private void ReleaseSceneParallaxResources()
+    {
+        _parallaxFreezeExpression?.Dispose();
+        _parallaxFreezeExpression = null;
+        _parallaxCenterPointExpression?.Dispose();
+        _parallaxCenterPointExpression = null;
+        _parallaxUnlockEasing?.Dispose();
+        _parallaxUnlockEasing = null;
+        _parallaxOutQuintEasing?.Dispose();
+        _parallaxOutQuintEasing = null;
+        _sceneParallaxProps?.Dispose();
+        _sceneParallaxProps = null;
+        _parallaxCompositor = null;
+    }
+
+    private void SyncSceneViewportSize()
+    {
+        if (_sceneParallaxProps == null)
+        {
+            return;
+        }
+
+        var width = Math.Max(0, BackgroundViewport.ActualWidth);
+        var height = Math.Max(0, BackgroundViewport.ActualHeight);
+        _sceneParallaxProps.InsertVector2(SceneViewportSizeProperty, new Vector2((float)width, (float)height));
+    }
+
+    private void SyncSceneMultiplier()
+    {
+        if (_sceneParallaxProps == null)
+        {
+            return;
+        }
+
+        _sceneParallaxProps.StopAnimation(SceneMultiplierProperty);
+        _sceneParallaxProps.InsertScalar(SceneMultiplierProperty, (float)_parallaxMultiplier);
     }
 
     private double GetBackgroundParallaxStrength()
@@ -105,15 +341,27 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
 
     private void UpdateLayerParallaxStrength(LayerParallaxRegistration registration)
     {
+        if (!IsActive)
+        {
+            return;
+        }
+
+        var now = _parallaxClock.GetTimestamp();
         var width = BackgroundViewport.ActualWidth;
         var height = BackgroundViewport.ActualHeight;
+        var canAnimate = CanAnimateParallax && !_isParallaxFrozen;
         var changed = registration.Motion.SetStrength(
             GetLayerParallaxStrength(registration.StrengthOverride),
+            now,
+            canAnimate,
+            _parallaxOutQuintEasing);
+        changed |= registration.Motion.UpdateTarget(
+            GetPointerInScene(width, height),
             width,
             height,
-            _parallaxMultiplier);
-        registration.Motion.UpdateTarget(GetPointerInScene(width, height), width, height);
-        EnsureParallaxTimer();
+            now,
+            canAnimate,
+            _parallaxOutQuintEasing);
         if (changed)
         {
             RaiseLayerParallaxUpdated();
@@ -127,13 +375,7 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
             return;
         }
 
-        var changed = registration.Motion.ResetIdentity();
-        if (IsParallaxSettled)
-        {
-            StopParallaxTimer();
-        }
-
-        if (changed)
+        if (registration.Motion.Detach(resetVisual: true))
         {
             RaiseLayerParallaxUpdated();
         }
@@ -142,22 +384,55 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
     private void RefreshParallaxStrength()
     {
         UpdateParallaxInput();
+        if (!IsActive)
+        {
+            return;
+        }
 
+        var now = _parallaxClock.GetTimestamp();
         var width = BackgroundViewport.ActualWidth;
         var height = BackgroundViewport.ActualHeight;
-        _backgroundParallax.SetStrength(GetBackgroundParallaxStrength(), width, height, _parallaxMultiplier);
+        var canAnimate = CanAnimateParallax;
+        if (canAnimate)
+        {
+            _isParallaxFrozen = false;
+        }
+
+        _backgroundParallax.SetStrength(
+            GetBackgroundParallaxStrength(),
+            now,
+            canAnimate,
+            _parallaxOutQuintEasing);
 
         var layerChanged = false;
         foreach (var entry in _layerParallaxes)
         {
             layerChanged |= entry.Motion.SetStrength(
                 GetLayerParallaxStrength(entry.StrengthOverride),
-                width,
-                height,
-                _parallaxMultiplier);
+                now,
+                canAnimate,
+                _parallaxOutQuintEasing);
         }
 
-        UpdateParallaxTarget();
+        var pointerInScene = GetPointerInScene(width, height);
+        _backgroundParallax.UpdateTarget(
+            pointerInScene,
+            width,
+            height,
+            now,
+            canAnimate,
+            _parallaxOutQuintEasing);
+        foreach (var entry in _layerParallaxes)
+        {
+            layerChanged |= entry.Motion.UpdateTarget(
+                pointerInScene,
+                width,
+                height,
+                now,
+                canAnimate,
+                _parallaxOutQuintEasing);
+        }
+
         if (layerChanged)
         {
             RaiseLayerParallaxUpdated();
@@ -179,7 +454,11 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
         }
 
         _parallaxPointer = null;
-        ResetParallaxMotion();
+        if (IsActive)
+        {
+            ResetParallaxMotion();
+        }
+
         _parallaxInput = input;
         if (input != null)
         {
@@ -193,30 +472,47 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
         SampleParallaxPointer(args);
     }
 
-    internal void SampleParallaxPointer(PointerRoutedEventArgs args)
+    private void UpdateParallaxViewport()
     {
-        if (args.Pointer.PointerDeviceType != PointerDeviceType.Mouse || _parallaxInput == null)
+        SyncSceneViewportSize();
+        if (!IsActive)
         {
             return;
         }
 
-        _parallaxPointer = args.GetCurrentPoint(_parallaxInput).Position;
-        UpdateParallaxTarget();
-    }
-
-    private void UpdateParallaxViewport()
-    {
+        var now = _parallaxClock.GetTimestamp();
         var width = BackgroundViewport.ActualWidth;
         var height = BackgroundViewport.ActualHeight;
-        _backgroundParallax.ClampToViewport(width, height, _parallaxMultiplier);
+        var canAnimate = CanAnimateParallax;
+        if (canAnimate && _isParallaxFrozen)
+        {
+            _isParallaxFrozen = false;
+            ResumeFrozenParallax(now);
+        }
+
+        var pointerInScene = GetPointerInScene(width, height);
+        _backgroundParallax.UpdateTarget(
+            pointerInScene,
+            width,
+            height,
+            now,
+            canAnimate && !_isParallaxFrozen,
+            _parallaxOutQuintEasing,
+            clampStartToViewport: true);
 
         var layerChanged = false;
         foreach (var entry in _layerParallaxes)
         {
-            layerChanged |= entry.Motion.ClampToViewport(width, height, _parallaxMultiplier);
+            layerChanged |= entry.Motion.UpdateTarget(
+                pointerInScene,
+                width,
+                height,
+                now,
+                canAnimate && !_isParallaxFrozen,
+                _parallaxOutQuintEasing,
+                clampStartToViewport: true);
         }
 
-        UpdateParallaxTarget();
         if (layerChanged)
         {
             RaiseLayerParallaxUpdated();
@@ -237,199 +533,191 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
 
     private void UpdateParallaxTarget()
     {
-        var width = BackgroundViewport.ActualWidth;
-        var height = BackgroundViewport.ActualHeight;
-        var pointerInScene = GetPointerInScene(width, height);
-        _backgroundParallax.UpdateTarget(pointerInScene, width, height);
-        foreach (var entry in _layerParallaxes)
-        {
-            entry.Motion.UpdateTarget(pointerInScene, width, height);
-        }
-
-        EnsureParallaxTimer();
-    }
-
-    private void EnsureParallaxTimer()
-    {
-        if (IsParallaxSettled)
-        {
-            StopParallaxTimer();
-            return;
-        }
-
-        if (IsActive && _parallaxTimer?.IsEnabled != true && _parallaxMultiplier == 1 && _unlockStoryboard == null)
-        {
-            // A lock view can receive input before XAML requests a new frame.
-            if (_parallaxTimer == null)
-            {
-                _parallaxTimer = new DispatcherTimer { Interval = ParallaxTickInterval };
-                _parallaxTimer.Tick += OnParallaxTick;
-            }
-
-            _lastParallaxTick = _parallaxClock.GetTimestamp();
-            _parallaxTimer.Start();
-        }
-    }
-
-    private bool IsParallaxSettled
-    {
-        get
-        {
-            if (!_backgroundParallax.IsSettled)
-            {
-                return false;
-            }
-
-            foreach (var entry in _layerParallaxes)
-            {
-                if (!entry.Motion.IsSettled)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-    }
-
-    private void OnParallaxTick(object? sender, object args)
-    {
-        if (_parallaxTimer?.IsEnabled != true)
+        if (!IsActive)
         {
             return;
         }
 
         var now = _parallaxClock.GetTimestamp();
-        var elapsed = Math.Clamp(_parallaxClock.GetElapsedTime(_lastParallaxTick, now).TotalMilliseconds, 0, ParallaxPositionDuration);
-        _lastParallaxTick = now;
-
         var width = BackgroundViewport.ActualWidth;
         var height = BackgroundViewport.ActualHeight;
-        if (!_backgroundParallax.IsSettled)
+        var canAnimate = CanAnimateParallax;
+        var wasFrozen = _isParallaxFrozen;
+        if (canAnimate && wasFrozen)
         {
-            _backgroundParallax.Step(elapsed, width, height, _parallaxMultiplier);
+            _isParallaxFrozen = false;
+            ResumeFrozenParallax(now);
         }
+
+        var pointerInScene = GetPointerInScene(width, height);
+        _backgroundParallax.UpdateTarget(
+            pointerInScene,
+            width,
+            height,
+            now,
+            canAnimate && !_isParallaxFrozen,
+            _parallaxOutQuintEasing);
 
         var layerChanged = false;
         foreach (var entry in _layerParallaxes)
         {
-            if (!entry.Motion.IsSettled)
-            {
-                layerChanged |= entry.Motion.Step(elapsed, width, height, _parallaxMultiplier);
-            }
+            layerChanged |= entry.Motion.UpdateTarget(
+                pointerInScene,
+                width,
+                height,
+                now,
+                canAnimate && !_isParallaxFrozen,
+                _parallaxOutQuintEasing);
         }
 
-        if (layerChanged)
+        if (layerChanged || (wasFrozen && canAnimate && _layerParallaxes.Count > 0))
         {
             RaiseLayerParallaxUpdated();
         }
+    }
 
-        if (IsParallaxSettled)
+    private void ResumeFrozenParallax(long now)
+    {
+        _backgroundParallax.ResumeScale(
+            GetBackgroundParallaxStrength(),
+            now,
+            _parallaxOutQuintEasing);
+        foreach (var entry in _layerParallaxes)
         {
-            StopParallaxTimer();
+            entry.Motion.ResumeScale(
+                GetLayerParallaxStrength(entry.StrengthOverride),
+                now,
+                _parallaxOutQuintEasing);
+        }
+    }
+
+    private void FreezeParallaxMotion()
+    {
+        if (_isParallaxFrozen)
+        {
+            return;
+        }
+
+        _isParallaxFrozen = true;
+        var now = _parallaxClock.GetTimestamp();
+        _backgroundParallax.Freeze(now, _parallaxFreezeExpression);
+        foreach (var entry in _layerParallaxes)
+        {
+            entry.Motion.Freeze(now, _parallaxFreezeExpression);
         }
     }
 
     private void SetParallaxMultiplier(double multiplier)
     {
-        if (_parallaxMultiplier == multiplier)
+        if (_parallaxMultiplier == multiplier && !_isUnlockAnimatingMultiplier)
         {
             return;
         }
 
         _parallaxMultiplier = multiplier;
+        _isUnlockAnimatingMultiplier = false;
         if (multiplier < 1)
         {
-            StopParallaxTimer();
+            FreezeParallaxMotion();
         }
 
-        _backgroundParallax.Apply(multiplier);
-        var layerChanged = false;
-        foreach (var entry in _layerParallaxes)
-        {
-            layerChanged |= entry.Motion.Apply(multiplier);
-        }
+        SyncSceneMultiplier();
 
-        if (layerChanged)
-        {
-            RaiseLayerParallaxUpdated();
-        }
-
-        if (multiplier == 1)
+        if (multiplier == 1 && CanAnimateParallax)
         {
             UpdateParallaxTarget();
         }
-    }
-
-    private void ResetParallaxMotion()
-    {
-        StopParallaxTimer();
-        _backgroundParallax.ResetMotion(_parallaxMultiplier);
-
-        var layerChanged = false;
-        foreach (var entry in _layerParallaxes)
-        {
-            layerChanged |= entry.Motion.ResetMotion(_parallaxMultiplier);
-        }
-
-        if (layerChanged)
+        else if (_layerParallaxes.Count > 0)
         {
             RaiseLayerParallaxUpdated();
         }
     }
 
-    private void AddParallaxUnlockAnimations(Storyboard storyboard)
+    private void StartParallaxUnlockAnimation()
     {
-        AddParallaxUnlockAnimations(storyboard, BackgroundParallaxTransform);
-        foreach (var entry in _layerParallaxes)
+        _isUnlockAnimatingMultiplier = true;
+        _multiplierUnlockStart = _parallaxMultiplier;
+        _multiplierUnlockStartTimestamp = _parallaxClock.GetTimestamp();
+
+        if (_sceneParallaxProps != null && _parallaxCompositor != null && _parallaxUnlockEasing != null)
         {
-            AddParallaxUnlockAnimations(storyboard, entry.Motion.Transform);
+            using var animation = _parallaxCompositor.CreateScalarKeyFrameAnimation();
+            animation.Duration = UnlockDuration;
+            animation.InsertKeyFrame(0.0f, (float)_parallaxMultiplier);
+            animation.InsertKeyFrame(1.0f, 0.0f, _parallaxUnlockEasing);
+            _sceneParallaxProps.StartAnimation(SceneMultiplierProperty, animation);
+        }
+
+        if (_layerParallaxes.Count > 0)
+        {
+            RaiseLayerParallaxUpdated();
         }
     }
 
-    private static void AddParallaxUnlockAnimations(Storyboard storyboard, CompositeTransform parallax)
+    private void StopParallaxUnlockAnimation()
     {
-        if (parallax.ScaleX == 1 && parallax.ScaleY == 1 && parallax.TranslateX == 0 && parallax.TranslateY == 0)
+        if (!_isUnlockAnimatingMultiplier)
         {
             return;
         }
 
-        AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.ScaleX), parallax.ScaleX, 1, UnlockDuration);
-        AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.ScaleY), parallax.ScaleY, 1, UnlockDuration);
-        AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.TranslateX), parallax.TranslateX, 0, UnlockDuration);
-        AddDoubleAnimation(storyboard, parallax, nameof(CompositeTransform.TranslateY), parallax.TranslateY, 0, UnlockDuration);
+        _isUnlockAnimatingMultiplier = false;
+        SyncSceneMultiplier();
+    }
+
+    private void ResetParallaxMotion()
+    {
+        var now = _parallaxClock.GetTimestamp();
+        _isParallaxFrozen = true;
+        _backgroundParallax.ResetMotion(now, _parallaxFreezeExpression);
+
+        var layerChanged = false;
+        foreach (var entry in _layerParallaxes)
+        {
+            layerChanged |= entry.Motion.ResetMotion(now, _parallaxFreezeExpression);
+        }
+
+        if (layerChanged)
+        {
+            RaiseLayerParallaxUpdated();
+        }
+    }
+
+    private bool IsMultiplierUnlockAnimatingAt(long now)
+    {
+        var elapsed = _parallaxClock.GetElapsedTime(_multiplierUnlockStartTimestamp, now);
+        return elapsed < UnlockDuration;
+    }
+
+    private double EvaluateParallaxMultiplier(long now)
+    {
+        if (!_isUnlockAnimatingMultiplier)
+        {
+            return _parallaxMultiplier;
+        }
+
+        var elapsed = _parallaxClock.GetElapsedTime(_multiplierUnlockStartTimestamp, now);
+        if (elapsed <= TimeSpan.Zero)
+        {
+            return _multiplierUnlockStart;
+        }
+
+        if (elapsed >= UnlockDuration)
+        {
+            return 0;
+        }
+
+        var progress = elapsed.TotalMilliseconds / UnlockDuration.TotalMilliseconds;
+        var eased = ParallaxMotionMath.EvaluateCubicBezier(
+            progress,
+            ParallaxMotionMath.UnlockControlPoint1,
+            ParallaxMotionMath.UnlockControlPoint2);
+        return _multiplierUnlockStart * (1 - eased);
     }
 
     private void RaiseLayerParallaxUpdated()
     {
         LayerParallaxUpdated?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void StopParallaxTimer()
-    {
-        _parallaxTimer?.Stop();
-    }
-
-    private void DetachParallaxTimer()
-    {
-        if (_parallaxTimer is { } timer)
-        {
-            timer.Stop();
-            timer.Tick -= OnParallaxTick;
-            _parallaxTimer = null;
-        }
-    }
-
-    private static double? NormalizeStrengthOverride(double? strengthOverride)
-    {
-        if (strengthOverride is not { } value)
-        {
-            return null;
-        }
-
-        return double.IsFinite(value)
-            ? Math.Clamp(value, 0, 200)
-            : DefaultParallaxStrength;
     }
 
     private sealed class LayerParallaxRegistration(
@@ -450,7 +738,7 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
                 return;
             }
 
-            var normalized = NormalizeStrengthOverride(strengthOverride);
+            var normalized = ParallaxMotionMath.NormalizeStrengthOverride(strengthOverride);
             if (StrengthOverride == normalized)
             {
                 return;
@@ -472,137 +760,547 @@ public sealed partial class ScenePresenter : ISceneParallaxHost
         }
     }
 
-    private sealed class ParallaxMotion(CompositeTransform transform)
+    private sealed class ParallaxMotion(UIElement target, TimeProvider clock)
     {
-        public CompositeTransform Transform { get; } = transform;
+        private const string ClampedOffsetExpressionText =
+            "scene.ViewportSize.X > 0 && scene.ViewportSize.Y > 0 " +
+            "? Vector2(" +
+                "Clamp(motion.Offset.X, -scene.ViewportSize.X * Max(motion.Scale - 1, motion.MaxAmount) * 0.5, scene.ViewportSize.X * Max(motion.Scale - 1, motion.MaxAmount) * 0.5), " +
+                "Clamp(motion.Offset.Y, -scene.ViewportSize.Y * Max(motion.Scale - 1, motion.MaxAmount) * 0.5, scene.ViewportSize.Y * Max(motion.Scale - 1, motion.MaxAmount) * 0.5)) " +
+            ": Vector2(0, 0)";
+
+        private const string EffectiveScaleExpressionText =
+            "1 + ((scene.ViewportSize.X > 0 && scene.ViewportSize.Y > 0 " +
+            "? Max(motion.Scale, 1 + 2 * Max(Abs(motion.ClampedOffset.X) / Max(scene.ViewportSize.X, 0.0001), Abs(motion.ClampedOffset.Y) / Max(scene.ViewportSize.Y, 0.0001))) " +
+            ": motion.Scale) - 1) * scene.Multiplier";
+
+        private const string TranslationExpressionText =
+            "Vector3(motion.ClampedOffset.X * scene.Multiplier, motion.ClampedOffset.Y * scene.Multiplier, 0)";
+
+        private const string ScaleExpressionText =
+            "Vector3(motion.EffectiveScale, motion.EffectiveScale, 1)";
+
+        private Compositor? _compositor;
+        private CompositionPropertySet? _motionProps;
+        private ExpressionAnimation? _clampedOffsetExpr;
+        private ExpressionAnimation? _effectiveScaleExpr;
+        private ExpressionAnimation? _translationExpr;
+        private ExpressionAnimation? _scaleExpr;
+        private bool _attached;
+        private bool _offsetFrozen;
+        private bool _scaleFrozen;
+
+        private Vector2 _offsetStart;
+        private Vector2 _offsetTarget;
+        private long _offsetStartTimestamp;
+        private bool _offsetAnimating;
+
+        private double _scaleStart = 1;
+        private double _scaleTarget = 1;
+        private long _scaleStartTimestamp;
+        private bool _scaleAnimating;
+
+        public UIElement Target { get; } = target;
+
+        public TimeProvider Clock { get; set; } = clock;
 
         public double Amount { get; private set; }
 
-        public Point Target { get; private set; }
+        public Vector2 TargetOffset { get; private set; }
 
-        public Point Offset { get; private set; }
-
-        public double Scale { get; private set; } = 1;
-
-        public bool IsSettled => Offset.Equals(Target) && Scale == 1 + Amount;
-
-        public bool SetStrength(double strength, double width, double height, double multiplier)
+        public bool IsAnimatingAt(long now)
         {
-            var clamped = double.IsFinite(strength) ? Math.Clamp(strength, 0, 200) : 0;
-            Amount = DefaultParallaxAmount * (clamped / 100);
-            if (Amount == 0)
+            if (!_offsetFrozen
+                && _offsetAnimating
+                && Clock.GetElapsedTime(_offsetStartTimestamp, now) < ParallaxMotionMath.PositionDuration)
             {
-                Scale = 1;
-                return ResetMotion(multiplier);
+                return true;
             }
 
-            return ClampToViewport(width, height, multiplier);
+            if (!_scaleFrozen
+                && _scaleAnimating
+                && Clock.GetElapsedTime(_scaleStartTimestamp, now) < ParallaxMotionMath.ScaleDuration)
+            {
+                return true;
+            }
+
+            return false;
         }
 
-        public bool ClampToViewport(double width, double height, double multiplier)
+        public void Attach(
+            Compositor compositor,
+            CompositionPropertySet sceneProps,
+            ExpressionAnimation centerPointExpr)
         {
-            var margin = (Scale - 1) / 2;
-            var limitX = width * margin;
-            var limitY = height * margin;
-            Offset = new Point(
-                Math.Clamp(Offset.X, -limitX, limitX),
-                Math.Clamp(Offset.Y, -limitY, limitY));
-            return Apply(multiplier);
+            if (_attached && ReferenceEquals(_compositor, compositor))
+            {
+                return;
+            }
+
+            Detach(resetVisual: true);
+
+            ElementCompositionPreview.SetIsTranslationEnabled(Target, true);
+            var visual = ElementCompositionPreview.GetElementVisual(Target);
+            if (!ReferenceEquals(visual.Compositor, compositor))
+            {
+                return;
+            }
+
+            visual.Properties.InsertVector3(VisualTranslationProperty, Vector3.Zero);
+
+            var motionProps = compositor.CreatePropertySet();
+            motionProps.InsertVector2(MotionOffsetProperty, Vector2.Zero);
+            motionProps.InsertScalar(MotionScaleProperty, 1.0f);
+            motionProps.InsertScalar(MotionMaxAmountProperty, 0.0f);
+            motionProps.InsertVector2(MotionClampedOffsetProperty, Vector2.Zero);
+            motionProps.InsertScalar(MotionEffectiveScaleProperty, 1.0f);
+
+            var clampedOffsetExpr = compositor.CreateExpressionAnimation(ClampedOffsetExpressionText);
+            clampedOffsetExpr.SetReferenceParameter("scene", sceneProps);
+            clampedOffsetExpr.SetReferenceParameter("motion", motionProps);
+
+            var effectiveScaleExpr = compositor.CreateExpressionAnimation(EffectiveScaleExpressionText);
+            effectiveScaleExpr.SetReferenceParameter("scene", sceneProps);
+            effectiveScaleExpr.SetReferenceParameter("motion", motionProps);
+
+            var translationExpr = compositor.CreateExpressionAnimation(TranslationExpressionText);
+            translationExpr.SetReferenceParameter("scene", sceneProps);
+            translationExpr.SetReferenceParameter("motion", motionProps);
+
+            var scaleExpr = compositor.CreateExpressionAnimation(ScaleExpressionText);
+            scaleExpr.SetReferenceParameter("motion", motionProps);
+
+            motionProps.StartAnimation(MotionClampedOffsetProperty, clampedOffsetExpr);
+            motionProps.StartAnimation(MotionEffectiveScaleProperty, effectiveScaleExpr);
+            visual.StartAnimation(VisualTranslationProperty, translationExpr);
+            visual.StartAnimation(VisualScaleProperty, scaleExpr);
+            visual.StartAnimation(VisualCenterPointProperty, centerPointExpr);
+
+            _compositor = compositor;
+            _motionProps = motionProps;
+            _clampedOffsetExpr = clampedOffsetExpr;
+            _effectiveScaleExpr = effectiveScaleExpr;
+            _translationExpr = translationExpr;
+            _scaleExpr = scaleExpr;
+            _attached = true;
+            _offsetFrozen = false;
+            _scaleFrozen = false;
         }
 
-        public void UpdateTarget(Point? pointerInScene, double width, double height)
+        public bool Detach(bool resetVisual)
         {
-            Target = default;
-            if (Amount > 0 && pointerInScene is { } position && width > 0 && height > 0)
+            var now = Clock.GetTimestamp();
+            var hadNonIdentity = Amount != 0
+                || TargetOffset != Vector2.Zero
+                || _offsetTarget != Vector2.Zero
+                || _scaleTarget != 1
+                || _offsetAnimating
+                || _scaleAnimating
+                || EvaluateOffset(now) != Vector2.Zero
+                || Math.Abs(EvaluateScale(now) - 1) > 1e-9;
+
+            if (resetVisual && _attached)
             {
-                // osu!lazer's desktop UI fits a 1024 × 768 logical area inside the viewport.
-                var viewportScale = Math.Min(width / 1024, height / 768);
-                var halfWidth = width / 2;
-                var halfHeight = height / 2;
-                Target = new Point(
-                    CalculateParallaxOffset(position.X - halfWidth, halfWidth, viewportScale),
-                    CalculateParallaxOffset(position.Y - halfHeight, halfHeight, viewportScale));
+                var visual = ElementCompositionPreview.GetElementVisual(Target);
+                visual.StopAnimation(VisualTranslationProperty);
+                visual.StopAnimation(VisualScaleProperty);
+                visual.StopAnimation(VisualCenterPointProperty);
+                visual.Properties.InsertVector3(VisualTranslationProperty, Vector3.Zero);
+                visual.Scale = Vector3.One;
+                visual.CenterPoint = Vector3.Zero;
+            }
+
+            if (_motionProps != null)
+            {
+                _motionProps.StopAnimation(MotionOffsetProperty);
+                _motionProps.StopAnimation(MotionScaleProperty);
+                _motionProps.StopAnimation(MotionClampedOffsetProperty);
+                _motionProps.StopAnimation(MotionEffectiveScaleProperty);
+                _motionProps.Dispose();
+                _motionProps = null;
+            }
+
+            _clampedOffsetExpr?.Dispose();
+            _clampedOffsetExpr = null;
+            _effectiveScaleExpr?.Dispose();
+            _effectiveScaleExpr = null;
+            _translationExpr?.Dispose();
+            _translationExpr = null;
+            _scaleExpr?.Dispose();
+            _scaleExpr = null;
+
+            _compositor = null;
+            _attached = false;
+            _offsetFrozen = false;
+            _scaleFrozen = false;
+            Amount = 0;
+            TargetOffset = Vector2.Zero;
+            _offsetStart = Vector2.Zero;
+            _offsetTarget = Vector2.Zero;
+            _offsetAnimating = false;
+            _scaleStart = 1;
+            _scaleTarget = 1;
+            _scaleAnimating = false;
+            return hadNonIdentity;
+        }
+
+        public bool SetStrength(
+            double strength,
+            long now,
+            bool canAnimate,
+            CubicBezierEasingFunction? easing)
+        {
+            var newAmount = ParallaxMotionMath.GetAmount(strength);
+            if (newAmount == 0)
+            {
+                var hadState = Amount != 0
+                    || TargetOffset != Vector2.Zero
+                    || _offsetTarget != Vector2.Zero
+                    || _scaleTarget != 1
+                    || _offsetAnimating
+                    || _scaleAnimating;
+                SnapToIdentity();
+                return hadState;
+            }
+
+            var amountChanged = Amount != newAmount;
+            Amount = newAmount;
+            _motionProps?.InsertScalar(MotionMaxAmountProperty, (float)newAmount);
+
+            var targetScale = 1 + newAmount;
+            if (!canAnimate)
+            {
+                return amountChanged;
+            }
+
+            return StartScaleAnimation(targetScale, now, easing) || amountChanged;
+        }
+
+        public bool ResumeScale(
+            double strength,
+            long now,
+            CubicBezierEasingFunction? easing)
+        {
+            var newAmount = ParallaxMotionMath.GetAmount(strength);
+            Amount = newAmount;
+            if (newAmount == 0)
+            {
+                SnapToIdentity();
+                return false;
+            }
+
+            _motionProps?.InsertScalar(MotionMaxAmountProperty, (float)newAmount);
+            return StartScaleAnimation(1 + newAmount, now, easing);
+        }
+
+        public bool UpdateTarget(
+            Point? pointerInScene,
+            double width,
+            double height,
+            long now,
+            bool canAnimate,
+            CubicBezierEasingFunction? easing,
+            bool clampStartToViewport = false)
+        {
+            var newTarget = ParallaxMotionMath.CalculateTargetOffset(pointerInScene, width, height, Amount);
+            var targetChanged = TargetOffset != newTarget;
+            TargetOffset = newTarget;
+
+            if (!canAnimate)
+            {
+                return targetChanged;
+            }
+
+            return StartOffsetAnimation(newTarget, width, height, now, easing, clampStartToViewport) || targetChanged;
+        }
+
+        public void Freeze(long now, ExpressionAnimation? freezeExpression)
+        {
+            if (!_attached || _motionProps == null || Amount == 0)
+            {
+                return;
+            }
+
+            if (!_offsetFrozen)
+            {
+                _offsetFrozen = true;
+                var currentOffset = EvaluateOffset(now);
+                _offsetStart = currentOffset;
+                _offsetTarget = currentOffset;
+                _offsetAnimating = false;
+                if (freezeExpression != null)
+                {
+                    _motionProps.StartAnimation(MotionOffsetProperty, freezeExpression);
+                }
+            }
+
+            if (!_scaleFrozen)
+            {
+                _scaleFrozen = true;
+                var currentScale = EvaluateScale(now);
+                _scaleStart = currentScale;
+                _scaleTarget = currentScale;
+                _scaleAnimating = false;
+                if (freezeExpression != null)
+                {
+                    _motionProps.StartAnimation(MotionScaleProperty, freezeExpression);
+                }
             }
         }
 
-        public bool Step(double elapsed, double width, double height, double multiplier)
+        public bool ResetMotion(long now, ExpressionAnimation? freezeExpression)
         {
-            var x = EaseParallax(Offset.X, Target.X, elapsed / ParallaxPositionDuration);
-            var y = EaseParallax(Offset.Y, Target.Y, elapsed / ParallaxPositionDuration);
-            var scale = EaseParallax(Scale, 1 + Amount, elapsed / ParallaxScaleDuration);
+            var currentOffset = EvaluateOffset(now);
+            var hadMotion = TargetOffset != Vector2.Zero
+                || _offsetTarget != Vector2.Zero
+                || currentOffset != Vector2.Zero
+                || _offsetAnimating
+                || _scaleAnimating;
 
-            // A quick translation can outpace zoom while the target fills the clipped viewport.
-            if (width > 0 && height > 0)
+            TargetOffset = Vector2.Zero;
+            _offsetStart = Vector2.Zero;
+            _offsetTarget = Vector2.Zero;
+            _offsetAnimating = false;
+            _offsetFrozen = false;
+
+            if (_motionProps != null)
             {
-                scale = Math.Max(scale, 1 + 2 * Math.Max(Math.Abs(x) / width, Math.Abs(y) / height));
+                _motionProps.StopAnimation(MotionOffsetProperty);
+                _motionProps.InsertVector2(MotionOffsetProperty, Vector2.Zero);
             }
 
-            Offset = new Point(x, y);
-            Scale = scale;
-            return Apply(multiplier);
+            var currentScale = EvaluateScale(now);
+            _scaleStart = currentScale;
+            _scaleTarget = currentScale;
+            _scaleAnimating = false;
+
+            if (_motionProps != null && freezeExpression != null && Amount > 0)
+            {
+                _scaleFrozen = true;
+                _motionProps.StartAnimation(MotionScaleProperty, freezeExpression);
+            }
+
+            return hadMotion;
         }
 
-        public bool Apply(double multiplier)
+        public BrushEditorMatrix EvaluateMatrix(
+            long now,
+            double viewportWidth,
+            double viewportHeight,
+            double targetWidth,
+            double targetHeight,
+            double multiplier)
         {
-            var scale = 1 + (Scale - 1) * multiplier;
-            var translateX = Offset.X * multiplier;
-            var translateY = Offset.Y * multiplier;
-            var changed = false;
-
-            if (Transform.ScaleX != scale)
-            {
-                Transform.ScaleX = scale;
-                changed = true;
-            }
-
-            if (Transform.ScaleY != scale)
-            {
-                Transform.ScaleY = scale;
-                changed = true;
-            }
-
-            if (Transform.TranslateX != translateX)
-            {
-                Transform.TranslateX = translateX;
-                changed = true;
-            }
-
-            if (Transform.TranslateY != translateY)
-            {
-                Transform.TranslateY = translateY;
-                changed = true;
-            }
-
-            return changed;
+            var offset = EvaluateOffset(now);
+            var scale = EvaluateScale(now);
+            var (translation, effectiveScale) = ParallaxMotionMath.EvaluateEffectiveTransform(
+                offset,
+                scale,
+                Amount,
+                viewportWidth,
+                viewportHeight,
+                multiplier);
+            return ParallaxMotionMath.CreateCenteredTransformMatrix(
+                targetWidth,
+                targetHeight,
+                translation,
+                effectiveScale);
         }
 
-        public bool ResetMotion(double multiplier)
-        {
-            Target = default;
-            Offset = default;
-            return Apply(multiplier);
-        }
-
-        public bool ResetIdentity()
+        private void SnapToIdentity()
         {
             Amount = 0;
-            Scale = 1;
-            Target = default;
-            Offset = default;
-            return Apply(1);
+            TargetOffset = Vector2.Zero;
+            _offsetStart = Vector2.Zero;
+            _offsetTarget = Vector2.Zero;
+            _offsetAnimating = false;
+            _offsetFrozen = false;
+            _scaleStart = 1;
+            _scaleTarget = 1;
+            _scaleAnimating = false;
+            _scaleFrozen = false;
+
+            if (_motionProps != null)
+            {
+                _motionProps.StopAnimation(MotionOffsetProperty);
+                _motionProps.StopAnimation(MotionScaleProperty);
+                _motionProps.InsertVector2(MotionOffsetProperty, Vector2.Zero);
+                _motionProps.InsertScalar(MotionScaleProperty, 1.0f);
+                _motionProps.InsertScalar(MotionMaxAmountProperty, 0.0f);
+            }
         }
 
-        private double CalculateParallaxOffset(double distance, double halfExtent, double viewportScale)
+        private bool StartScaleAnimation(
+            double targetScale,
+            long now,
+            CubicBezierEasingFunction? easing)
         {
-            var saturation = 1 - Math.Pow(ParallaxSaturationBase, Math.Abs(distance) / viewportScale);
-            return Math.CopySign(saturation * halfExtent * Amount, distance);
+            var currentScale = EvaluateScale(now);
+            var wasFrozen = _scaleFrozen;
+            _scaleFrozen = false;
+
+            if (Math.Abs(currentScale - targetScale) <= 1e-9 && (!wasFrozen || !_scaleAnimating))
+            {
+                if (_scaleAnimating || Math.Abs(_scaleTarget - targetScale) > 1e-9 || wasFrozen)
+                {
+                    _scaleStart = targetScale;
+                    _scaleTarget = targetScale;
+                    _scaleAnimating = false;
+                    if (_motionProps != null)
+                    {
+                        _motionProps.StopAnimation(MotionScaleProperty);
+                        _motionProps.InsertScalar(MotionScaleProperty, (float)targetScale);
+                    }
+
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!wasFrozen && _scaleAnimating && Math.Abs(_scaleTarget - targetScale) <= 1e-9)
+            {
+                return false;
+            }
+
+            _scaleStart = currentScale;
+            _scaleTarget = targetScale;
+            _scaleStartTimestamp = now;
+            _scaleAnimating = true;
+
+            if (_motionProps != null && _compositor != null && easing != null)
+            {
+                using var animation = _compositor.CreateScalarKeyFrameAnimation();
+                animation.Duration = ParallaxMotionMath.ScaleDuration;
+                // 显式写入解析起点关键帧，避免高刷显示器或高回报率输入连续重设目标时 Composition 反复锁死 this.StartingValue。
+                animation.InsertKeyFrame(0.0f, (float)currentScale);
+                animation.InsertKeyFrame(1.0f, (float)targetScale, easing);
+                _motionProps.StartAnimation(MotionScaleProperty, animation);
+            }
+
+            return true;
         }
 
-        private static double EaseParallax(double current, double target, double progress)
+        private bool StartOffsetAnimation(
+            Vector2 targetOffset,
+            double width,
+            double height,
+            long now,
+            CubicBezierEasingFunction? easing,
+            bool clampStartToViewport)
         {
-            return Math.Abs(current - target) <= ParallaxEpsilon
-                ? target
-                : target + (current - target) * Math.Pow(1 - progress, 5);
+            var currentOffset = EvaluateOffset(now);
+            var wasFrozen = _offsetFrozen;
+            _offsetFrozen = false;
+
+            var startOffset = currentOffset;
+            if (clampStartToViewport && width > 0 && height > 0)
+            {
+                var currentScale = EvaluateScale(now);
+                var margin = Math.Max(currentScale - 1, Amount) * 0.5;
+                var limitX = (float)(width * margin);
+                var limitY = (float)(height * margin);
+                startOffset = new Vector2(
+                    Math.Clamp(startOffset.X, -limitX, limitX),
+                    Math.Clamp(startOffset.Y, -limitY, limitY));
+            }
+
+            if (startOffset == targetOffset && (!wasFrozen || !_offsetAnimating))
+            {
+                if (_offsetAnimating || _offsetTarget != targetOffset || currentOffset != targetOffset || wasFrozen)
+                {
+                    _offsetStart = targetOffset;
+                    _offsetTarget = targetOffset;
+                    _offsetAnimating = false;
+                    if (_motionProps != null)
+                    {
+                        _motionProps.StopAnimation(MotionOffsetProperty);
+                        _motionProps.InsertVector2(MotionOffsetProperty, targetOffset);
+                    }
+
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!wasFrozen && !clampStartToViewport && _offsetAnimating && _offsetTarget == targetOffset)
+            {
+                return false;
+            }
+
+            _offsetStart = startOffset;
+            _offsetTarget = targetOffset;
+            _offsetStartTimestamp = now;
+            _offsetAnimating = true;
+
+            if (_motionProps != null && _compositor != null && easing != null)
+            {
+                using var animation = _compositor.CreateVector2KeyFrameAnimation();
+                animation.Duration = ParallaxMotionMath.PositionDuration;
+                // 显式写入已完成视口裁剪的解析起点关键帧，防止帧内/跨帧高频 retargeting 时 Composition 反复锁回 0 进度。
+                animation.InsertKeyFrame(0.0f, startOffset);
+                animation.InsertKeyFrame(1.0f, targetOffset, easing);
+                _motionProps.StartAnimation(MotionOffsetProperty, animation);
+            }
+
+            return true;
+        }
+
+        private Vector2 EvaluateOffset(long now)
+        {
+            if (!_offsetAnimating)
+            {
+                return _offsetTarget;
+            }
+
+            var elapsed = Clock.GetElapsedTime(_offsetStartTimestamp, now);
+            if (elapsed <= TimeSpan.Zero)
+            {
+                return _offsetStart;
+            }
+
+            if (elapsed >= ParallaxMotionMath.PositionDuration)
+            {
+                _offsetStart = _offsetTarget;
+                _offsetAnimating = false;
+                return _offsetTarget;
+            }
+
+            var progress = elapsed.TotalMilliseconds / ParallaxMotionMath.PositionDuration.TotalMilliseconds;
+            var eased = ParallaxMotionMath.EvaluateCubicBezier(
+                progress,
+                ParallaxMotionMath.OutQuintControlPoint1,
+                ParallaxMotionMath.OutQuintControlPoint2);
+            return Vector2.Lerp(_offsetStart, _offsetTarget, (float)eased);
+        }
+
+        private double EvaluateScale(long now)
+        {
+            if (!_scaleAnimating)
+            {
+                return _scaleTarget;
+            }
+
+            var elapsed = Clock.GetElapsedTime(_scaleStartTimestamp, now);
+            if (elapsed <= TimeSpan.Zero)
+            {
+                return _scaleStart;
+            }
+
+            if (elapsed >= ParallaxMotionMath.ScaleDuration)
+            {
+                _scaleStart = _scaleTarget;
+                _scaleAnimating = false;
+                return _scaleTarget;
+            }
+
+            var progress = elapsed.TotalMilliseconds / ParallaxMotionMath.ScaleDuration.TotalMilliseconds;
+            var eased = ParallaxMotionMath.EvaluateCubicBezier(
+                progress,
+                ParallaxMotionMath.OutQuintControlPoint1,
+                ParallaxMotionMath.OutQuintControlPoint2);
+            return _scaleStart + (_scaleTarget - _scaleStart) * eased;
         }
     }
 }

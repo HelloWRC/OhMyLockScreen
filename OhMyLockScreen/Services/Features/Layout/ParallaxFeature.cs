@@ -6,10 +6,8 @@ using OhMyLockScreen.Shared.Abstractions.FeatureHost;
 using OhMyLockScreen.Shared.Attributes.FeatureHost;
 using OhMyLockScreen.Shared.Controls.Scene;
 using OhMyLockScreen.Shared.Controls.UI;
-using Windows.Foundation;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Media;
 
 namespace OhMyLockScreen.Services.Features.Layout;
 
@@ -17,7 +15,7 @@ namespace OhMyLockScreen.Services.Features.Layout;
 public sealed class ParallaxFeature : FeatureBase<LayerPresenter, ParallaxFeatureSettings>
 {
     private readonly CompositeDisposable _bindings = new();
-    private CompositeTransform? _transform;
+    private Border? _wrapper;
     private IDecoratorRegistration? _decoratorRegistration;
     private ISceneParallaxRegistration? _parallaxRegistration;
     private ISceneParallaxHost? _registeredHost;
@@ -33,13 +31,8 @@ public sealed class ParallaxFeature : FeatureBase<LayerPresenter, ParallaxFeatur
 
         try
         {
-            var transform = new CompositeTransform();
-            var wrapper = new Border
-            {
-                RenderTransform = transform,
-                RenderTransformOrigin = new Point(0.5, 0.5)
-            };
-            _transform = transform;
+            var wrapper = new Border();
+            _wrapper = wrapper;
             _decoratorRegistration = target.Decorators.Register(wrapper, DecoratorPriorities.Parallax);
             _hostCallbackToken = target.RegisterPropertyChangedCallback(
                 LayerPresenter.ParallaxHostProperty,
@@ -83,7 +76,7 @@ public sealed class ParallaxFeature : FeatureBase<LayerPresenter, ParallaxFeatur
 
         var decorator = _decoratorRegistration;
         _decoratorRegistration = null;
-        _transform = null;
+        _wrapper = null;
         _strengthOverride = null;
         decorator?.Dispose();
     }
@@ -116,9 +109,9 @@ public sealed class ParallaxFeature : FeatureBase<LayerPresenter, ParallaxFeatur
             _registeredHost = null;
             previous?.Dispose();
 
-            if (host != null && _transform != null)
+            if (host != null && _wrapper != null)
             {
-                var registration = host.Register(_transform, _strengthOverride);
+                var registration = host.Register(_wrapper, _strengthOverride);
                 _registeredHost = host;
                 _parallaxRegistration = registration;
             }

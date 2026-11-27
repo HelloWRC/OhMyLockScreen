@@ -55,6 +55,12 @@ public sealed partial class App : Application
             return;
         }
 
+        if (args.Arguments.Contains("parallax", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchParallaxPreview();
+            return;
+        }
+
         if (args.Arguments.Contains("scene-preview-card", StringComparison.OrdinalIgnoreCase))
         {
             LaunchScenePreviewCardPreview();

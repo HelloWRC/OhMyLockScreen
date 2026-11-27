@@ -277,7 +277,7 @@ namespace OhMyLockScreen.Shared.Controls.Scene
         private readonly global::OhMyLockScreen.Shared.Controls.UI.ChainedDecorator DecoratorHost = new();
         private readonly Windows.UI.Xaml.Controls.Grid SceneRoot = new();
         private readonly Windows.UI.Xaml.Controls.Grid BackgroundViewport = new();
-        private readonly Windows.UI.Xaml.Media.CompositeTransform BackgroundParallaxTransform = new();
+        private readonly Windows.UI.Xaml.Controls.Grid BackgroundParallaxHost = new();
         private readonly Windows.UI.Xaml.Controls.Grid BackgroundLayer = new();
         private readonly Windows.UI.Xaml.Controls.Image SystemBackgroundImageElement = new();
         private readonly Windows.UI.Xaml.Controls.Image WallpaperImage = new();
@@ -291,7 +291,7 @@ namespace OhMyLockScreen.Shared.Controls.Scene
         internal Windows.UI.Xaml.Controls.Grid BackgroundLayerElement => BackgroundLayer;
         internal Windows.UI.Xaml.Controls.Grid BackgroundViewportElement => BackgroundViewport;
         internal Windows.UI.Xaml.Controls.Grid SceneRootElement => SceneRoot;
-        internal Windows.UI.Xaml.Media.CompositeTransform ParallaxTransform => BackgroundParallaxTransform;
+        internal Windows.UI.Xaml.Controls.Grid BackgroundParallaxHostElement => BackgroundParallaxHost;
         internal Windows.UI.Xaml.Controls.Image SystemBackgroundElement => SystemBackgroundImageElement;
         internal Windows.UI.Xaml.Controls.Image WallpaperElement => WallpaperImage;
         internal Task RefreshSystemBackgroundForTestAsync() => RefreshSystemBackgroundAsync();
@@ -300,11 +300,12 @@ namespace OhMyLockScreen.Shared.Controls.Scene
 
         private void InitializeComponent()
         {
-            BackgroundViewport.Children.Add(new Windows.UI.Xaml.Controls.Grid
-            {
-                RenderTransform = BackgroundParallaxTransform,
-                Children = { SystemBackgroundImageElement, WallpaperImage, BackgroundLayer }
-            });
+            BackgroundParallaxHost.Children.Add(SystemBackgroundImageElement);
+            BackgroundParallaxHost.Children.Add(WallpaperImage);
+            BackgroundParallaxHost.Children.Add(BackgroundLayer);
+            BackgroundViewport.Children.Add(BackgroundParallaxHost);
+            BackgroundViewport.SizeChanged += (_, _) =>
+                BackgroundParallaxHost.Resize(BackgroundViewport.ActualWidth, BackgroundViewport.ActualHeight);
             SceneRoot.Children.Add(BackgroundViewport);
             SceneRoot.Children.Add(LayersLayer);
             DecoratorHost.SetTemplatePart("PART_Host", new Windows.UI.Xaml.Controls.Border());

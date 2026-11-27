@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml.Controls;
 using System.ComponentModel;
+using System.Diagnostics;
 using OhMyLockScreen.Controls.Editor;
 using OhMyLockScreen.Models.Features.Layout;
 using OhMyLockScreen.Models.Scene;
@@ -117,6 +118,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private readonly IComponentsService _components;
     private readonly IFeatureService _features;
     private readonly FeatureRegistryService _featureRegistry;
+    private const double LayerParallaxSettleGraceMilliseconds = 100;
     private Window? _window;
     private bool _loaded;
     private bool _restoringEditor;
@@ -128,6 +130,8 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
     private bool _updatingInspector;
     private bool _inspectorAgain;
     private bool _selectionPending;
+    private bool _trackingLayerParallax;
+    private long _layerParallaxSettleDeadline;
     private IFeatureContainer? _featureTarget;
     private IDecoratorHost? _featureDecoratorHost;
     private TransformSettingsControl? _observedTransformControl;
@@ -356,6 +360,9 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         }
 
         CompositionTarget.Rendering -= OnSelectionRendering;
+        CompositionTarget.Rendering -= OnLayerParallaxRendering;
+        _trackingLayerParallax = false;
+        _layerParallaxSettleDeadline = 0;
         ViewModel.Dispose();
         _window = null;
     }
@@ -422,9 +429,67 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
 
     private void OnLayerParallaxUpdated(object? sender, EventArgs args)
     {
+        ExtendLayerParallaxSettleGrace();
         if (!_selectionPending && ViewModel.ShowSelection)
         {
             UpdateSelectionGeometry();
+        }
+        else
+        {
+            UpdateLayerParallaxTracking();
+        }
+    }
+
+    private void ExtendLayerParallaxSettleGrace()
+    {
+        _layerParallaxSettleDeadline = Stopwatch.GetTimestamp()
+            + (long)(Stopwatch.Frequency * (LayerParallaxSettleGraceMilliseconds / 1000.0));
+    }
+
+    private void UpdateLayerParallaxTracking()
+    {
+        var now = Stopwatch.GetTimestamp();
+        var isAnimating = EditorPresenter.HasActiveLayerParallaxAnimation;
+        if (isAnimating)
+        {
+            ExtendLayerParallaxSettleGrace();
+        }
+
+        // TransformToVisual 已包含 Composition 视差变换且滞后 DWM 约 1~2 帧；动画结束后保留短暂余韵窗口以捕获最终落点帧。
+        var shouldTrack = _loaded
+            && ViewModel.ShowSelection
+            && (isAnimating || now < _layerParallaxSettleDeadline);
+        if (shouldTrack == _trackingLayerParallax)
+        {
+            return;
+        }
+
+        _trackingLayerParallax = shouldTrack;
+        if (shouldTrack)
+        {
+            CompositionTarget.Rendering += OnLayerParallaxRendering;
+        }
+        else
+        {
+            CompositionTarget.Rendering -= OnLayerParallaxRendering;
+        }
+    }
+
+    private void OnLayerParallaxRendering(object? sender, object args)
+    {
+        if (!_loaded || !ViewModel.ShowSelection)
+        {
+            UpdateLayerParallaxTracking();
+            return;
+        }
+
+        if (!_selectionPending)
+        {
+            UpdateSelectionGeometry();
+        }
+        else
+        {
+            UpdateLayerParallaxTracking();
         }
     }
     private async void OnSceneSaved(object? sender, SceneChangedEventArgs args)
@@ -2347,6 +2412,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         {
             ViewModel.HasSelectionBounds = false;
             _lastSelectionQuad = null;
+            UpdateLayerParallaxTracking();
             return;
         }
 
@@ -2376,6 +2442,7 @@ public sealed partial class SceneEditorPage : Page, Controls.Rules.IRulesetDrawe
         ViewModel.CanEditTransform = selected is { Model: ComponentSettings transformComponent, IsEffectivelyLocked: false }
             && SceneTransformEditing.CanEditTransform(transformComponent);
         ViewModel.HasSelectionBounds = true;
+        UpdateLayerParallaxTracking();
     }
 
     private void UpdateSelectionOutline(SceneSelectionGeometry geometry)
