@@ -9,6 +9,7 @@ namespace OhMyLockScreen.Services.Scene;
 public sealed partial class SceneService
 {
     private const int MaxPackageSceneJsonBytes = 16 * 1024 * 1024;
+    private const CompressionLevel PackageCompressionLevel = CompressionLevel.SmallestSize;
     private const string PackageStreamTemporaryPrefix = ".omls-stream-";
 
     public async Task ExportAsync(Guid id, Stream destination, CancellationToken cancellationToken = default)
@@ -35,7 +36,7 @@ public sealed partial class SceneService
         }
 
         await using var archive = new ZipArchive(destination, ZipArchiveMode.Create, leaveOpen: true);
-        var sceneEntry = archive.CreateEntry("scene.json", CompressionLevel.Optimal);
+        var sceneEntry = archive.CreateEntry("scene.json", PackageCompressionLevel);
         await using (var entryStream = await sceneEntry.OpenAsync(cancellationToken).ConfigureAwait(false))
         {
             await entryStream.WriteAsync(sceneBytes, cancellationToken).ConfigureAwait(false);
@@ -44,7 +45,7 @@ public sealed partial class SceneService
         foreach (var (entryPath, filePath) in files)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var entry = archive.CreateEntry(entryPath, CompressionLevel.NoCompression);
+            var entry = archive.CreateEntry(entryPath, PackageCompressionLevel);
             await using var sourceStream = new FileStream(
                 filePath,
                 FileMode.Open,

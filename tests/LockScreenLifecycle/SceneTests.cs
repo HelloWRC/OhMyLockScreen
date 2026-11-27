@@ -2008,7 +2008,7 @@ internal static class SceneTests
             using var fixture = new Fixture();
             var source = fixture.Service.Create("打包场景");
             var usedBytes = "referenced-preview-image"u8.ToArray();
-            var unreferencedBytes = "unreferenced-asset-kept-verbatim"u8.ToArray();
+            var unreferencedBytes = new byte[8192];
             var usedBlob = await fixture.Blobs.ImportAsync(source.SceneId, new MemoryStream(usedBytes));
             var unreferencedBlob = await fixture.Blobs.ImportAsync(source.SceneId, new MemoryStream(unreferencedBytes));
 
@@ -2038,6 +2038,9 @@ internal static class SceneTests
                     && names.Contains(usedPath)
                     && names.Contains(unreferencedPath),
                     "Exported .omls archive dropped scene.json or blobs instead of exporting all blobs verbatim.");
+                var compressedBlob = zip.GetEntry(unreferencedPath)!;
+                Check(compressedBlob.CompressedLength < compressedBlob.Length,
+                    "Export stored a compressible blob without reducing its size.");
                 Check(!names.Contains("scene.json.bak")
                     && !names.Contains("scene.json.tmp")
                     && names.All(name => !Path.GetFileName(name).StartsWith(SceneBlobStorageService.TemporaryFilePrefix, StringComparison.Ordinal)),
