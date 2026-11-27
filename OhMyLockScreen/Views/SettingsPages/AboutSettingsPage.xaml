@@ -26,12 +26,21 @@
                         <toolkit:SettingsCard
                             Header="Copyright (c) 2026 HelloWRC"
                             Description="本项目基于 GNU General Public License v3.0 获得许可。"
-                            ContentAlignment="Right">
-                            <HyperlinkButton
-                                Content="开放源代码许可"
-                                Margin="2"
-                                NavigateUri="https://github.com/HelloWRC/OhMyLockScreen/blob/master/LICENSE"
-                                Padding="4" />
+                            ContentAlignment="Right"
+                            Tapped="OnCopyrightTapped"
+                            DoubleTapped="OnCopyrightTapped">
+                            <StackPanel Orientation="Horizontal">
+                                <HyperlinkButton
+                                    Content="开放源代码许可"
+                                    Margin="2"
+                                    NavigateUri="https://github.com/HelloWRC/OhMyLockScreen/blob/master/LICENSE"
+                                    Padding="4" />
+                                <HyperlinkButton
+                                    Content="隐私政策"
+                                    Margin="2"
+                                    NavigateUri="https://github.com/HelloWRC/OhMyLockScreen/blob/master/docs/PRIVACY.md"
+                                    Padding="4" />
+                            </StackPanel>
                         </toolkit:SettingsCard>
                         <toolkit:SettingsCard
                             Header="常用链接"

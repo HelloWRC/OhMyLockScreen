@@ -83,7 +83,8 @@ public sealed partial class ApplicationSettingsPage : Page
         AttachSystemNavigation();
         if (SettingsFrame.Content == null)
         {
-            NavigateToSettingsPage("general");
+            var returningFromEasterPage = Frame.ForwardStack.FirstOrDefault()?.SourcePageType == typeof(EasterPage);
+            NavigateToSettingsPage(returningFromEasterPage ? "about" : "general");
         }
     }
 

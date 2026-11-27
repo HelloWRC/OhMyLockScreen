@@ -21,7 +21,7 @@
 - 应用使用 Microsoft.Extensions.Hosting 和 UWP 生命周期。服务统一在 App.Services.cs 中注册，业务服务优先使用构造函数注入；重复激活和多视图共用应用主机。
 - 主宿主的各视图共享同一份本地磁盘日志；归档仅管理 `LocalState/Logs` 中本写入器的日志，不触碰 NativeHost 的专用诊断文件。
 - 激活时先捕获目标窗口的 Dispatcher；异步初始化后显式返回该窗口的 UI 线程显示页面，不依赖 SynchronizationContext，窗口关闭或应用退出后跳过显示。
-- 主包以 `App` 同时承接开始菜单和锁屏激活。按激活类型和当前窗口宿主识别锁屏视图；桌面启动进入场景管理器（`SceneManagerPage`），并通过根 `Frame` 导航至场景编辑器、全屏预览页（`ScenePreviewPage`）与应用设置页。
+- 主包以 `App` 同时承接开始菜单和锁屏激活。按激活类型和当前窗口宿主识别锁屏视图；桌面启动进入场景管理器（`SceneManagerPage`），并通过根 `Frame` 导航至场景编辑器、全屏预览页（`ScenePreviewPage`）、应用设置页与彩蛋页。彩蛋入口仅在关于页版权行累计点击十次后触发，保持静默，系统返回时回到关于页。
 - 应用设置页通过 SettingsPageInfoAttribute 与 AddSettingsPage<T> 注册，由 UWP Frame 创建具有公开无参构造函数的 SettingsPageBase 子类；系统标题栏返回优先处理设置内容 Frame，再返回根 Frame。
 - 桌面激活显式关闭 ExtendViewIntoTitleBar，以覆盖 UWP 跨启动保存的标题栏扩展状态。
 - 应用在 App 构造时订阅 Application.UnhandledException，以 Critical 记录原异常和堆栈（主宿主尚未建立时在建立后补记），将异常标记为已处理并复用当前窗口的 Toast 宿主显示不可自动关闭的错误；Toast 宿主尚未建立时，在窗口内容就绪后补显示。

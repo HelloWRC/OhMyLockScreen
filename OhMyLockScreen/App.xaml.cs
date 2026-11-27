@@ -285,7 +285,7 @@ public sealed partial class App : Application
         var fileImportRequiresManager = hasPendingFileImports && rootFrame.Content is not SceneManagerPage;
         var pageChanged = isLockScreen
             ? rootFrame.Content is not MainPage || lockScreenRequiresFreshPage
-            : fileImportRequiresManager || rootFrame.Content is not (SceneManagerPage or SceneEditorPage or ScenePreviewPage or ApplicationSettingsPage);
+            : fileImportRequiresManager || rootFrame.Content is not (SceneManagerPage or SceneEditorPage or ScenePreviewPage or ApplicationSettingsPage or EasterPage);
         if (pageChanged)
         {
             if (fileImportRequiresManager && rootFrame.Content is SceneEditorPage)

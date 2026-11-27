@@ -695,7 +695,10 @@ namespace Windows.UI.Xaml
         public string Message => Exception.Message;
     }
 
-    public sealed class RoutedEventArgs : EventArgs;
+    public sealed class RoutedEventArgs : EventArgs
+    {
+        public object? OriginalSource { get; init; }
+    }
     public sealed class SizeChangedEventArgs : EventArgs;
     public readonly record struct Duration(TimeSpan TimeSpan);
     public sealed class WindowActivatedEventArgs(CoreWindowActivationState state) : EventArgs

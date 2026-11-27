@@ -1,0 +1,24 @@
+<Page
+    x:Class="OhMyLockScreen.Views.EasterPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+    <StackPanel
+        Margin="16,0"
+        HorizontalAlignment="Center"
+        VerticalAlignment="Center"
+        Spacing="16">
+        <Image
+            Width="96"
+            Height="96"
+            Source="ms-appx:///Assets/Stickers/米沙_疑惑.png"
+            Stretch="UniformToFill" />
+        <TextBlock
+            FontFamily="Microsoft YaHei UI"
+            FontSize="22"
+            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+            Text="一个人究竟要走多远的距离，才能找回最开始的自己？"
+            TextAlignment="Center"
+            TextWrapping="Wrap" />
+    </StackPanel>
+</Page>

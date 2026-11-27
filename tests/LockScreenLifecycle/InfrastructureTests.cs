@@ -606,6 +606,25 @@ internal static class InfrastructureTests
             app.Activate(new ActivatedEventArgs(ActivationKind.Other));
             Check(ReferenceEquals(root.Content, settings), "Desktop activation replaced the current settings page.");
 
+            var about = new AboutSettingsPage();
+            var card = new Windows.UI.Xaml.Controls.Primitives.ButtonBase();
+            var label = new TextBlock { VisualParent = card };
+            var link = new Windows.UI.Xaml.Controls.Primitives.ButtonBase { VisualParent = card };
+            about.TapCopyright(card, new TextBlock { VisualParent = link });
+            for (var tap = 1; tap < 10; tap++)
+            {
+                about.TapCopyright(card, label);
+                Check(ReferenceEquals(root.Content, settings), $"The Easter page opened early on tap {tap}.");
+            }
+
+            about.TapCopyright(card, card);
+            Check(root.Content is EasterPage, "The tenth copyright tap did not open the Easter page.");
+            var easterPage = root.Content;
+            app.Launch(new LaunchActivatedEventArgs());
+            Check(ReferenceEquals(root.Content, easterPage), "Desktop reactivation replaced the Easter page.");
+            root.GoBack();
+            Check(ReferenceEquals(root.Content, settings), "Back from the Easter page did not return to settings.");
+
             titleBar.ExtendViewIntoTitleBar = true;
             app.Activate(new ActivatedEventArgs(ActivationKind.LockScreen));
             Check(root.Content is MainPage, "Lock-screen activation kept the desktop settings page.");
