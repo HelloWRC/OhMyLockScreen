@@ -85,6 +85,7 @@ internal static class FeatureTests
                 new OhMyLockScreen.Controls.Editor.ShadowSettingsControl(),
                 new OhMyLockScreen.Controls.Editor.OpacitySettingsControl(),
                 new OhMyLockScreen.Controls.Editor.ForegroundSettingsControl(),
+                new OhMyLockScreen.Controls.Editor.ThemeSettingsControl(),
                 new OhMyLockScreen.Controls.Editor.LayoutSettingsControl(),
                 new OhMyLockScreen.Controls.Editor.GridLayoutSettingsControl()
             ];
@@ -261,7 +262,7 @@ internal static class FeatureTests
             Check(registered.Select(feature => feature.Id).ToHashSet().SetEquals(
                 ["omls.features.layout.layout", "omls.features.layout.grid", "omls.features.layout.transform", "omls.features.layout.parallax", "omls.features.appearance.background",
                     "omls.features.appearance.border", "omls.features.appearance.stroke", "omls.features.appearance.shadow", "omls.features.appearance.opacity", "omls.features.appearance.foreground",
-                    "omls.features.appearance.text", "omls.features.appearance.font", "omls.features.visibility.hideByRules"]),
+                    "omls.features.appearance.theme", "omls.features.appearance.text", "omls.features.appearance.font", "omls.features.visibility.hideByRules"]),
                 "The app host did not register the built-in features.");
             Check(host.Services.GetRequiredService<IFeatureService>() is FeatureService, "The app host did not register the feature service.");
         });

@@ -7,7 +7,6 @@
     xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene"
     mc:Ignorable="d"
     IsTabStop="True"
-    RequestedTheme="Dark"
     Background="Black"
     Foreground="White">
     <scene:ScenePresenter

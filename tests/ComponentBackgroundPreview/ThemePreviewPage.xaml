@@ -1,0 +1,14 @@
+<Page
+    x:Class="ComponentBackgroundPreview.ThemePreviewPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:manager="using:OhMyLockScreen.Controls.SceneManager"
+    xmlns:scene="using:OhMyLockScreen.Shared.Controls.Scene"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <StackPanel>
+        <ContentDialog x:Name="Dialog" x:FieldModifier="internal" Title="主题验证" CloseButtonText="关闭" />
+        <manager:ScenePreviewCard x:Name="Card" x:FieldModifier="internal" />
+        <scene:ScenePresenter x:Name="Surface" x:FieldModifier="internal" Width="360" Height="120" />
+        <ContentPresenter x:Name="EditorHost" x:FieldModifier="internal" />
+    </StackPanel>
+</Page>

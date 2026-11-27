@@ -146,6 +146,7 @@ public sealed partial class App : Application
             services.AddFeature<TextFeature, TextFeatureSettingsControl>();
             services.AddFeature<FontFeature, FontSettingsControl>();
             services.AddFeature<ForegroundFeature, ForegroundSettingsControl>();
+            services.AddFeature<ThemeFeature, ThemeSettingsControl>();
             services.AddFeature<LayoutFeature>();
             services.AddFeature<GridLayoutFeature>();
             services.AddComponent<TextComponent>();
@@ -153,6 +154,12 @@ public sealed partial class App : Application
             services.AddComponent<DateComponent>();
             services.AddComponent<ContainerComponent>();
         }).Build();
+        if (args.Arguments == "theme")
+        {
+            LaunchThemePreview();
+            return;
+        }
+
         _presenter = new ComponentPresenter { Width = 240, Height = 120 };
         var root = new StackPanel { Background = new SolidColorBrush(Colors.Black), Spacing = 16 };
         root.Children.Add(_status);

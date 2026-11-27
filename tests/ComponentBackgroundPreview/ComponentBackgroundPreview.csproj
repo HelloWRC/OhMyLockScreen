@@ -32,6 +32,7 @@
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/TextFeature.cs" Link="Services/TextFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/FontFeature.cs" Link="Services/FontFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/ForegroundFeature.cs" Link="Services/ForegroundFeature.cs" />
+    <Compile Include="../../OhMyLockScreen/Services/Features/Appearance/ThemeFeature.cs" Link="Services/ThemeFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Layout/LayoutFeature.cs" Link="Services/LayoutFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Layout/GridLayoutFeature.cs" Link="Services/GridLayoutFeature.cs" />
     <Compile Include="../../OhMyLockScreen/Services/Features/Layout/TransformFeature.cs" Link="Services/TransformFeature.cs" />
@@ -92,6 +93,8 @@
     <Page Include="../../OhMyLockScreen/Controls/Editor/BackgroundSettingsControl.xaml" Link="Controls/Editor/BackgroundSettingsControl.xaml" />
     <Compile Include="../../OhMyLockScreen/Controls/Editor/ForegroundSettingsControl.xaml.cs" Link="Controls/Editor/ForegroundSettingsControl.xaml.cs" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/ForegroundSettingsControl.xaml" Link="Controls/Editor/ForegroundSettingsControl.xaml" />
+    <Compile Include="../../OhMyLockScreen/Controls/Editor/ThemeSettingsControl.xaml.cs" Link="Controls/Editor/ThemeSettingsControl.xaml.cs" />
+    <Page Include="../../OhMyLockScreen/Controls/Editor/ThemeSettingsControl.xaml" Link="Controls/Editor/ThemeSettingsControl.xaml" />
     <Page Include="../../OhMyLockScreen/Controls/Editor/EditorResources.xaml" Link="Controls/Editor/EditorResources.xaml" />
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneListMotion.cs" Link="Helpers/UI/SceneListMotion.cs" />
     <Compile Include="../../OhMyLockScreen/Helpers/UI/SceneListMotionController.cs" Link="Helpers/UI/SceneListMotionController.cs" />

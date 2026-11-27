@@ -126,16 +126,31 @@
                     CornerRadius="8"
                     IsHitTestVisible="False" />
 
-                <!-- 渐进背景模糊深色遮罩：由 Composition 遮罩偏移在底部 54px 与整卡 200px 间滑动 -->
+                <!-- 渐进背景模糊遮罩由 Composition 在底部 54px 与整卡 200px 间滑动。 -->
                 <Border
                     x:Name="BackdropMaskLayer"
                     CornerRadius="8"
                     IsHitTestVisible="False">
+                    <Border.Resources>
+                        <ResourceDictionary>
+                            <ResourceDictionary.ThemeDictionaries>
+                                <ResourceDictionary x:Key="Default">
+                                    <Color x:Key="PreviewMaskTintColor">#A3000000</Color>
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="Light">
+                                    <Color x:Key="PreviewMaskTintColor">#A3FFFFFF</Color>
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="HighContrast">
+                                    <StaticResource x:Key="PreviewMaskTintColor" ResourceKey="SystemColorWindowColor" />
+                                </ResourceDictionary>
+                            </ResourceDictionary.ThemeDictionaries>
+                        </ResourceDictionary>
+                    </Border.Resources>
                     <Border.Background>
                         <ui:MaskedBackdropBlurBrush
                             x:Name="CardBackdropBrush"
                             BlurAmount="30"
-                            TintColor="#A3000000"
+                            TintColor="{ThemeResource PreviewMaskTintColor}"
                             MaskFadeHeight="54"
                             MaskOffsetY="146" />
                     </Border.Background>
@@ -147,8 +162,7 @@
                     VerticalAlignment="Top"
                     Padding="8"
                     Spacing="4"
-                    IsHitTestVisible="False"
-                    RequestedTheme="Dark">
+                    IsHitTestVisible="False">
                     <TextBlock
                         x:Name="TitleTextBlock"
                         Text="{x:Bind Item.Name, Mode=OneWay}"
@@ -177,7 +191,6 @@
                     MinHeight="56"
                     Padding="8"
                     ColumnSpacing="10"
-                    RequestedTheme="Dark"
                     IsHitTestVisible="False">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

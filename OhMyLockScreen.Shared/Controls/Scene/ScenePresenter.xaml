@@ -8,10 +8,15 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     FontFamily="Microsoft YaHei UI"
-    Foreground="White"
+    RequestedTheme="Dark"
     mc:Ignorable="d"
     d:DesignHeight="300"
     d:DesignWidth="400">
+    <UserControl.Style>
+        <Style TargetType="UserControl">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+        </Style>
+    </UserControl.Style>
 
     <ui:ChainedDecorator
         x:Name="DecoratorHost"

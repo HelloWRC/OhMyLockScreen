@@ -10,7 +10,6 @@
     xmlns:editor="using:OhMyLockScreen.Controls.Editor"
     xmlns:ui="using:OhMyLockScreen.Shared.Controls.UI"
     xmlns:icons="using:FluentIcons.Uwp"
-    RequestedTheme="Dark"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
     FontFamily="Microsoft YaHei UI">
@@ -229,7 +228,6 @@
             PrimaryButtonText="确定"
             CloseButtonText="取消"
             DefaultButton="Primary"
-            RequestedTheme="Dark"
             PrimaryButtonClick="OnNameDialogPrimaryButtonClick">
             <TextBox
                 Text="{Binding DialogName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

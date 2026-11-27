@@ -10,7 +10,6 @@
     xmlns:vm="using:OhMyLockScreen.ViewModels"
     xmlns:manager="using:OhMyLockScreen.Controls.SceneManager"
     mc:Ignorable="d"
-    RequestedTheme="Dark"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
     FontFamily="Microsoft YaHei UI">
@@ -40,7 +39,6 @@
             PrimaryButtonText="确定"
             CloseButtonText="取消"
             DefaultButton="Primary"
-            RequestedTheme="Dark"
             PrimaryButtonClick="OnNameDialogPrimaryButtonClick">
             <TextBox
                 Text="{x:Bind ViewModel.DialogName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -55,7 +53,6 @@
             PrimaryButtonText="删除"
             CloseButtonText="取消"
             DefaultButton="Close"
-            RequestedTheme="Dark"
             Content="{x:Bind ViewModel.DialogMessage, Mode=OneWay}" />
 
         <ContentDialog
@@ -63,8 +60,7 @@
             Title="导入场景？"
             PrimaryButtonText="导入"
             CloseButtonText="取消"
-            DefaultButton="Primary"
-            RequestedTheme="Dark">
+            DefaultButton="Primary">
             <StackPanel Spacing="8" MaxWidth="420">
                 <TextBlock
                     Text="{x:Bind ViewModel.DialogMessage, Mode=OneWay}"

@@ -737,6 +737,23 @@ internal static class SceneTests
             fixture.Service.FlushPending();
             Check(Reload().BorderBrush == null, "Clearing the border brush did not persist null.");
         });
+        run("Theme feature changes persist through the scene editor", () =>
+        {
+            using var fixture = new Fixture();
+            using var editor = fixture.Editor();
+            editor.Open(fixture.Service.ActiveSceneId);
+            var scene = editor.Scene!;
+            var settings = new ThemeFeatureSettings();
+            scene.Features.Add(new FeatureInfo { Id = "omls.features.appearance.theme", Settings = settings });
+            foreach (var theme in new[] { ElementTheme.Dark, ElementTheme.Light, ElementTheme.Default })
+            {
+                settings.RequestedTheme = theme;
+                fixture.Service.FlushPending();
+                var saved = fixture.Service.Load(scene.SceneId).Features.Single();
+                Check(saved.Id == "omls.features.appearance.theme" && saved.GetSettings<ThemeFeatureSettings>().RequestedTheme == theme,
+                    $"The editor did not persist the requested {theme} theme.");
+            }
+        });
         run("Foreground feature brush replacements and null automatically persist through the editor", () =>
         {
             using var fixture = new Fixture();

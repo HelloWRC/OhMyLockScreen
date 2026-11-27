@@ -248,7 +248,13 @@ namespace Windows.UI.Xaml
     {
         public XamlRoot? XamlRoot { get; set; }
         public ElementTheme ActualTheme { get; set; }
-        public ElementTheme RequestedTheme { get; set; }
+        public static readonly DependencyProperty RequestedThemeProperty = DependencyProperty.Register(
+            nameof(RequestedTheme), typeof(ElementTheme), typeof(FrameworkElement), new PropertyMetadata(ElementTheme.Default));
+        public ElementTheme RequestedTheme
+        {
+            get => (ElementTheme)GetValue(RequestedThemeProperty)!;
+            set => SetValue(RequestedThemeProperty, value);
+        }
         public double MaxWidth { get; set; }
         public event Action<FrameworkElement, object>? ActualThemeChanged;
         public void ChangeTheme(ElementTheme theme)

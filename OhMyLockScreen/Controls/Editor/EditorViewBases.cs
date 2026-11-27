@@ -14,5 +14,6 @@ public abstract class StrokeSettingsControlBase : FeatureSettingsControlBase<Str
 public abstract class ShadowSettingsControlBase : FeatureSettingsControlBase<ShadowFeatureSettings>;
 public abstract class OpacitySettingsControlBase : FeatureSettingsControlBase<OpacityFeatureSettings>;
 public abstract class ForegroundSettingsControlBase : FeatureSettingsControlBase<ForegroundFeatureSettings>;
+public abstract class ThemeSettingsControlBase : FeatureSettingsControlBase<ThemeFeatureSettings>;
 public abstract class TextFeatureSettingsControlBase : FeatureSettingsControlBase<TextFeatureSettings>;
 public abstract class FontSettingsControlBase : FeatureSettingsControlBase<FontFeatureSettings>;

@@ -199,6 +199,7 @@ if (args.Contains("--binding-only"))
     ShadowFeatureTests.Run(Run);
     OpacityFeatureTests.Run(Run);
     ForegroundFeatureTests.Run(Run);
+    ThemeFeatureTests.Run(Run);
     TypographyFeatureTests.Run(Run);
     Console.WriteLine($"All {passed} property binding checks passed using simulated UWP controls.");
     return;
@@ -259,6 +260,7 @@ TransformFeatureTests.Run(Run);
 BackgroundFeatureTests.Run(Run);
 BorderFeatureTests.Run(Run);
 ForegroundFeatureTests.Run(Run);
+ThemeFeatureTests.Run(Run);
 TypographyFeatureTests.Run(Run);
 FeatureTests.Run(Run);
 StrokeFeatureTests.Run(Run);

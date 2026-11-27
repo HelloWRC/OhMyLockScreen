@@ -362,8 +362,9 @@ public sealed partial class App
             : Vector3.Zero;
     }
 
-    private static async Task<Uri> CreateSyntheticPreviewImageAsync(string fileName, int width, int height)
+    private static async Task<Uri> CreateSyntheticPreviewImageAsync(string fileName, int width, int height, bool dark = false)
     {
+        var divisor = dark ? 5 : 1;
         var pixels = new byte[width * height * 4];
         for (var y = 0; y < height; y++)
         {
@@ -396,9 +397,9 @@ public sealed partial class App
                 }
 
                 var offset = (y * width + x) * 4;
-                pixels[offset] = b;
-                pixels[offset + 1] = g;
-                pixels[offset + 2] = r;
+                pixels[offset] = (byte)(b / divisor);
+                pixels[offset + 1] = (byte)(g / divisor);
+                pixels[offset + 2] = (byte)(r / divisor);
                 pixels[offset + 3] = 255;
             }
         }

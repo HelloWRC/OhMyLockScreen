@@ -140,6 +140,7 @@ public sealed partial class App
         services.AddFeature<ShadowFeature, ShadowSettingsControl>();
         services.AddFeature<OpacityFeature, OpacitySettingsControl>();
         services.AddFeature<ForegroundFeature, ForegroundSettingsControl>();
+        services.AddFeature<ThemeFeature, ThemeSettingsControl>();
         services.AddFeature<TextFeature, TextFeatureSettingsControl>();
         services.AddFeature<FontFeature, FontSettingsControl>();
     }
